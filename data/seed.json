@@ -365,6 +365,23 @@
       "source": "owner_observation"
     },
     {
+      "id": "obs-0901",
+      "date": "2026-09-01",
+      "appetite": "",
+      "energy": "",
+      "nausea": 1,
+      "vomiting": 0,
+      "stool": "",
+      "hydration": "",
+      "urination": "",
+      "pain": 0,
+      "medications": [
+        "Cerenia 60 mg"
+      ],
+      "notes": "Nausea continued; Cerenia administered.",
+      "source": "owner_observation"
+    },
+    {
       "id": "obs-0913",
       "date": "2026-09-13",
       "appetite": "normal",
@@ -380,6 +397,23 @@
       "source": "owner_observation"
     },
     {
+      "id": "obs-0914",
+      "date": "2026-09-14",
+      "appetite": "normal",
+      "energy": "",
+      "nausea": 2,
+      "vomiting": 0,
+      "stool": "",
+      "hydration": "",
+      "urination": "",
+      "pain": 0,
+      "medications": [
+        "Cerenia 60 mg"
+      ],
+      "notes": "Ongoing nausea signs after chemo #3; Cerenia administered.",
+      "source": "owner_observation"
+    },
+    {
       "id": "obs-0921",
       "date": "2026-09-21",
       "appetite": "",
@@ -392,6 +426,40 @@
       "pain": 0,
       "medications": [],
       "notes": "Nausea, drooling and lip licking. Subsequent bright-red blood noted with stool.",
+      "source": "owner_observation"
+    },
+    {
+      "id": "obs-0922",
+      "date": "2026-09-22",
+      "appetite": "",
+      "energy": "",
+      "nausea": 2,
+      "vomiting": 0,
+      "stool": "",
+      "hydration": "",
+      "urination": "",
+      "pain": 0,
+      "medications": [
+        "Cerenia 60 mg"
+      ],
+      "notes": "Nausea symptoms continued; Cerenia administered.",
+      "source": "owner_observation"
+    },
+    {
+      "id": "obs-0923",
+      "date": "2026-09-23",
+      "appetite": "",
+      "energy": "",
+      "nausea": 2,
+      "vomiting": 0,
+      "stool": "5–6",
+      "hydration": "",
+      "urination": "house urination",
+      "pain": 0,
+      "medications": [
+        "Cerenia 60 mg"
+      ],
+      "notes": "Nausea with lip licking and drooling. Stool 5–6 with bright-red blood; urinated in the house. Cerenia administered.",
       "source": "owner_observation"
     },
     {
@@ -412,6 +480,23 @@
       "source": "owner_observation"
     },
     {
+      "id": "obs-0925",
+      "date": "2026-09-25",
+      "appetite": "",
+      "energy": "",
+      "nausea": 0,
+      "vomiting": 0,
+      "stool": "",
+      "hydration": "",
+      "urination": "",
+      "pain": 0,
+      "medications": [
+        "Metronidazole 250 mg AM"
+      ],
+      "notes": "GI/stool observations improving; morning metronidazole administered.",
+      "source": "owner_observation"
+    },
+    {
       "id": "obs-0928",
       "date": "2026-09-28",
       "appetite": "",
@@ -429,18 +514,35 @@
       "source": "owner_observation"
     },
     {
-      "id": "obs-0930",
-      "date": "2026-09-30",
+      "id": "obs-0929",
+      "date": "2026-09-29",
       "appetite": "",
-      "energy": "",
-      "nausea": 0,
+      "energy": "low",
+      "nausea": 2,
       "vomiting": 0,
-      "stool": "",
+      "stool": "frequent",
       "hydration": "",
       "urination": "",
       "pain": 0,
+      "medications": [
+        "Cerenia 60 mg at 10 PM"
+      ],
+      "notes": "Recurrent nausea/gurgling/restlessness with low energy and frequent stools. Cerenia administered at 10 PM.",
+      "source": "owner_observation"
+    },
+    {
+      "id": "obs-0930",
+      "date": "2026-09-30",
+      "appetite": "normal",
+      "energy": "low",
+      "nausea": 0,
+      "vomiting": 0,
+      "stool": "normal",
+      "hydration": "normal",
+      "urination": "",
+      "pain": 0,
       "medications": [],
-      "notes": "No nausea noted.",
+      "notes": "Normal appetite, water and stools. No nausea; lower energy and quieter than usual.",
       "source": "owner_observation"
     },
     {
