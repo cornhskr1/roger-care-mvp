@@ -36,11 +36,12 @@ async function boot(){
   bindExports();
   bindProfilePhoto();
   bindOverlayControls();
+  bindRefreshControl();
   await loadState();
   await loadDocuments();
   renderAll();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
   }
 }
 
@@ -51,11 +52,63 @@ function cacheEls(){
 async function loadState(){
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
-    try { state = JSON.parse(saved); return; } catch (_) {}
+    try {
+      state = migrateState(JSON.parse(saved));
+      persist();
+      return;
+    } catch (_) {}
   }
-  const response = await fetch('./data/seed.json');
-  state = await response.json();
+  const response = await fetch('./data/seed.json', {cache:'no-store'});
+  state = migrateState(await response.json());
   persist();
+}
+
+function migrateState(input){
+  const next = input || {};
+  next.costs = Array.isArray(next.costs) ? next.costs : [];
+
+  const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
+  if (combinedIndex >= 0) {
+    next.costs.splice(combinedIndex, 1,
+      {
+        id:'cost-0918-treatment',
+        date:'2026-09-18',
+        provider:'K-State Veterinary Health Center',
+        label:'Chemo #4 treatment',
+        amountPaid:193.50,
+        category:'treatment',
+        status:'confirmed',
+        source:'invoice',
+        components:[
+          ['Oncology recheck',36.50],
+          ['Chemo administration',78.00],
+          ['Hazardous drug preparation',55.00],
+          ['Vinblastine',24.00]
+        ]
+      },
+      {
+        id:'cost-0918-restaging',
+        date:'2026-09-18',
+        provider:'K-State Veterinary Health Center',
+        label:'Mid-protocol restaging',
+        amountPaid:667.25,
+        category:'restaging',
+        status:'confirmed',
+        source:'invoice',
+        components:[
+          ['Abdominal ultrasound',403.75],
+          ['Cytology ×2',115.50],
+          ['Ultrasound-guided liver/spleen aspirates',130.00],
+          ['Atipamezole',5.52],
+          ['Butorphanol',7.50],
+          ['Dexmedetomidine',4.98]
+        ]
+      }
+    );
+    next.costs.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  }
+  next.schemaVersion = 2;
+  return next;
 }
 
 function persist(){
@@ -178,6 +231,29 @@ function bindOverlayControls(){
   metric.addEventListener('change', renderTreatmentOverlay);
 }
 
+function bindRefreshControl(){
+  const button = q('#refreshAppButton');
+  if (!button) return;
+  button.addEventListener('click', async () => {
+    const oldText = button.textContent;
+    button.disabled = true;
+    button.textContent = '…';
+    try {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) await registration.update();
+      }
+      const next = new URL(location.href);
+      next.searchParams.set('refresh', Date.now().toString());
+      location.replace(next.pathname + next.search);
+    } catch (_) {
+      button.disabled = false;
+      button.textContent = oldText;
+      toast('Could not refresh right now', true);
+    }
+  });
+}
+
 function renderAll(){
   renderProfile(); renderHome(); renderTreatmentOverlay(); renderJournal(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
 }
@@ -243,137 +319,153 @@ function severityChip(o){
 function daysBetween(a,b){ return Math.round((new Date(`${b}T12:00:00Z`)-new Date(`${a}T12:00:00Z`))/86400000); }
 
 function renderTreatmentOverlay(){
-  const root = q('#treatmentOverlayChart');
-  const detail = q('#treatmentOverlayDetail');
-  const selector = q('#overlayMetric');
-  const legend = q('#overlayBloodLegend');
-  const windowSelector = q('#treatmentWindowSelector');
-  const windowDetails = q('#treatmentWindowDetails');
-  if (!root || !detail || !selector || !windowSelector || !windowDetails || !state) return;
+  const root=q('#treatmentOverlayChart');
+  const detail=q('#treatmentOverlayDetail');
+  const selector=q('#overlayMetric');
+  const legend=q('#overlayBloodLegend');
+  const windowSelector=q('#treatmentWindowSelector');
+  const windowDetails=q('#treatmentWindowDetails');
+  if(!root||!detail||!selector||!windowSelector||!windowDetails||!state)return;
 
-  const metric = selector.value || 'Neutrophils';
-  if (legend) legend.textContent = metric;
+  const metric=selector.value||'Neutrophils';
+  if(legend)legend.textContent=metric;
 
-  const allTreatments = state.treatments.slice().sort((a,b)=>a.date.localeCompare(b.date));
-  renderTreatmentWindowSelector(windowSelector, allTreatments);
+  const allTreatments=state.treatments.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  renderTreatmentWindowSelector(windowSelector,allTreatments);
 
-  const selectedCycle = selectedTreatmentWindow === 'all'
+  const selectedCycle=selectedTreatmentWindow==='all'
     ? null
-    : allTreatments.find(t => String(t.number) === String(selectedTreatmentWindow));
-  const window = selectedCycle ? cycleWindowFor(selectedCycle, allTreatments) : null;
+    : allTreatments.find(t=>String(t.number)===String(selectedTreatmentWindow));
+  const window=selectedCycle?cycleWindowFor(selectedCycle,allTreatments):null;
+  const firstTreatmentDate=allTreatments[0]?.date;
 
-  const bloodAll = state.labs
-    .filter(x => x.metric === metric)
-    .slice()
-    .sort((a,b)=>a.date.localeCompare(b.date));
-  const symptomAll = state.observations
-    .map(o => ({...o, severity:symptomSeverity(o)}))
-    .filter(o => o.severity > 0)
+  const bloodAll=state.labs.filter(x=>x.metric===metric).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const symptomAll=state.observations
+    .map(o=>({...o,severity:symptomSeverity(o)}))
+    .filter(o=>o.severity>0)
     .sort((a,b)=>a.date.localeCompare(b.date));
 
-  const firstTreatmentDate = allTreatments[0]?.date;
-  const blood = selectedCycle
-    ? bloodAll.filter(p => inCycleWindow(p.date, window))
-    : bloodAll.filter(p => p.date >= firstTreatmentDate);
-  const symptoms = selectedCycle
-    ? symptomAll.filter(o => inCycleWindow(o.date, window))
-    : symptomAll.filter(o => o.date >= firstTreatmentDate);
-  const treatments = selectedCycle ? [selectedCycle] : allTreatments;
+  const blood=selectedCycle
+    ? bloodAll.filter(p=>inCycleWindow(p.date,window))
+    : bloodAll.filter(p=>p.date>=firstTreatmentDate);
+  const symptoms=selectedCycle
+    ? symptomAll.filter(o=>inCycleWindow(o.date,window))
+    : symptomAll.filter(o=>o.date>=firstTreatmentDate);
+  const treatments=selectedCycle?[selectedCycle]:allTreatments;
 
-  if (!treatments.length) {
-    root.innerHTML = '<div class="empty-state">No treatment data available yet.</div>';
-    windowDetails.innerHTML = '';
+  if(!treatments.length){
+    root.innerHTML='<div class="empty-state">No treatment data available yet.</div>';
+    windowDetails.innerHTML='';
     return;
   }
 
-  const startDate = selectedCycle ? window.start : firstTreatmentDate;
-  const endDate = selectedCycle
+  const startDate=selectedCycle?window.start:firstTreatmentDate;
+  const endDate=selectedCycle
     ? window.displayEnd
-    : [...blood.map(x=>x.date), ...symptoms.map(x=>x.date), ...treatments.map(x=>x.date)].sort().at(-1);
-  const startMs = Date.parse(startDate + 'T12:00:00Z');
-  let endMs = Date.parse(endDate + 'T12:00:00Z');
-  if (endMs <= startMs) endMs = startMs + 7*86400000;
-  const span = Math.max(1,endMs-startMs);
+    : [...blood.map(x=>x.date),...symptoms.map(x=>x.date),...treatments.map(x=>x.date)].sort().at(-1);
+  const startMs=Date.parse(startDate+'T12:00:00Z');
+  let endMs=Date.parse(endDate+'T12:00:00Z');
+  if(endMs<=startMs)endMs=startMs+7*86400000;
+  const span=Math.max(1,endMs-startMs);
 
-  const W=360,H=278,L=42,R=38,T=34;
-  const plotBottom=194,symptomY=222;
-  const x = date => L + ((Date.parse(date+'T12:00:00Z')-startMs)/span)*(W-L-R);
+  // Three aligned tracks: dose, bloodwork and symptoms. One shared time axis.
+  const W=360,H=334,L=48,R=14;
+  const doseTop=38,doseBottom=94;
+  const bloodTop=124,bloodBottom=218;
+  const symptomTop=250,symptomBottom=286;
+  const axisY=316;
+  const x=date=>L+((Date.parse(date+'T12:00:00Z')-startMs)/span)*(W-L-R);
 
   const thresholdMap={Neutrophils:2,Hematocrit:25,Platelets:75};
   const unitMap={Neutrophils:'K/µL',Hematocrit:'%',Platelets:'K/µL'};
-  const threshold=thresholdMap[metric], unit=unitMap[metric]||'';
+  const threshold=thresholdMap[metric],unit=unitMap[metric]||'';
+
+  const doseValues=allTreatments.map(t=>Number(t.doseMgM2)||0);
+  const doseLow=Math.min(...doseValues)-0.08;
+  const doseHigh=Math.max(...doseValues)+0.08;
+  const yDose=value=>doseBottom-((Number(value)-doseLow)/(doseHigh-doseLow))*(doseBottom-doseTop);
 
   const bloodValues=blood.map(x=>Number(x.value)||0);
   const bloodMaxRaw=Math.max(...bloodValues,threshold||0,1);
   const bloodMax=Math.max(1,bloodMaxRaw*1.12);
-  const yBlood=value=>plotBottom-(Number(value)/bloodMax)*(plotBottom-T);
-
-  const doseValues=allTreatments.map(t=>Number(t.doseMgM2)||0);
-  const doseLow=Math.min(...doseValues,1.8)-0.08;
-  const doseHigh=Math.max(...doseValues,2.6)+0.08;
-  const yDose=value=>plotBottom-((Number(value)-doseLow)/(doseHigh-doseLow))*(plotBottom-T);
+  const yBlood=value=>bloodBottom-(Number(value)/bloodMax)*(bloodBottom-bloodTop);
 
   let svg='';
-  for(let i=0;i<4;i++){
-    const value=bloodMax*(3-i)/3;
-    const yy=T+i*(plotBottom-T)/3;
-    const label=metric==='Platelets'?Math.round(value):(value<10?value.toFixed(1):Math.round(value));
-    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#dce4df" stroke-width="1"/>`;
-    svg+=`<text x="${L-6}" y="${yy+4}" text-anchor="end" font-size="9" fill="#68766f">${label}</text>`;
-  }
-  svg+=`<text x="6" y="18" font-size="9" font-weight="700" fill="#3e6f5d">${metric} ${unit}</text>`;
-  svg+=`<text x="${W-3}" y="18" text-anchor="end" font-size="9" font-weight="700" fill="#97672c">Dose mg/m²</text>`;
 
-  [2.0,2.3,2.6].forEach(v=>{
-    if(v<doseLow||v>doseHigh)return;
-    const yy=yDose(v);
-    svg+=`<text x="${W-3}" y="${yy+3}" text-anchor="end" font-size="8.5" fill="#97672c">${v.toFixed(1)}</text>`;
-  });
+  // Lane labels and separators.
+  svg+=`<text x="4" y="${doseTop-9}" font-size="9" font-weight="800" fill="#512888">DOSE · mg/m²</text>`;
+  svg+=`<line x1="${L}" y1="${doseBottom+10}" x2="${W-R}" y2="${doseBottom+10}" stroke="#dedfea"/>`;
+  svg+=`<text x="4" y="${bloodTop-9}" font-size="9" font-weight="800" fill="#5e7895">${metric.toUpperCase()} · ${unit}</text>`;
+  svg+=`<line x1="${L}" y1="${bloodBottom+10}" x2="${W-R}" y2="${bloodBottom+10}" stroke="#dedfea"/>`;
+  svg+=`<text x="4" y="${symptomTop-8}" font-size="9" font-weight="800" fill="#9a5364">OWNER SYMPTOMS</text>`;
 
+  // Treatment vertical guides anchor all tracks to the same cycles.
   treatments.forEach(tr=>{
     const xx=x(tr.date);
-    svg+=`<line x1="${xx}" y1="${T}" x2="${xx}" y2="${symptomY+8}" stroke="#97672c" stroke-opacity=".28" stroke-dasharray="3 4"/>`;
-    svg+=`<text x="${xx}" y="29" text-anchor="middle" font-size="8.5" font-weight="800" fill="#97672c">#${tr.number}</text>`;
+    svg+=`<line x1="${xx}" y1="${doseTop-3}" x2="${xx}" y2="${symptomBottom+2}" stroke="#512888" stroke-opacity=".15" stroke-dasharray="3 4"/>`;
   });
 
-  if(threshold!=null&&threshold<=bloodMax){
-    const yy=yBlood(threshold);
-    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#68766f" stroke-dasharray="5 4" stroke-width="1.2"/>`;
-    svg+=`<text x="${W-R-2}" y="${yy-4}" text-anchor="end" font-size="8.5" fill="#68766f">threshold</text>`;
-  }
-
-  if(blood.length>1){
-    const path=blood.map((p,i)=>`${i?'L':'M'}${x(p.date)},${yBlood(p.value)}`).join(' ');
-    svg+=`<path d="${path}" fill="none" stroke="#3e6f5d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }
-  blood.forEach((p,i)=>{
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="blood" data-index="${i}" cx="${x(p.date)}" cy="${yBlood(p.value)}" r="5.5" fill="#3e6f5d" stroke="#fff" stroke-width="2.5"/>`;
-  });
-
+  // Dose track.
   if(treatments.length>1){
     const path=treatments.map((tr,i)=>`${i?'L':'M'}${x(tr.date)},${yDose(tr.doseMgM2)}`).join(' ');
-    svg+=`<path d="${path}" fill="none" stroke="#97672c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    svg+=`<path d="${path}" fill="none" stroke="#512888" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
   treatments.forEach((tr,i)=>{
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="treatment" data-index="${i}" cx="${x(tr.date)}" cy="${yDose(tr.doseMgM2)}" r="5.5" fill="#97672c" stroke="#fff" stroke-width="2.5"/>`;
+    const xx=x(tr.date),yy=yDose(tr.doseMgM2);
+    svg+=`<circle class="chart-hit" tabindex="0" data-kind="treatment" data-index="${i}" cx="${xx}" cy="${yy}" r="6" fill="#512888" stroke="#fff" stroke-width="2.5"/>`;
+    svg+=`<text x="${xx}" y="${yy-10}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#512888">#${tr.number} · ${tr.doseMgM2}</text>`;
   });
 
-  svg+=`<line x1="${L}" y1="${symptomY}" x2="${W-R}" y2="${symptomY}" stroke="#dce4df"/>`;
-  svg+=`<text x="${L-6}" y="${symptomY+3}" text-anchor="end" font-size="8.5" fill="#944c4c">Sx</text>`;
+  // Bloodwork track with its own scale and treatment threshold.
+  for(let i=0;i<3;i++){
+    const value=bloodMax*(2-i)/2;
+    const yy=bloodTop+i*(bloodBottom-bloodTop)/2;
+    const label=metric==='Platelets'?Math.round(value):(value<10?value.toFixed(1):Math.round(value));
+    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#e7e8ef"/>`;
+    svg+=`<text x="${L-6}" y="${yy+3}" text-anchor="end" font-size="8" fill="#707181">${label}</text>`;
+  }
+  if(threshold!=null&&threshold<=bloodMax){
+    const yy=yBlood(threshold);
+    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#707181" stroke-dasharray="5 4" stroke-width="1.2"/>`;
+    svg+=`<text x="${W-R-2}" y="${yy-4}" text-anchor="end" font-size="8" fill="#707181">treatment threshold</text>`;
+  }
+  if(blood.length>1){
+    const path=blood.map((p,i)=>`${i?'L':'M'}${x(p.date)},${yBlood(p.value)}`).join(' ');
+    svg+=`<path d="${path}" fill="none" stroke="#5e7895" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }
+  blood.forEach((p,i)=>{
+    const xx=x(p.date),yy=yBlood(p.value);
+    svg+=`<circle class="chart-hit" tabindex="0" data-kind="blood" data-index="${i}" cx="${xx}" cy="${yy}" r="5.5" fill="#5e7895" stroke="#fff" stroke-width="2.5"/>`;
+    svg+=`<text x="${xx}" y="${yy-9}" text-anchor="middle" font-size="7.8" font-weight="750" fill="#5e7895">${p.displayValue||p.value}</text>`;
+  });
+
+  // Symptom severity track: height means severity; a small blue square means medication was given.
+  svg+=`<line x1="${L}" y1="${symptomBottom}" x2="${W-R}" y2="${symptomBottom}" stroke="#dedfea"/>`;
   symptoms.forEach((o,i)=>{
-    const radius=4.5+Math.min(3,o.severity)*1.2;
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" cx="${x(o.date)}" cy="${symptomY}" r="${radius}" fill="#944c4c" fill-opacity=".88" stroke="#fff" stroke-width="2"/>`;
+    const xx=x(o.date);
+    const yy=symptomBottom-(Math.min(3,o.severity)/3)*(symptomBottom-symptomTop);
+    svg+=`<line x1="${xx}" y1="${symptomBottom}" x2="${xx}" y2="${yy}" stroke="#9a5364" stroke-width="4" stroke-linecap="round"/>`;
+    svg+=`<circle class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" cx="${xx}" cy="${yy}" r="5" fill="#9a5364" stroke="#fff" stroke-width="2"/>`;
+    if(o.medications?.length){
+      svg+=`<rect class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" x="${xx-3.5}" y="${symptomBottom+5}" width="7" height="7" rx="1.5" fill="#5e7895"/>`;
+    }
   });
+  svg+=`<text x="${L-7}" y="${symptomTop+3}" text-anchor="end" font-size="7.5" fill="#707181">3</text>`;
+  svg+=`<text x="${L-7}" y="${symptomBottom+3}" text-anchor="end" font-size="7.5" fill="#707181">0</text>`;
 
-  const dateLabels=selectedCycle
-    ? [window.start,window.displayEnd]
-    : treatments.map(t=>t.date);
-  [...new Set(dateLabels)].forEach((d,i,arr)=>{
+  // Shared time axis.
+  svg+=`<line x1="${L}" y1="${axisY-12}" x2="${W-R}" y2="${axisY-12}" stroke="#dedfea"/>`;
+  const labels=selectedCycle?[window.start,window.displayEnd]:treatments.map(t=>t.date);
+  [...new Set(labels)].forEach((d,i,arr)=>{
+    const xx=x(d);
     const anchor=i===0?'start':i===arr.length-1?'end':'middle';
-    svg+=`<text x="${x(d)}" y="260" text-anchor="${anchor}" font-size="8" fill="#68766f">${fmtDate(d).replace(', 2026','')}</text>`;
+    const dateLabel=fmtDate(d).replace(', 2026','');
+    const dayLabel=selectedCycle?(`Day +${Math.max(0,daysBetween(window.start,d))}`):'';
+    svg+=`<text x="${xx}" y="${axisY}" text-anchor="${anchor}" font-size="8" fill="#707181">${dateLabel}</text>`;
+    if(dayLabel)svg+=`<text x="${xx}" y="${axisY+11}" text-anchor="${anchor}" font-size="7.5" fill="#9a5364">${dayLabel}</text>`;
   });
 
-  root.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Treatment response overlay chart">${svg}</svg>`;
+  root.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Aligned treatment response tracks">${svg}</svg>`;
 
   root.querySelectorAll('.chart-hit').forEach(node=>{
     const show=()=>{
@@ -395,10 +487,10 @@ function renderTreatmentOverlay(){
   });
 
   if(selectedCycle){
-    detail.innerHTML=`<strong>Chemo #${selectedCycle.number} treatment window</strong>${fmtDate(window.start)} through ${fmtDate(window.displayEnd)} · ${selectedCycle.doseMg} mg (${selectedCycle.doseMgM2} mg/m²). Tap any point above for the exact source event.`;
+    detail.innerHTML=`<strong>Chemo #${selectedCycle.number} treatment window</strong>${fmtDate(window.start)} through ${fmtDate(window.displayEnd)} · ${selectedCycle.doseMg} mg (${selectedCycle.doseMgM2} mg/m²). Select a point above for exact source detail.`;
     windowDetails.innerHTML=renderCycleDetails(selectedCycle,window);
   }else{
-    detail.innerHTML='<strong>All treatment cycles</strong>Select a treatment above to zoom into its complete lab, symptom, medication, and cost window.';
+    detail.innerHTML='<strong>All treatment cycles</strong>Purple shows dose, blue shows bloodwork, and the symptom track shows owner-observed severity. Select a treatment above to zoom into one complete cycle.';
     windowDetails.innerHTML='';
   }
 }
@@ -505,17 +597,87 @@ function renderTimeline(){
 }
 
 function renderCosts(){
-  const total=totalPaid(), confirmed=confirmedPaid(), provisional=provisionalPaid();
-  els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#dce8e3">TOTAL OWNER-PAID CARE</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
-  const estimate=state.sourceNotes.find(x=>x.id==='src-ksu-0804');
+  const total=totalPaid(),confirmed=confirmedPaid(),provisional=provisionalPaid();
+  els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">TOTAL OWNER-PAID CARE</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
+
   const treatmentAfterPlan=state.costs.filter(c=>c.date>'2026-08-04').reduce((s,c)=>s+Number(c.amountPaid||0),0);
-  els.estimateComparison.innerHTML=`<div class="estimate-grid"><div class="estimate-box"><div class="section-kicker">SOURCE ESTIMATE · 8/4</div><div class="estimate-value">$3,500–$4,000</div><div class="estimate-note">Complete treatment course, per K-State oncology note. ${esc(estimate?.summary||'')}</div></div><div class="estimate-box"><div class="section-kicker">PAID SINCE 8/4</div><div class="estimate-value">${money(treatmentAfterPlan)}</div><div class="estimate-note">Treatment-course spending after the 8/4 oncology plan; the 8/4 staging visit itself is excluded from this comparison.</div></div></div>`;
-  els.costEntries.innerHTML=[...state.costs].sort((a,b)=>b.date.localeCompare(a.date)).map(c=>`<article class="cost-card"><div class="row-between"><div><div class="item-title">${esc(c.label)}</div><div class="item-meta">${fmtDate(c.date)} · ${esc(c.provider)}</div></div><div class="cost-amount">${money(c.amountPaid)}</div></div><div class="chip-row"><span class="chip ${c.status==='confirmed'?'':'warn'}">${esc(c.status)}</span><span class="chip info">${esc(c.category.replaceAll('_',' '))}</span></div></article>`).join('');
+  els.estimateComparison.innerHTML=`<div class="estimate-grid">
+    <div class="estimate-box">
+      <div class="section-kicker">K-STATE ESTIMATE · 8/4</div>
+      <div class="estimate-value">$3,500–$4,000</div>
+      <div class="estimate-note">Complete 8-dose treatment course. K-State estimated about $250 per chemo injection; outside pre-treatment bloodwork was not included in that per-injection figure. Restaging was estimated at about $700.</div>
+    </div>
+    <div class="estimate-box">
+      <div class="section-kicker">PAID SINCE 8/4</div>
+      <div class="estimate-value">${money(treatmentAfterPlan)}</div>
+      <div class="estimate-note">Spending after the treatment plan was established, excluding the 8/4 staging visit itself. Three chemo treatments and final restaging remain planned.</div>
+    </div>
+  </div>`;
+
+  els.costEntries.innerHTML=[...state.costs]
+    .sort((a,b)=>b.date.localeCompare(a.date)||String(b.id).localeCompare(String(a.id)))
+    .map(c=>`<article class="cost-card">
+      <div class="row-between">
+        <div><div class="item-title">${esc(c.label)}</div><div class="item-meta">${fmtDate(c.date)} · ${esc(c.provider)}</div></div>
+        <div class="cost-amount">${money(c.amountPaid)}</div>
+      </div>
+      <div class="chip-row">
+        <span class="chip ${c.status==='confirmed'?'':'warn'}">${esc(c.status)}</span>
+        <span class="chip info">${esc(categoryLabel(c.category))}</span>
+      </div>
+      ${renderCostComponents(c)}
+    </article>`).join('');
 }
+
+function renderCostComponents(cost){
+  if(!Array.isArray(cost.components)||!cost.components.length)return '';
+  return `<div class="cost-components">${cost.components.map(part=>`<div class="cost-component-row"><span>${esc(part[0])}</span><strong>${money(part[1])}</strong></div>`).join('')}</div>`;
+}
+
+function categoryLabel(category){
+  const labels={
+    mixed_surgery_dental:'Surgery + dental day',
+    treatment:'Chemo treatment',
+    staging:'Initial staging',
+    restaging:'Restaging',
+    monitoring:'Monitoring labs',
+    diagnosis:'Initial diagnosis',
+    medication_unresolved:'Unresolved medication',
+    medication:'Medication',
+    mixed:'Mixed care',
+    other:'Other'
+  };
+  return labels[category]||String(category||'Other').replaceAll('_',' ');
+}
+
+function careColor(category){
+  const colors={
+    mixed_surgery_dental:'#77839a',
+    treatment:'#512888',
+    staging:'#6c4aa0',
+    restaging:'#8469b4',
+    monitoring:'#5e7895',
+    diagnosis:'#7893ad',
+    medication_unresolved:'#a17383',
+    medication:'#7289a4',
+    mixed:'#777c91',
+    other:'#8b8d9a'
+  };
+  return colors[category]||'#777c91';
+}
+
 function categoryMeters(){
-  const groups={}; state.costs.forEach(c=>{groups[c.category]=(groups[c.category]||0)+Number(c.amountPaid||0);});
-  const rows=Object.entries(groups).sort((a,b)=>b[1]-a[1]); const max=Math.max(...rows.map(r=>r[1]),1);
-  return `<section class="card" style="box-shadow:none;margin-top:10px"><div class="section-kicker">BY CARE TYPE</div>${rows.map(([k,v])=>`<div class="cost-meter"><div class="cost-meter-row"><span>${esc(k.replaceAll('_',' '))}</span><strong>${money(v)}</strong></div><div class="meter-track"><div class="meter-fill" style="width:${(v/max)*100}%"></div></div></div>`).join('')}</section>`;
+  const groups={};
+  state.costs.forEach(c=>{groups[c.category]=(groups[c.category]||0)+Number(c.amountPaid||0);});
+  const rows=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
+  const max=Math.max(...rows.map(r=>r[1]),1);
+  return `<section class="card" style="box-shadow:none;margin-top:10px">
+    <div class="section-kicker">BY CARE TYPE</div>
+    ${rows.map(([k,v])=>`<div class="cost-meter">
+      <div class="cost-meter-row"><span>${esc(categoryLabel(k))}</span><strong>${money(v)}</strong></div>
+      <div class="meter-track"><div class="meter-fill" style="width:${(v/max)*100}%;background:${careColor(k)}"></div></div>
+    </div>`).join('')}
+  </section>`;
 }
 
 function renderProfileDetails(){
