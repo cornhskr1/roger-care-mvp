@@ -46,68 +46,82 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','clinicalCourse','homeCostSummary','openItems','journalSummary','journalEntries','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','petSubtitle','careModeButton','journalDialog','costDialog'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','clinicalCourse','homeCostSummary','openItems','journalSummary','journalEntries','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      state = migrateState(JSON.parse(saved));
-      persist();
-      return;
-    } catch (_) {}
-  }
   const response = await fetch('./data/seed.json', {cache:'no-store'});
-  state = migrateState(await response.json());
+  const canonical = await response.json();
+
+  let saved = null;
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try { saved = JSON.parse(raw); } catch (_) {}
+  }
+
+  state = saved ? mergeCanonicalSeed(canonical, saved) : canonical;
+  state = migrateState(state);
   persist();
+}
+
+function mergeCanonicalSeed(canonical, saved){
+  const merged = structuredClone(canonical);
+
+  // Preserve owner personalization and all owner-created records while allowing
+  // corrected canonical clinical/journal backfill to flow in on refresh.
+  if (saved.profile?.photoDataUrl) merged.profile.photoDataUrl = saved.profile.photoDataUrl;
+
+  const mergeById = (canonicalRows=[], savedRows=[], keepSaved=true) => {
+    const map = new Map(canonicalRows.map(row => [row.id, row]));
+    savedRows.forEach(row => {
+      if (!row?.id) return;
+      if (!map.has(row.id) || keepSaved) map.set(row.id, {...map.get(row.id), ...row});
+    });
+    return [...map.values()];
+  };
+
+  const migratedSaved = migrateState(saved);
+  merged.observations = mergeById(canonical.observations, migratedSaved.observations, false);
+  merged.costs = mergeById(canonical.costs, migratedSaved.costs, false);
+  merged.medicationAdministrations = mergeById(canonical.medicationAdministrations, migratedSaved.medicationAdministrations, false);
+  merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
+  merged.medicationCourses = mergeById(canonical.medicationCourses, migratedSaved.medicationCourses, false);
+
+  // Owner-entered items have generated IDs and are not present in canonical data.
+  for (const row of migratedSaved.observations || []) if (String(row.id||'').includes('-') && !merged.observations.some(x=>x.id===row.id)) merged.observations.push(row);
+  for (const row of migratedSaved.costs || []) if (String(row.id||'').startsWith('cost-') && !merged.costs.some(x=>x.id===row.id)) merged.costs.push(row);
+  for (const row of migratedSaved.medicationAdministrations || []) if (!merged.medicationAdministrations.some(x=>x.id===row.id)) merged.medicationAdministrations.push(row);
+
+  merged.observations.sort((a,b)=>a.date.localeCompare(b.date));
+  merged.costs.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
+  merged.medicationAdministrations.sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  return merged;
 }
 
 function migrateState(input){
   const next = input || {};
   next.costs = Array.isArray(next.costs) ? next.costs : [];
+  next.observations = Array.isArray(next.observations) ? next.observations : [];
+  next.medications = Array.isArray(next.medications) ? next.medications : [];
+  next.medicationCourses = Array.isArray(next.medicationCourses) ? next.medicationCourses : [];
+  next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
 
   const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
   if (combinedIndex >= 0) {
     next.costs.splice(combinedIndex, 1,
       {
-        id:'cost-0918-treatment',
-        date:'2026-09-18',
-        provider:'K-State Veterinary Health Center',
-        label:'Chemo #4 treatment',
-        amountPaid:193.50,
-        category:'treatment',
-        status:'confirmed',
-        source:'invoice',
-        components:[
-          ['Oncology recheck',36.50],
-          ['Chemo administration',78.00],
-          ['Hazardous drug preparation',55.00],
-          ['Vinblastine',24.00]
-        ]
+        id:'cost-0918-treatment',date:'2026-09-18',provider:'K-State Veterinary Health Center',
+        label:'Chemo #4 treatment',amountPaid:193.50,category:'treatment',status:'confirmed',source:'invoice',
+        components:[['Oncology recheck',36.50],['Chemo administration',78.00],['Hazardous drug preparation',55.00],['Vinblastine',24.00]]
       },
       {
-        id:'cost-0918-restaging',
-        date:'2026-09-18',
-        provider:'K-State Veterinary Health Center',
-        label:'Mid-protocol restaging',
-        amountPaid:667.25,
-        category:'restaging',
-        status:'confirmed',
-        source:'invoice',
-        components:[
-          ['Abdominal ultrasound',403.75],
-          ['Cytology ×2',115.50],
-          ['Ultrasound-guided liver/spleen aspirates',130.00],
-          ['Atipamezole',5.52],
-          ['Butorphanol',7.50],
-          ['Dexmedetomidine',4.98]
-        ]
+        id:'cost-0918-restaging',date:'2026-09-18',provider:'K-State Veterinary Health Center',
+        label:'Mid-protocol restaging',amountPaid:667.25,category:'restaging',status:'confirmed',source:'invoice',
+        components:[['Abdominal ultrasound',403.75],['Cytology ×2',115.50],['Ultrasound-guided liver/spleen aspirates',130.00],['Atipamezole',5.52],['Butorphanol',7.50],['Dexmedetomidine',4.98]]
       }
     );
-    next.costs.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
   }
-  next.schemaVersion = 2;
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),3);
   return next;
 }
 
@@ -127,6 +141,7 @@ function navigate(view){
 function bindDialogs(){
   q('#openJournalComposer').addEventListener('click', openJournalDialog);
   q('#journalAddButton').addEventListener('click', openJournalDialog);
+  q('#medicationAddButton').addEventListener('click', openMedicationDialog);
   q('#costAddButton').addEventListener('click', () => {
     q('#costDate').value = todayIso();
     els.costDialog.showModal();
@@ -184,6 +199,23 @@ function bindForms(){
     persist(); renderAll(); els.costDialog.close(); event.currentTarget.reset(); toast('Cost saved');
   });
 
+  q('#medicationForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
+    state.medicationAdministrations.push({
+      id:uid('medadm'),
+      medicationId:fd.get('medicationId'),
+      date:fd.get('date'),
+      time:fd.get('time') || null,
+      dose:String(fd.get('dose')||'').trim(),
+      status:fd.get('status') || 'given',
+      reason:String(fd.get('reason')||'').trim(),
+      source:'owner journal'
+    });
+    state.medicationAdministrations.sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+    persist(); renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast('Medication administration saved');
+  });
+
   q('#documentForm').addEventListener('submit', async event => {
     event.preventDefault();
     const file = q('#documentFile').files[0];
@@ -198,6 +230,40 @@ function bindForms(){
       await loadDocuments(); renderDocuments(); toast('Document saved on this device');
     } catch (err) { toast('Could not save document on this device', true); }
   });
+}
+
+function openMedicationDialog(){
+  const select=q('#medicationSelect');
+  select.innerHTML=(state.medications||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+  q('#medicationDate').value=todayIso();
+  q('#medicationTime').value='';
+  selectMedicationDefaultDose();
+  select.onchange=selectMedicationDefaultDose;
+  q('#medicationDate').onchange=selectMedicationDefaultDose;
+  els.medicationDialog.showModal();
+}
+
+function selectMedicationDefaultDose(){
+  const medId=q('#medicationSelect')?.value;
+  const date=q('#medicationDate')?.value||todayIso();
+  const med=(state.medications||[]).find(m=>m.id===medId);
+  const dose=q('#medicationDose');
+  const hint=q('#medicationPrescriptionHint');
+  if(!med||!dose||!hint)return;
+  dose.value=defaultDoseForMedication(medId,date);
+  hint.innerHTML=`<strong>Prescribed:</strong> ${esc(med.prescribedDose)}<br><strong>Use:</strong> ${esc(med.indication)}`;
+}
+
+function defaultDoseForMedication(medId,date){
+  if(medId==='med-prednisone') return date>='2026-10-02'?'10 mg':'20 mg';
+  if(medId==='med-cerenia') return '60 mg';
+  if(medId==='med-metronidazole') return '250 mg';
+  if(medId==='med-trazodone') return '200 mg';
+  return '';
+}
+
+function medicationName(id){
+  return (state.medications||[]).find(m=>m.id===id)?.name || id || 'Medication';
 }
 
 function bindProfilePhoto(){
@@ -255,7 +321,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderTreatmentOverlay(); renderJournal(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
+  renderProfile(); renderHome(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
 }
 
 function renderProfile(){
@@ -288,7 +354,8 @@ function renderHome(){
   ].map(m=>`<div class="metric-card"><div class="metric-label">${m[0]}</div><div class="metric-value">${m[1]}</div><div class="metric-note">${m[2]}</div></div>`).join('');
 
   const obs=latestObservation();
-  els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest owner observation</div></div>${severityChip(obs)}</div><div class="item-copy">${esc(obs.notes)}</div>` : 'No observations yet.';
+  const coverage=state.journalCoverageThrough;
+  els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest structured owner observation · journal current through ${fmtDate(coverage||obs.date)}</div></div>${severityChip(obs)}</div><div class="item-copy">${esc(obs.notes)}</div>` : 'No observations yet.';
 
   els.clinicalCourse.innerHTML = state.treatments.map(tr => {
     const nextObs = state.observations.find(o=>o.date>=tr.date && daysBetween(tr.date,o.date)<=5);
@@ -538,9 +605,9 @@ function inCycleWindow(date,window){
 function renderCycleDetails(treatment,window){
   const labs=state.labs.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||a.metric.localeCompare(b.metric));
   const observations=state.observations.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date));
+  const medications=(state.medicationAdministrations||[]).filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
   const costs=state.costs.filter(x=>inCycleWindow(x.date,window));
   const cyclePaid=costs.reduce((sum,c)=>sum+Number(c.amountPaid||0),0);
-  const supportive=[...new Set(observations.flatMap(o=>o.medications||[]))];
 
   const labRows=labs.length?labs.map(l=>`<div class="cycle-result-row"><div>${fmtDate(l.date).replace(', 2026','')}</div><div class="cycle-result-value">${esc(l.metric)}<br>${esc(l.displayValue||l.value)} ${esc(l.unit)}</div><div class="cycle-result-context">${esc(l.context)}<br>${esc(l.source)}</div></div>`).join(''):'<div class="empty-state">No bloodwork is stored in this treatment window yet.</div>';
 
@@ -557,7 +624,7 @@ function renderCycleDetails(treatment,window){
     <div class="cycle-section"><div class="cycle-section-title">WHY THIS DOSE</div><div class="item-copy" style="margin-top:0">${esc(treatment.doseReason)}</div></div>
     <div class="cycle-section"><div class="cycle-section-title">BLOODWORK & CHEMISTRY</div>${labRows}</div>
     <div class="cycle-section"><div class="cycle-section-title">OWNER-OBSERVED SYMPTOMS</div>${obsRows}</div>
-    <div class="cycle-section"><div class="cycle-section-title">SUPPORTIVE MEDICATIONS</div><div class="item-copy" style="margin-top:0">${supportive.length?esc(supportive.join(', ')):'None documented from owner observations in this cycle.'}</div></div>
+    <div class="cycle-section"><div class="cycle-section-title">MEDICATION ADMINISTRATIONS</div>${medications.length?medications.map(a=>`<div class="cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join(''):'<div class="empty-state">No structured medication administrations in this cycle.</div>'}</div>
     ${treatment.recordCheck?`<div class="alert"><strong>Record check:</strong> ${esc(treatment.recordCheck)}</div>`:''}
   </section>`;
 }
@@ -574,9 +641,13 @@ function symptomSeverity(o){
 
 function renderJournal(){
   const obs=[...state.observations].sort((a,b)=>b.date.localeCompare(a.date));
-  const nauseaDays=obs.filter(o=>Number(o.nausea)>0).length, medDays=obs.filter(o=>o.medications?.length).length;
+  const nauseaDays=obs.filter(o=>Number(o.nausea)>0).length;
+  const medDays=new Set((state.medicationAdministrations||[]).filter(a=>a.status==='given').map(a=>a.date)).size;
   els.journalSummary.innerHTML = [
-    [obs.length,'ENTRIES'],[nauseaDays,'NAUSEA DAYS'],[medDays,'SUPPORTIVE-MED DAYS'],[obs.filter(o=>Number(o.vomiting)>0).reduce((s,o)=>s+Number(o.vomiting),0),'VOMITING EVENTS']
+    [obs.length,'STRUCTURED ENTRIES'],
+    [nauseaDays,'NAUSEA DAYS'],
+    [medDays,'MEDICATION DAYS'],
+    [fmtDate(state.journalCoverageThrough||obs[0]?.date||'2026-10-02').replace(', 2026',''),'CURRENT THROUGH']
   ].map(x=>`<div class="summary-tile"><div class="summary-value">${x[0]}</div><div class="summary-label">${x[1]}</div></div>`).join('');
   els.journalEntries.innerHTML = obs.map(o=>`<article class="observation-card"><div class="row-between"><div><div class="item-title">${fmtDate(o.date)}</div><div class="item-meta">Owner observation</div></div>${severityChip(o)}</div><div class="chip-row">${observationChips(o)}</div><div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta" style="margin-top:8px"><strong>Medication:</strong> ${esc(o.medications.join(', '))}</div>`:''}</article>`).join('');
 }
@@ -586,14 +657,41 @@ function observationChips(o){
   return chips.map(x=>`<span class="chip">${esc(x)}</span>`).join('');
 }
 
+function renderMedications(){
+  const administrations=[...(state.medicationAdministrations||[])].sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''));
+  const given=administrations.filter(a=>a.status==='given');
+  const cerenia=given.filter(a=>a.medicationId==='med-cerenia');
+  const metro=given.filter(a=>a.medicationId==='med-metronidazole');
+  const traz=given.filter(a=>a.medicationId==='med-trazodone');
+  const currentPred=(state.medicationCourses||[]).find(c=>c.medicationId==='med-prednisone'&&!c.endDate);
+
+  els.medicationSummary.innerHTML=`<div class="summary-grid medication-grid">
+    <div class="summary-tile med-summary owner-med"><div class="summary-value">${cerenia.length}</div><div class="summary-label">CERENIA GIVEN</div><div class="item-meta">60 mg PRN</div></div>
+    <div class="summary-tile med-summary owner-med"><div class="summary-value">${metro.length}</div><div class="summary-label">METRONIDAZOLE</div><div class="item-meta">250 mg PRN</div></div>
+    <div class="summary-tile med-summary ksu-med"><div class="summary-value">${currentPred?.dose||'10 mg'}</div><div class="summary-label">PREDNISONE NOW</div><div class="item-meta">every 24 hours</div></div>
+    <div class="summary-tile med-summary neutral-med"><div class="summary-value">${traz.length}</div><div class="summary-label">TRAZODONE DAYS</div><div class="item-meta">200 mg pre-visit</div></div>
+  </div>`;
+
+  els.medicationHistory.innerHTML=administrations.map(a=>{
+    const med=(state.medications||[]).find(m=>m.id===a.medicationId);
+    const time=a.time?` · ${esc(a.time)}`:'';
+    const prescribed=med?.prescribedDose?`<div class="item-meta"><strong>Prescribed:</strong> ${esc(med.prescribedDose)}</div>`:'';
+    return `<article class="observation-card medication-card">
+      <div class="row-between"><div><div class="item-title">${esc(medicationName(a.medicationId))} · ${esc(a.dose||'dose not recorded')}</div><div class="item-meta">${fmtDate(a.date)}${time}</div></div><span class="chip ${a.status==='held'?'warn':'info'}">${esc(a.status)}</span></div>
+      ${a.reason?`<div class="item-copy">${esc(a.reason)}</div>`:''}
+      ${prescribed}
+    </article>`;
+  }).join('');
+}
+
 function renderTimeline(){
   const events=[];
   state.milestones.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:x.title,detail:x.detail}));
   state.treatments.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:`Vinblastine #${x.number} · ${x.doseMg} mg`,detail:`${x.doseMgM2} mg/m² · ${x.weightLb} lb · ${x.doseReason}`}));
-  state.labs.forEach(x=>{ if(['Neutrophils','ALT','ALP'].includes(x.metric)) events.push({date:x.date,kind:'clinical',source:x.source,title:`${x.metric}: ${x.displayValue||x.value} ${x.unit}`,detail:x.context}); });
+  state.labs.forEach(x=>{ if(['Neutrophils','ALT','ALP'].includes(x.metric)) events.push({date:x.date,kind:'lab',source:x.source,title:`${x.metric}: ${x.displayValue||x.value} ${x.unit}`,detail:x.context}); });
   state.observations.forEach(x=>events.push({date:x.date,kind:'owner',source:'Owner observation',title:'Home observation',detail:x.notes}));
-  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter).sort((a,b)=>b.date.localeCompare(a.date));
-  els.timelineEntries.innerHTML=filtered.map(x=>`<article class="timeline-entry ${x.kind==='owner'?'owner':''}"><div class="timeline-date">${fmtDate(x.date).replace(', 2026','')}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-content"><div class="source-label">${esc(x.source)}</div><div class="item-title">${esc(x.title)}</div><div class="item-copy">${esc(x.detail)}</div></div></article>`).join('');
+  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter||(timelineFilter==='clinical'&&x.kind==='lab')).sort((a,b)=>b.date.localeCompare(a.date));
+  els.timelineEntries.innerHTML=filtered.map(x=>`<article class="timeline-entry ${x.kind==='owner'?'owner':x.kind==='lab'?'lab':''}"><div class="timeline-date">${fmtDate(x.date).replace(', 2026','')}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-content"><div class="source-label">${esc(x.source)}</div><div class="item-title">${esc(x.title)}</div><div class="item-copy">${esc(x.detail)}</div></div></article>`).join('');
 }
 
 function renderCosts(){
