@@ -34,6 +34,7 @@ async function boot(){
   bindForms();
   bindExports();
   bindProfilePhoto();
+  bindOverlayControls();
   await loadState();
   await loadDocuments();
   renderAll();
@@ -170,8 +171,14 @@ function compressImage(file,maxSize,quality){
   });
 }
 
+function bindOverlayControls(){
+  const metric = q('#overlayMetric');
+  if (!metric) return;
+  metric.addEventListener('change', renderTreatmentOverlay);
+}
+
 function renderAll(){
-  renderProfile(); renderHome(); renderJournal(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
+  renderProfile(); renderHome(); renderTreatmentOverlay(); renderJournal(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
 }
 
 function renderProfile(){
@@ -206,7 +213,7 @@ function renderHome(){
   const obs=latestObservation();
   els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest owner observation</div></div>${severityChip(obs)}</div><div class="item-copy">${esc(obs.notes)}</div>` : 'No observations yet.';
 
-  els.clinicalCourse.innerHTML = state.treatments.slice(-4).map(tr => {
+  els.clinicalCourse.innerHTML = state.treatments.map(tr => {
     const nextObs = state.observations.find(o=>o.date>=tr.date && daysBetween(tr.date,o.date)<=5);
     const postLab = state.labs.filter(l=>l.metric==='Neutrophils' && l.date>tr.date && daysBetween(tr.date,l.date)<=9).sort((a,b)=>a.date.localeCompare(b.date))[0];
     const pieces=[];
@@ -233,6 +240,159 @@ function severityChip(o){
   return '<span class="chip">stable / mild</span>';
 }
 function daysBetween(a,b){ return Math.round((new Date(`${b}T12:00:00Z`)-new Date(`${a}T12:00:00Z`))/86400000); }
+
+function renderTreatmentOverlay(){
+  const root = q('#treatmentOverlayChart');
+  const detail = q('#treatmentOverlayDetail');
+  const selector = q('#overlayMetric');
+  const legend = q('#overlayBloodLegend');
+  if (!root || !detail || !selector || !state) return;
+
+  const metric = selector.value || 'Neutrophils';
+  if (legend) legend.textContent = metric;
+
+  const blood = state.labs
+    .filter(x => x.metric === metric)
+    .slice()
+    .sort((a,b) => a.date.localeCompare(b.date));
+  const treatments = state.treatments.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const symptoms = state.observations
+    .map(o => ({...o, severity: symptomSeverity(o)}))
+    .filter(o => o.severity > 0)
+    .sort((a,b) => a.date.localeCompare(b.date));
+
+  if (!blood.length || !treatments.length) {
+    root.innerHTML = '<div class="empty-state">Not enough treatment/lab data to draw the overlay yet.</div>';
+    return;
+  }
+
+  const allDates = [
+    ...blood.map(x => x.date),
+    ...treatments.map(x => x.date),
+    ...symptoms.map(x => x.date)
+  ].sort();
+  const start = treatments[0].date;
+  const end = allDates[allDates.length - 1];
+  const startMs = Date.parse(start + 'T12:00:00Z');
+  const endMs = Date.parse(end + 'T12:00:00Z');
+  const span = Math.max(1, endMs - startMs);
+
+  const W=360, H=278, L=42, R=38, T=34, B=58;
+  const plotBottom=194, symptomY=222;
+  const x = date => L + ((Date.parse(date + 'T12:00:00Z') - startMs) / span) * (W-L-R);
+
+  const thresholdMap = {Neutrophils:2, Hematocrit:25, Platelets:75};
+  const unitMap = {Neutrophils:'K/µL', Hematocrit:'%', Platelets:'K/µL'};
+  const threshold = thresholdMap[metric];
+  const unit = unitMap[metric] || '';
+
+  const bloodMaxRaw = Math.max(...blood.map(x=>Number(x.value)||0), threshold || 0);
+  const bloodMax = Math.max(1, bloodMaxRaw * 1.12);
+  const yBlood = value => plotBottom - (Number(value) / bloodMax) * (plotBottom-T);
+
+  const doseMin=1.8, doseMax=2.65;
+  const yDose = value => plotBottom - ((Number(value)-doseMin)/(doseMax-doseMin))*(plotBottom-T);
+
+  let svg = '';
+  // Horizontal grid + left blood axis.
+  for(let i=0;i<4;i++){
+    const value = bloodMax * (3-i)/3;
+    const yy = T + i*(plotBottom-T)/3;
+    const label = metric==='Platelets' ? Math.round(value) : (value<10 ? value.toFixed(1) : Math.round(value));
+    svg += `<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#dce4df" stroke-width="1"/>`;
+    svg += `<text x="${L-6}" y="${yy+4}" text-anchor="end" font-size="9" fill="#68766f">${label}</text>`;
+  }
+  svg += `<text x="6" y="18" font-size="9" font-weight="700" fill="#3e6f5d">${metric} ${unit}</text>`;
+
+  // Right dose scale.
+  [2.0,2.3,2.6].forEach(v=>{
+    const yy=yDose(v);
+    svg += `<text x="${W-3}" y="${yy+3}" text-anchor="end" font-size="8.5" fill="#97672c">${v.toFixed(1)}</text>`;
+  });
+  svg += `<text x="${W-3}" y="18" text-anchor="end" font-size="9" font-weight="700" fill="#97672c">Dose mg/m²</text>`;
+
+  // Treatment event guides spanning the clinical plot into the symptom lane.
+  treatments.forEach((tr,i)=>{
+    const xx=x(tr.date);
+    svg += `<line x1="${xx}" y1="${T}" x2="${xx}" y2="${symptomY+8}" stroke="#97672c" stroke-opacity=".24" stroke-dasharray="3 4"/>`;
+    svg += `<text x="${xx}" y="29" text-anchor="middle" font-size="8.5" font-weight="800" fill="#97672c">#${tr.number}</text>`;
+  });
+
+  // Threshold.
+  if (threshold != null && threshold <= bloodMax){
+    const yy=yBlood(threshold);
+    svg += `<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#68766f" stroke-dasharray="5 4" stroke-width="1.2"/>`;
+    svg += `<text x="${W-R-2}" y="${yy-4}" text-anchor="end" font-size="8.5" fill="#68766f">treatment threshold</text>`;
+  }
+
+  // Blood line and points.
+  const bloodPath = blood.map((p,i)=>`${i?'L':'M'}${x(p.date)},${yBlood(p.value)}`).join(' ');
+  svg += `<path d="${bloodPath}" fill="none" stroke="#3e6f5d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+  blood.forEach((p,i)=>{
+    const xx=x(p.date), yy=yBlood(p.value);
+    svg += `<circle class="chart-hit" tabindex="0" data-kind="blood" data-index="${i}" cx="${xx}" cy="${yy}" r="5.5" fill="#3e6f5d" stroke="#fff" stroke-width="2.5"/>`;
+  });
+
+  // Dose line and points.
+  const dosePath = treatments.map((tr,i)=>`${i?'L':'M'}${x(tr.date)},${yDose(tr.doseMgM2)}`).join(' ');
+  svg += `<path d="${dosePath}" fill="none" stroke="#97672c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  treatments.forEach((tr,i)=>{
+    const xx=x(tr.date), yy=yDose(tr.doseMgM2);
+    svg += `<circle class="chart-hit" tabindex="0" data-kind="treatment" data-index="${i}" cx="${xx}" cy="${yy}" r="5.5" fill="#97672c" stroke="#fff" stroke-width="2.5"/>`;
+  });
+
+  // Symptom lane.
+  svg += `<line x1="${L}" y1="${symptomY}" x2="${W-R}" y2="${symptomY}" stroke="#dce4df"/>`;
+  svg += `<text x="${L-6}" y="${symptomY+3}" text-anchor="end" font-size="8.5" fill="#944c4c">Sx</text>`;
+  symptoms.forEach((o,i)=>{
+    const xx=x(o.date), r=4.5 + Math.min(3,o.severity)*1.2;
+    svg += `<circle class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" cx="${xx}" cy="${symptomY}" r="${r}" fill="#944c4c" fill-opacity=".88" stroke="#fff" stroke-width="2"/>`;
+  });
+
+  // Date labels use treatment anchors, because those are the most meaningful dates here.
+  treatments.forEach(tr=>{
+    const xx=x(tr.date);
+    const d=fmtDate(tr.date).replace(', 2026','');
+    svg += `<text x="${xx}" y="260" text-anchor="middle" font-size="8" fill="#68766f">${d}</text>`;
+  });
+
+  root.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Treatment response overlay chart">${svg}</svg>`;
+
+  root.querySelectorAll('.chart-hit').forEach(node=>{
+    const show = () => {
+      const kind=node.dataset.kind, i=Number(node.dataset.index);
+      if(kind==='blood'){
+        const p=blood[i];
+        detail.innerHTML=`<strong>${fmtDate(p.date)} · ${esc(metric)} ${esc(p.displayValue||p.value)} ${esc(p.unit)}</strong>${esc(p.context)} · ${esc(p.source)}`;
+      } else if(kind==='treatment'){
+        const tr=treatments[i];
+        detail.innerHTML=`<strong>${fmtDate(tr.date)} · Chemo #${tr.number}</strong>Vinblastine ${tr.doseMg} mg · ${tr.doseMgM2} mg/m² · ${tr.weightLb} lb. ${esc(tr.doseReason)}`;
+      } else {
+        const o=symptoms[i];
+        const meds=o.medications?.length ? ` Medication: ${esc(o.medications.join(', '))}.` : '';
+        detail.innerHTML=`<strong>${fmtDate(o.date)} · Owner-observed symptoms</strong>${esc(compactObservation(o))}. ${esc(o.notes)}${meds}`;
+      }
+    };
+    node.addEventListener('click',show);
+    node.addEventListener('focus',show);
+  });
+
+  const first=treatments[0];
+  const firstPost=blood.find(p=>p.date>first.date);
+  detail.innerHTML = firstPost
+    ? `<strong>Start at chemo #1</strong>${fmtDate(first.date)} · ${first.doseMg} mg (${first.doseMgM2} mg/m²), followed by ${metric.toLowerCase()} ${firstPost.displayValue||firstPost.value} ${firstPost.unit} on ${fmtDate(firstPost.date)}.`
+    : 'Tap a chemo, lab, or symptom marker to inspect that point.';
+}
+
+function symptomSeverity(o){
+  let s=0;
+  s=Math.max(s,Number(o.nausea)||0,Number(o.pain)||0);
+  if(Number(o.vomiting)>0) s=Math.max(s,2);
+  const stool=parseFloat(o.stool);
+  if(Number.isFinite(stool) && stool>=6) s=Math.max(s,2);
+  if(String(o.energy||'').toLowerCase().includes('low')) s=Math.max(s,1);
+  return s;
+}
 
 function renderJournal(){
   const obs=[...state.observations].sort((a,b)=>b.date.localeCompare(a.date));
