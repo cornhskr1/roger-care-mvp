@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "name": "Roger",
+    "species": "Canine",
+    "breed": "Australian Shepherd",
+    "sex": "Male",
+    "reproductiveStatus": "Neutered",
+    "dob": "2015-04-20",
+    "diagnosis": "High-grade, Grade II mast cell tumor of the right caudal flank, completely excised",
+    "currentStatus": "Vinblastine treatment 5 of 8 complete",
+    "photoDataUrl": null
+  },
+  "sourceNotes": [
+    {
+      "id": "src-ksu-0804",
+      "date": "2026-08-04",
+      "sourceType": "clinician_note",
+      "provider": "K-State Veterinary Health Center",
+      "label": "Oncology consultation",
+      "summary": "Recommended 8 vinblastine injections (4 weekly, then 4 every two weeks), CBC before each treatment, restaging at doses 4 and 8. Estimated complete treatment-course cost approximately $3,500–$4,000; approximately $250 per chemotherapy injection excluding primary-veterinarian bloodwork; restaging approximately $700."
+    },
+    {
+      "id": "src-pathology-0721",
+      "date": "2026-07-21",
+      "sourceType": "pathology",
+      "provider": "IDEXX / Optimum Veterinary",
+      "label": "Histopathology",
+      "summary": "Mast cell tumor, Grade II (Patnaik) / high grade (Kiupel); mitotic count 8; complete excision; nearest peripheral margin 6 mm and deep margin 5 mm; vascular invasion not observed."
+    }
+  ],
+  "treatments": [
+    {
+      "id": "chemo-1",
+      "number": 1,
+      "date": "2026-08-14",
+      "drug": "Vinblastine",
+      "doseMg": 2.2,
+      "doseMgM2": 2.53,
+      "weightLb": 55.6,
+      "prednisone": "20 mg daily",
+      "doseReason": "Initial protocol dose.",
+      "clinicalSummary": "First vinblastine treatment. CBC described as unremarkable. Chemistry showed mildly elevated liver enzymes.",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "chemo-2",
+      "number": 2,
+      "date": "2026-08-28",
+      "drug": "Vinblastine",
+      "doseMg": 1.7,
+      "doseMgM2": 2.0,
+      "weightLb": 53.4,
+      "prednisone": "20 mg daily",
+      "doseReason": "20% dose reduction after post-treatment neutropenia.",
+      "clinicalSummary": "K-State documented decreased energy after treatment #1. Neutrophils were 0.25 K/µL on 8/20; amoxicillin was started.",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "chemo-3",
+      "number": 3,
+      "date": "2026-09-11",
+      "drug": "Vinblastine",
+      "doseMg": 1.8,
+      "doseMgM2": 2.2,
+      "weightLb": 52.3,
+      "prednisone": "20 mg daily",
+      "doseReason": "10% increase from treatment #2 after counts recovered; treatment delayed one week after 9/3 neutropenia.",
+      "clinicalSummary": "K-State recorded manageable nausea after treatment #2 and recovery of counts before treatment #3.",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "chemo-4",
+      "number": 4,
+      "date": "2026-09-18",
+      "drug": "Vinblastine",
+      "doseMg": 1.9,
+      "doseMgM2": 2.31,
+      "weightLb": 52.7,
+      "prednisone": "20 mg daily through 10/1",
+      "doseReason": "Slight increase after prior treatment was tolerated.",
+      "clinicalSummary": "Vinblastine plus restaging. Abdominal ultrasound and liver/spleen cytology found no evidence of mast cell tumor involvement or other cancer.",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "chemo-5",
+      "number": 5,
+      "date": "2026-10-02",
+      "drug": "Vinblastine",
+      "doseMg": 2.0,
+      "doseMgM2": 2.42,
+      "weightLb": 51.8,
+      "prednisone": "10 mg daily beginning 10/2",
+      "doseReason": "Continued dose escalation with hematologic recovery.",
+      "clinicalSummary": "Clinical note records vinblastine 2.0 mg (2.42 mg/m²). Prednisone decreased to 10 mg daily.",
+      "recordCheck": "The 10/2 invoice contains two separate 2 mL vinblastine billing lines. Clinical note states 2.0 mg total; verify with K-State.",
+      "source": "K-State clinical note + invoice"
+    }
+  ],
+  "labs": [
+    {"date":"2026-06-30","metric":"Neutrophils","value":4.92,"unit":"K/µL","context":"Baseline","source":"Optimum / IDEXX"},
+    {"date":"2026-08-20","metric":"Neutrophils","value":0.25,"unit":"K/µL","context":"Post-chemo #1 nadir","source":"Optimum / IDEXX"},
+    {"date":"2026-08-27","metric":"Neutrophils","value":14.43,"unit":"K/µL","context":"Pre-chemo #2","source":"Optimum / IDEXX"},
+    {"date":"2026-09-03","metric":"Neutrophils","value":1.79,"unit":"K/µL","context":"Post-chemo #2; #3 delayed","source":"Optimum / IDEXX"},
+    {"date":"2026-09-10","metric":"Neutrophils","value":7.44,"unit":"K/µL","context":"Pre-chemo #3","source":"Optimum / IDEXX"},
+    {"date":"2026-09-17","metric":"Neutrophils","value":2.50,"unit":"K/µL","context":"Pre-chemo #4","source":"Optimum / IDEXX"},
+    {"date":"2026-10-01","metric":"Neutrophils","value":13.89,"unit":"K/µL","context":"Pre-chemo #5","source":"Optimum / IDEXX"},
+
+    {"date":"2026-06-30","metric":"Hematocrit","value":42.5,"unit":"%","context":"Baseline","source":"Optimum / IDEXX"},
+    {"date":"2026-08-20","metric":"Hematocrit","value":38.5,"unit":"%","context":"Post-chemo #1","source":"Optimum / IDEXX"},
+    {"date":"2026-08-27","metric":"Hematocrit","value":37.5,"unit":"%","context":"Pre-chemo #2","source":"Optimum / IDEXX"},
+    {"date":"2026-09-03","metric":"Hematocrit","value":33.5,"unit":"%","context":"Post-chemo #2","source":"Optimum / IDEXX"},
+    {"date":"2026-09-10","metric":"Hematocrit","value":34.8,"unit":"%","context":"Pre-chemo #3","source":"Optimum / IDEXX"},
+    {"date":"2026-09-17","metric":"Hematocrit","value":32.7,"unit":"%","context":"Pre-chemo #4","source":"Optimum / IDEXX"},
+    {"date":"2026-10-01","metric":"Hematocrit","value":32.0,"unit":"%","context":"Pre-chemo #5","source":"Optimum / IDEXX"},
+
+    {"date":"2026-06-30","metric":"Platelets","value":331,"unit":"K/µL","context":"Baseline","source":"Optimum / IDEXX"},
+    {"date":"2026-08-20","metric":"Platelets","value":384,"unit":"K/µL","context":"Post-chemo #1","source":"Optimum / IDEXX"},
+    {"date":"2026-08-27","metric":"Platelets","value":337,"unit":"K/µL","context":"Pre-chemo #2","source":"Optimum / IDEXX"},
+    {"date":"2026-09-03","metric":"Platelets","value":385,"unit":"K/µL","context":"Post-chemo #2","source":"Optimum / IDEXX"},
+    {"date":"2026-09-10","metric":"Platelets","value":395,"unit":"K/µL","context":"Pre-chemo #3","source":"Optimum / IDEXX"},
+    {"date":"2026-09-17","metric":"Platelets","value":367,"unit":"K/µL","context":"Pre-chemo #4","source":"Optimum / IDEXX"},
+    {"date":"2026-10-01","metric":"Platelets","value":442,"unit":"K/µL","context":"Pre-chemo #5","source":"Optimum / IDEXX"},
+
+    {"date":"2026-06-30","metric":"ALT","value":66,"unit":"U/L","context":"Baseline","source":"Optimum / IDEXX"},
+    {"date":"2026-08-14","metric":"ALT","value":168,"unit":"U/L","context":"Chemo #1 chemistry","source":"K-State"},
+    {"date":"2026-10-01","metric":"ALT","value":332,"unit":"U/L","context":"Pre-chemo #5 chemistry","source":"Optimum / IDEXX"},
+    {"date":"2026-06-30","metric":"ALP","value":74,"unit":"U/L","context":"Baseline","source":"Optimum / IDEXX"},
+    {"date":"2026-08-14","metric":"ALP","value":153,"unit":"U/L","context":"Chemo #1 chemistry","source":"K-State"},
+    {"date":"2026-10-01","metric":"ALP","value":2000,"unit":"U/L","displayValue":">2,000","context":"Pre-chemo #5 chemistry","source":"Optimum / IDEXX"}
+  ],
+  "observations": [
+    {"id":"obs-0817","date":"2026-08-17","appetite":"normal","energy":"normal","nausea":0,"vomiting":0,"stool":"4","hydration":"good","urination":"normal","pain":0,"medications":[],"notes":"Four well-formed #4 stools. Appetite good. Self-hydrating well; urine light yellow.","source":"owner_observation"},
+    {"id":"obs-0819","date":"2026-08-19","appetite":"normal","energy":"low","nausea":2,"vomiting":0,"stool":"","hydration":"","urination":"","pain":0,"medications":[],"notes":"Licking, panting and stomach gurgling; decreased energy documented around this period.","source":"owner_observation"},
+    {"id":"obs-0831","date":"2026-08-31","appetite":"normal","energy":"","nausea":2,"vomiting":0,"stool":"","hydration":"","urination":"","pain":0,"medications":["Cerenia"],"notes":"Nausea/restlessness. Cerenia used.","source":"owner_observation"},
+    {"id":"obs-0913","date":"2026-09-13","appetite":"normal","energy":"","nausea":2,"vomiting":0,"stool":"","hydration":"","urination":"","pain":0,"medications":[],"notes":"Borborygmi, lip licking, repeated swallowing and drooling.","source":"owner_observation"},
+    {"id":"obs-0921","date":"2026-09-21","appetite":"","energy":"","nausea":2,"vomiting":0,"stool":"5–6","hydration":"","urination":"","pain":0,"medications":[],"notes":"Nausea, drooling and lip licking. Subsequent bright-red blood noted with stool.","source":"owner_observation"},
+    {"id":"obs-0924","date":"2026-09-24","appetite":"","energy":"","nausea":0,"vomiting":0,"stool":"8","hydration":"","urination":"","pain":0,"medications":["Metronidazole"],"notes":"Diarrhea; possible blood. Metronidazole given.","source":"owner_observation"},
+    {"id":"obs-0928","date":"2026-09-28","appetite":"","energy":"","nausea":2,"vomiting":0,"stool":"","hydration":"","urination":"","pain":0,"medications":["Cerenia (9/29)"],"notes":"Recurrent borborygmi, nausea, lip licking and repeated swallowing. Cerenia given the next day.","source":"owner_observation"},
+    {"id":"obs-0930","date":"2026-09-30","appetite":"","energy":"","nausea":0,"vomiting":0,"stool":"","hydration":"","urination":"","pain":0,"medications":[],"notes":"No nausea noted.","source":"owner_observation"}
+  ],
+  "costs": [
+    {"id":"cost-0629","date":"2026-06-29","provider":"Optimum Veterinary","label":"Initial mass workup","amountPaid":326.18,"category":"diagnosis","status":"confirmed","source":"invoice"},
+    {"id":"cost-0714a","date":"2026-07-14","provider":"Optimum Veterinary","label":"Surgery / COHAT day","amountPaid":1718.23,"category":"mixed_surgery_dental","status":"confirmed","source":"payment_confirmed"},
+    {"id":"cost-0714b","date":"2026-07-14","provider":"Optimum Veterinary","label":"Additional same-day charge","amountPaid":20.46,"category":"medication_unresolved","status":"provisional","source":"payment_confirmed"},
+    {"id":"cost-0804","date":"2026-08-04","provider":"K-State Veterinary Health Center","label":"Oncology staging","amountPaid":971.88,"category":"staging","status":"confirmed","source":"invoice"},
+    {"id":"cost-0814","date":"2026-08-14","provider":"K-State Veterinary Health Center","label":"Chemo #1","amountPaid":425.56,"category":"treatment","status":"confirmed","source":"invoice"},
+    {"id":"cost-0820","date":"2026-08-20","provider":"Optimum Veterinary","label":"CBC","amountPaid":116.48,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-0827","date":"2026-08-27","provider":"Optimum Veterinary","label":"CBC","amountPaid":116.48,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-0828","date":"2026-08-28","provider":"K-State Veterinary Health Center","label":"Chemo #2","amountPaid":191.50,"category":"treatment","status":"confirmed","source":"invoice"},
+    {"id":"cost-0903","date":"2026-09-03","provider":"Optimum Veterinary","label":"CBC","amountPaid":116.48,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-0910","date":"2026-09-10","provider":"Optimum Veterinary","label":"CBC","amountPaid":116.48,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-0911","date":"2026-09-11","provider":"K-State Veterinary Health Center","label":"Chemo #3","amountPaid":285.19,"category":"treatment","status":"confirmed","source":"invoice"},
+    {"id":"cost-0917","date":"2026-09-17","provider":"Optimum Veterinary","label":"CBC","amountPaid":107.83,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-0918","date":"2026-09-18","provider":"K-State Veterinary Health Center","label":"Chemo #4 + restaging","amountPaid":860.75,"category":"treatment_restaging","status":"confirmed","source":"invoice"},
+    {"id":"cost-1001","date":"2026-10-01","provider":"Optimum Veterinary","label":"CBC + chemistry","amountPaid":220.23,"category":"monitoring","status":"confirmed","source":"invoice"},
+    {"id":"cost-1002","date":"2026-10-02","provider":"K-State Veterinary Health Center","label":"Chemo #5","amountPaid":301.94,"category":"treatment","status":"confirmed","source":"invoice"}
+  ],
+  "milestones": [
+    {"date":"2026-06-29","type":"diagnosis","title":"Initial mass evaluation","detail":"Ulcerated right-flank mass evaluated; FNA showed significant mast cells. Pre-surgical bloodwork obtained.","source":"Optimum record"},
+    {"date":"2026-07-14","type":"procedure","title":"Mass excision","detail":"Right-flank mass surgically removed during the same anesthetic event as dental care.","source":"Optimum record"},
+    {"date":"2026-07-21","type":"pathology","title":"Pathology finalized","detail":"Grade II Patnaik / high-grade Kiupel mast cell tumor; complete excision; no vascular invasion observed.","source":"IDEXX pathology"},
+    {"date":"2026-08-04","type":"staging","title":"K-State staging and treatment plan","detail":"No evidence of metastasis identified in liver or spleen. Eight-dose vinblastine protocol recommended.","source":"K-State clinical note"},
+    {"date":"2026-08-20","type":"lab","title":"Severe neutropenia after chemo #1","detail":"Neutrophils 0.25 K/µL; amoxicillin started.","source":"Optimum lab + K-State history"},
+    {"date":"2026-09-03","type":"lab","title":"Treatment delay","detail":"Neutrophils 1.79 K/µL; chemotherapy #3 delayed one week.","source":"Optimum lab + K-State note"},
+    {"date":"2026-09-18","type":"restaging","title":"Mid-protocol restaging","detail":"Ultrasound and liver/spleen cytology found no evidence of metastatic mast cell tumor.","source":"K-State clinical note"}
+  ]
+}
