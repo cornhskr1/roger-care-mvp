@@ -411,6 +411,10 @@ function renderTreatmentOverlay(){
     .map(o=>({...o,severity:symptomSeverity(o)}))
     .filter(o=>o.severity>0)
     .sort((a,b)=>a.date.localeCompare(b.date));
+  const medicationAll=(state.medicationAdministrations||[])
+    .filter(a=>a.status==='given')
+    .slice()
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
 
   const blood=selectedCycle
     ? bloodAll.filter(p=>inCycleWindow(p.date,window))
@@ -418,6 +422,9 @@ function renderTreatmentOverlay(){
   const symptoms=selectedCycle
     ? symptomAll.filter(o=>inCycleWindow(o.date,window))
     : symptomAll.filter(o=>o.date>=firstTreatmentDate);
+  const medicationEvents=selectedCycle
+    ? medicationAll.filter(a=>inCycleWindow(a.date,window))
+    : medicationAll.filter(a=>a.date>=firstTreatmentDate);
   const treatments=selectedCycle?[selectedCycle]:allTreatments;
 
   if(!treatments.length){
@@ -506,16 +513,18 @@ function renderTreatmentOverlay(){
     svg+=`<text x="${xx}" y="${yy-9}" text-anchor="middle" font-size="7.8" font-weight="750" fill="#b44f5c">${p.displayValue||p.value}</text>`;
   });
 
-  // Symptom severity track: height means severity; a small blue square means medication was given.
+  // Owner-observed symptom severity track.
   svg+=`<line x1="${L}" y1="${symptomBottom}" x2="${W-R}" y2="${symptomBottom}" stroke="#dedfea"/>`;
   symptoms.forEach((o,i)=>{
     const xx=x(o.date);
     const yy=symptomBottom-(Math.min(3,o.severity)/3)*(symptomBottom-symptomTop);
     svg+=`<line x1="${xx}" y1="${symptomBottom}" x2="${xx}" y2="${yy}" stroke="#5e7895" stroke-width="4" stroke-linecap="round"/>`;
     svg+=`<circle class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" cx="${xx}" cy="${yy}" r="5" fill="#5e7895" stroke="#fff" stroke-width="2"/>`;
-    if(o.medications?.length){
-      svg+=`<rect class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" x="${xx-3.5}" y="${symptomBottom+5}" width="7" height="7" rx="1.5" fill="#b44f5c"/>`;
-    }
+  });
+  medicationEvents.forEach((a,i)=>{
+    const xx=x(a.date);
+    const yy=symptomBottom+8;
+    svg+=`<rect class="chart-hit" tabindex="0" data-kind="medication" data-index="${i}" x="${xx-4}" y="${yy}" width="8" height="8" rx="2" fill="#5e7895" stroke="#fff" stroke-width="1.5"/>`;
   });
   svg+=`<text x="${L-7}" y="${symptomTop+3}" text-anchor="end" font-size="7.5" fill="#707181">3</text>`;
   svg+=`<text x="${L-7}" y="${symptomBottom+3}" text-anchor="end" font-size="7.5" fill="#707181">0</text>`;
@@ -543,10 +552,13 @@ function renderTreatmentOverlay(){
       }else if(kind==='treatment'){
         const tr=treatments[i];
         detail.innerHTML=`<strong>${fmtDate(tr.date)} · Chemo #${tr.number}</strong>Vinblastine ${tr.doseMg} mg · ${tr.doseMgM2} mg/m² · ${tr.weightLb} lb. ${esc(tr.doseReason)}`;
-      }else{
+      }else if(kind==='symptom'){
         const o=symptoms[i];
-        const meds=o.medications?.length?` Medication: ${esc(o.medications.join(', '))}.`:'';
-        detail.innerHTML=`<strong>${fmtDate(o.date)} · Owner-observed symptoms</strong>${esc(compactObservation(o))}. ${esc(o.notes)}${meds}`;
+        detail.innerHTML=`<strong>${fmtDate(o.date)} · Owner-observed symptoms</strong>${esc(compactObservation(o))}. ${esc(o.notes)}`;
+      }else{
+        const a=medicationEvents[i];
+        const time=a.time?` · ${esc(a.time)}`:'';
+        detail.innerHTML=`<strong>${fmtDate(a.date)}${time} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</strong>${esc(a.reason||'Medication administered')}`;
       }
     };
     node.addEventListener('click',show);
