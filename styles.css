@@ -121,7 +121,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .response-chart svg{display:block;width:100%;height:auto;touch-action:manipulation}
 .response-chart .chart-hit{cursor:pointer;outline:none}
 .response-chart .chart-hit:focus{filter:drop-shadow(0 0 2px rgba(33,72,61,.35))}
-.response-detail{min-height:54px;margin-top:8px;padding:10px 11px;border-radius:12px;background:var(--green-soft);font-size:12px;line-height:1.4;color:var(--muted)}
+.response-detail{min-height:54px;margin-top:8px;padding:10px 11px;border-radius:12px;background:#f3f5fa;font-size:12px;line-height:1.4;color:var(--muted)}
 .response-detail strong{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}
 @media(max-width:480px){
   .response-card .card-head{display:block}
@@ -192,3 +192,18 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 #journalEntries .observation-card{border-left:4px solid var(--owner)}
 .timeline-entry.owner .timeline-content{border-left:4px solid var(--owner)}
 .timeline-entry.lab .timeline-content{border-left:4px solid var(--blood)}
+
+.cycle-insights{display:grid;gap:7px;margin-top:10px}
+.cycle-insight{border-radius:11px;padding:9px 10px;border-left:4px solid var(--line);background:#fafafe}
+.cycle-insight-label{font-size:8px;font-weight:900;letter-spacing:.07em;color:var(--muted)}
+.cycle-insight-value{font-size:12px;font-weight:800;line-height:1.35;margin-top:2px}
+.cycle-insight.ksu-insight{border-left-color:var(--ksu);background:#f6f2fb}
+.cycle-insight.owner-insight{border-left-color:var(--owner);background:#f3f7fb}
+.cycle-insight.blood-insight{border-left-color:var(--blood);background:var(--blood-soft)}
+.ksu-title{color:var(--ksu)!important}
+.owner-title{color:var(--owner)!important}
+.blood-title{color:var(--blood)!important}
+.owner-cycle-observation{border-left:3px solid var(--owner);padding-left:9px}
+.medication-cycle-observation{border-left:3px solid var(--owner);padding-left:9px}
+.ksu-cycle{background:#f4effa}
+.ksu-cycle .cycle-kpi-value{color:var(--ksu)}
