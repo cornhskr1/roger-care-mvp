@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "profile": {
     "name": "Roger",
     "species": "Canine",
@@ -442,6 +442,24 @@
       "medications": [],
       "notes": "No nausea noted.",
       "source": "owner_observation"
+    },
+    {
+      "id": "obs-1001-med",
+      "date": "2026-10-01",
+      "appetite": "normal",
+      "energy": "slightly reduced",
+      "nausea": 1,
+      "vomiting": 0,
+      "stool": "4 AM",
+      "hydration": "normal",
+      "urination": "",
+      "pain": 0,
+      "medications": [
+        "Cerenia 60 mg",
+        "Prednisone 20 mg"
+      ],
+      "notes": "Pre-chemo blood draw day. Cerenia administered; journal remains current through 10/2.",
+      "source": "owner_observation"
     }
   ],
   "costs": [
@@ -699,6 +717,268 @@
       "title": "Mid-protocol restaging",
       "detail": "Ultrasound and liver/spleen cytology found no evidence of metastatic mast cell tumor.",
       "source": "K-State clinical note"
+    }
+  ],
+  "journalCoverageThrough": "2026-10-02",
+  "medications": [
+    {
+      "id": "med-prednisone",
+      "name": "Prednisone",
+      "prescribedDose": "20 mg by mouth every 24 hours through 10/1/2026; 10 mg by mouth every 24 hours beginning 10/2/2026",
+      "indication": "Part of mast cell tumor chemotherapy protocol",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "med-cerenia",
+      "name": "Cerenia / maropitant",
+      "prescribedDose": "60 mg by mouth every 24 hours as needed",
+      "indication": "Chemotherapy-associated nausea or vomiting",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "med-metronidazole",
+      "name": "Metronidazole",
+      "prescribedDose": "250 mg by mouth every 12 hours as needed with food",
+      "indication": "Chemotherapy-associated diarrhea",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "med-trazodone",
+      "name": "Trazodone",
+      "prescribedDose": "200 mg by mouth approximately 2 hours before veterinary appointments",
+      "indication": "Pre-visit anxiety/sedation support",
+      "source": "K-State clinical note"
+    },
+    {
+      "id": "med-amoxicillin",
+      "name": "Amoxicillin",
+      "prescribedDose": "Dose not established in the records currently loaded",
+      "indication": "Started after severe neutropenia",
+      "source": "Owner journal + K-State history"
+    }
+  ],
+  "medicationCourses": [
+    {
+      "id": "course-pred-20",
+      "medicationId": "med-prednisone",
+      "startDate": "2026-08-14",
+      "endDate": "2026-10-01",
+      "dose": "20 mg",
+      "frequency": "Every 24 hours",
+      "status": "owner-reported daily use",
+      "source": "owner journal + K-State prescription"
+    },
+    {
+      "id": "course-pred-10",
+      "medicationId": "med-prednisone",
+      "startDate": "2026-10-02",
+      "endDate": null,
+      "dose": "10 mg",
+      "frequency": "Every 24 hours",
+      "status": "started 10/2",
+      "source": "owner journal + K-State prescription"
+    },
+    {
+      "id": "course-amoxicillin",
+      "medicationId": "med-amoxicillin",
+      "startDate": "2026-08-20",
+      "endDate": "2026-08-26",
+      "dose": null,
+      "frequency": null,
+      "status": "course administered; dose not available in current record",
+      "source": "owner journal"
+    }
+  ],
+  "medicationAdministrations": [
+    {
+      "id": "adm-cer-0820",
+      "medicationId": "med-cerenia",
+      "date": "2026-08-20",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0821",
+      "medicationId": "med-cerenia",
+      "date": "2026-08-21",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0831",
+      "medicationId": "med-cerenia",
+      "date": "2026-08-31",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea/restlessness",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0901",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-01",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0913",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-13",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea signs",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0914",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-14",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea signs",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0921",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-21",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea/lip licking/drooling",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0922",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-22",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0923",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-23",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0928-held",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-28",
+      "time": null,
+      "dose": "60 mg",
+      "status": "held",
+      "reason": "nausea signs subsided before dose",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-0929",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-29",
+      "time": "22:00",
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "recurrent nausea/gurgling/restlessness",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-cer-1001",
+      "medicationId": "med-cerenia",
+      "date": "2026-10-01",
+      "time": null,
+      "dose": "60 mg",
+      "status": "given",
+      "reason": "nausea",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-met-0924",
+      "medicationId": "med-metronidazole",
+      "date": "2026-09-24",
+      "time": null,
+      "dose": "250 mg",
+      "status": "given",
+      "reason": "diarrhea / possible blood",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-met-0925",
+      "medicationId": "med-metronidazole",
+      "date": "2026-09-25",
+      "time": "AM",
+      "dose": "250 mg",
+      "status": "given",
+      "reason": "diarrhea follow-up",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-traz-0814",
+      "medicationId": "med-trazodone",
+      "date": "2026-08-14",
+      "time": "08:30",
+      "dose": "200 mg",
+      "status": "given",
+      "reason": "pre-visit",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-traz-0828",
+      "medicationId": "med-trazodone",
+      "date": "2026-08-28",
+      "time": null,
+      "dose": "200 mg",
+      "status": "given",
+      "reason": "pre-visit",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-traz-0911",
+      "medicationId": "med-trazodone",
+      "date": "2026-09-11",
+      "time": null,
+      "dose": "200 mg",
+      "status": "given",
+      "reason": "pre-visit",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-traz-0918",
+      "medicationId": "med-trazodone",
+      "date": "2026-09-18",
+      "time": null,
+      "dose": "200 mg",
+      "status": "given",
+      "reason": "pre-visit",
+      "source": "owner journal"
+    },
+    {
+      "id": "adm-traz-1002",
+      "medicationId": "med-trazodone",
+      "date": "2026-10-02",
+      "time": null,
+      "dose": "200 mg",
+      "status": "given",
+      "reason": "pre-visit",
+      "source": "owner journal"
     }
   ]
 }
