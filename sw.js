@@ -1,4 +1,4 @@
-const CACHE = 'roger-care-v2';
+const CACHE = 'roger-care-v4';
 const ASSETS = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./data/seed.json','./icons/icon.svg'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
