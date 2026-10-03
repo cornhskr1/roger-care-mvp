@@ -97,3 +97,28 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .care-team-mode .care-team-visible{display:block}
 @media(min-width:680px){#mainContent{padding-left:18px;padding-right:18px}.app-header{padding-left:20px;padding-right:20px}.summary-grid{grid-template-columns:repeat(4,1fr)}.form-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.button-stack{grid-template-columns:repeat(2,1fr)}.status-hero{padding:22px}.metric-card{min-width:175px}}
 @media(max-width:380px){.profile-row{grid-template-columns:56px 1fr auto}.avatar-button{width:56px;height:56px;border-radius:18px}.quiet-button{font-size:11px;padding:7px 8px}.form-grid.two,.estimate-grid{grid-template-columns:1fr}.sheet-actions{grid-template-columns:1fr}.summary-grid{grid-template-columns:1fr 1fr}}
+
+/* Treatment response overlay */
+.response-card .card-head{align-items:flex-end}
+.overlay-intro{margin:5px 0 0;max-width:470px}
+.overlay-select-label{display:grid;gap:4px;min-width:132px;flex:0 0 auto}
+.overlay-select-label>span{font-size:9px;font-weight:850;letter-spacing:.06em;color:var(--muted)}
+.overlay-select-label select{min-height:40px;padding:7px 30px 7px 9px;font-size:12px}
+.overlay-legend{display:flex;gap:11px 14px;flex-wrap:wrap;margin:11px 0 6px;font-size:10px;color:var(--muted);font-weight:750}
+.overlay-legend>span{display:inline-flex;align-items:center;gap:5px}
+.legend-line{display:inline-block;width:19px;height:0;border-top:3px solid var(--green2);border-radius:999px}
+.legend-line.dose{border-color:var(--gold)}
+.legend-line.threshold{border-color:var(--muted);border-top-style:dashed;border-top-width:2px}
+.legend-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red)}
+.response-chart{width:100%;overflow:hidden;margin-top:2px}
+.response-chart svg{display:block;width:100%;height:auto;touch-action:manipulation}
+.response-chart .chart-hit{cursor:pointer;outline:none}
+.response-chart .chart-hit:focus{filter:drop-shadow(0 0 2px rgba(33,72,61,.35))}
+.response-detail{min-height:54px;margin-top:8px;padding:10px 11px;border-radius:12px;background:var(--green-soft);font-size:12px;line-height:1.4;color:var(--muted)}
+.response-detail strong{display:block;color:var(--ink);font-size:13px;margin-bottom:2px}
+@media(max-width:480px){
+  .response-card .card-head{display:block}
+  .overlay-select-label{margin-top:10px;width:100%;min-width:0}
+  .overlay-select-label select{width:100%;font-size:16px;min-height:44px}
+  .overlay-legend{gap:8px 11px}
+}
