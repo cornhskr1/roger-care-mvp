@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#21483d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Roger Care">
+  <title>Roger Care</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="app-header">
+      <div class="profile-row">
+        <button id="profilePhotoButton" class="avatar-button" type="button" aria-label="Change Roger's profile photo">
+          <img id="profilePhoto" alt="Roger profile" hidden>
+          <span id="profileInitial" class="avatar-fallback">R</span>
+        </button>
+        <div class="profile-copy">
+          <div class="eyebrow">LONGITUDINAL ONCOLOGY RECORD</div>
+          <h1 id="petName">Roger</h1>
+          <p id="petSubtitle">Australian Shepherd · Male · Neutered</p>
+        </div>
+        <button id="careModeButton" class="quiet-button" type="button" aria-pressed="false">Care team</button>
+      </div>
+      <input id="profilePhotoInput" type="file" accept="image/*" hidden>
+    </header>
+
+    <main id="mainContent">
+      <section id="view-home" class="view active" data-view="home">
+        <div id="statusHero" class="status-hero"></div>
+        <div id="metricStrip" class="metric-strip"></div>
+
+        <section class="card quick-log-card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">TODAY</div>
+              <h2>How is Roger doing?</h2>
+            </div>
+            <button id="openJournalComposer" type="button" class="primary-button compact">Log today</button>
+          </div>
+          <div id="latestObservation" class="empty-state"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CLINICAL COURSE</div>
+              <h2>Dose → bloodwork → symptoms</h2>
+            </div>
+          </div>
+          <div id="clinicalCourse"></div>
+        </section>
+
+        <section class="card owner-only">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CARE BURDEN</div>
+              <h2>Owner-paid cost</h2>
+            </div>
+            <button class="text-button" data-nav="costs" type="button">View costs</button>
+          </div>
+          <div id="homeCostSummary"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">NEXT</div>
+              <h2>Open items</h2>
+            </div>
+          </div>
+          <div id="openItems"></div>
+        </section>
+      </section>
+
+      <section id="view-journal" class="view" data-view="journal">
+        <div class="page-title-row">
+          <div>
+            <div class="section-kicker">OWNER OBSERVATIONS</div>
+            <h2>Daily journal</h2>
+            <p>Fast enough to use every day. Detailed enough to matter later.</p>
+          </div>
+          <button id="journalAddButton" class="primary-button compact" type="button">+ Entry</button>
+        </div>
+        <div id="journalSummary" class="summary-grid"></div>
+        <div id="journalEntries" class="stack"></div>
+      </section>
+
+      <section id="view-timeline" class="view" data-view="timeline">
+        <div class="page-title-row">
+          <div>
+            <div class="section-kicker">LONGITUDINAL RECORD</div>
+            <h2>Treatment timeline</h2>
+            <p>Clinical notes, labs, treatments and owner observations aligned by date.</p>
+          </div>
+        </div>
+        <div class="segmented" role="group" aria-label="Timeline filter">
+          <button class="segment active" type="button" data-timeline-filter="all">All</button>
+          <button class="segment" type="button" data-timeline-filter="clinical">Clinical</button>
+          <button class="segment" type="button" data-timeline-filter="owner">Owner</button>
+        </div>
+        <div id="timelineEntries" class="timeline"></div>
+      </section>
+
+      <section id="view-costs" class="view" data-view="costs">
+        <div class="page-title-row">
+          <div>
+            <div class="section-kicker">FAMILY FINANCIAL BURDEN</div>
+            <h2>Cost of care</h2>
+            <p>Amounts paid only. No bank or payment-account information is stored.</p>
+          </div>
+          <button id="costAddButton" class="primary-button compact" type="button">+ Cost</button>
+        </div>
+        <div id="costSummary"></div>
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">EXPECTED VS ACTUAL</div>
+              <h2>Treatment-course context</h2>
+            </div>
+          </div>
+          <div id="estimateComparison"></div>
+        </section>
+        <div id="costEntries" class="stack"></div>
+      </section>
+
+      <section id="view-more" class="view" data-view="more">
+        <div class="page-title-row">
+          <div>
+            <div class="section-kicker">RECORD & SHARING</div>
+            <h2>Documents & exports</h2>
+            <p>Files stay on this device in this MVP unless you export them yourself.</p>
+          </div>
+        </div>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">DOCUMENTS</div>
+              <h2>Upload a care record</h2>
+            </div>
+          </div>
+          <form id="documentForm" class="form-stack">
+            <label class="field">
+              <span>File</span>
+              <input id="documentFile" name="file" type="file" accept="application/pdf,image/*,.doc,.docx" required>
+            </label>
+            <div class="form-grid two">
+              <label class="field"><span>Date</span><input id="documentDate" name="date" type="date" required></label>
+              <label class="field"><span>Type</span>
+                <select id="documentType" name="type">
+                  <option value="clinical_note">Clinical note</option>
+                  <option value="lab">Lab result</option>
+                  <option value="invoice">Invoice</option>
+                  <option value="pathology">Pathology</option>
+                  <option value="imaging">Imaging / cytology</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+            </div>
+            <label class="field"><span>Provider / source</span><input id="documentProvider" name="provider" type="text" placeholder="K-State, Optimum, IDEXX…"></label>
+            <label class="field"><span>Note</span><textarea id="documentNote" name="note" rows="3" placeholder="Optional context"></textarea></label>
+            <button type="submit" class="primary-button">Save document on this device</button>
+          </form>
+          <div class="privacy-note">Automatic extraction is intentionally not faked in this first build. The upload is real; AI-assisted document ingestion comes when we add a secure backend.</div>
+          <div id="documentList" class="stack compact-stack"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CARE TEAM</div>
+              <h2>Share a clean summary</h2>
+            </div>
+          </div>
+          <p class="body-copy">The care-team export includes longitudinal clinical data, owner-observed symptoms, and financial burden totals. It excludes bank/payment account information and private app backup data.</p>
+          <div class="button-stack">
+            <button id="downloadCareSummary" class="primary-button" type="button">Download care-team summary</button>
+            <button id="printCareSummary" class="secondary-button" type="button">Print / Save as PDF</button>
+          </div>
+        </section>
+
+        <section class="card owner-only">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">BACKUP</div>
+              <h2>Keep your data portable</h2>
+            </div>
+          </div>
+          <div class="button-stack">
+            <button id="exportBackup" class="secondary-button" type="button">Export app backup (.json)</button>
+            <label class="secondary-button file-button">Import app backup<input id="importBackup" type="file" accept="application/json" hidden></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="section-kicker">PROFILE</div><h2>Roger</h2></div></div>
+          <div id="profileDetails"></div>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <button class="nav-item active" type="button" data-nav="home"><span class="nav-icon">⌂</span><span>Home</span></button>
+      <button class="nav-item" type="button" data-nav="journal"><span class="nav-icon">✎</span><span>Journal</span></button>
+      <button class="nav-item" type="button" data-nav="timeline"><span class="nav-icon">↕</span><span>Timeline</span></button>
+      <button class="nav-item" type="button" data-nav="costs"><span class="nav-icon">$</span><span>Costs</span></button>
+      <button class="nav-item" type="button" data-nav="more"><span class="nav-icon">•••</span><span>More</span></button>
+    </nav>
+  </div>
+
+  <dialog id="journalDialog" class="sheet-dialog">
+    <form id="journalForm" method="dialog" class="sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div><div class="section-kicker">OWNER OBSERVATION</div><h2>Daily check-in</h2></div>
+        <button class="icon-button" type="button" data-close-dialog="journalDialog" aria-label="Close">×</button>
+      </div>
+      <label class="field"><span>Date</span><input id="journalDate" name="date" type="date" required></label>
+      <div class="form-grid two">
+        <label class="field"><span>Appetite</span><select name="appetite"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>refused food</option></select></label>
+        <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>high</option><option>low</option><option>very low</option></select></label>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Nausea signs</span><select name="nausea"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+        <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" value="0"></label>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Stool score</span><input name="stool" type="text" inputmode="decimal" placeholder="e.g. 4 or 7"></label>
+        <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Hydration / thirst</span><select name="hydration"><option value="">Not logged</option><option>normal</option><option>increased thirst</option><option>decreased drinking</option><option>good self-hydration</option></select></label>
+        <label class="field"><span>Urination</span><select name="urination"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>accident / unusual</option></select></label>
+      </div>
+      <label class="field"><span>Medication given</span><input name="medications" type="text" placeholder="Cerenia, metronidazole…"></label>
+      <label class="field"><span>What did you notice?</span><textarea name="notes" rows="5" placeholder="Write naturally. The original wording is preserved." required></textarea></label>
+      <div class="sheet-actions">
+        <button class="secondary-button" type="button" data-close-dialog="journalDialog">Cancel</button>
+        <button class="primary-button" type="submit">Save observation</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="costDialog" class="sheet-dialog">
+    <form id="costForm" method="dialog" class="sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div><div class="section-kicker">AMOUNT PAID</div><h2>Add care cost</h2></div>
+        <button class="icon-button" type="button" data-close-dialog="costDialog" aria-label="Close">×</button>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Date</span><input id="costDate" name="date" type="date" required></label>
+        <label class="field"><span>Amount paid</span><input name="amountPaid" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" required></label>
+      </div>
+      <label class="field"><span>Provider</span><input name="provider" type="text" placeholder="K-State, Optimum…" required></label>
+      <label class="field"><span>What was it for?</span><input name="label" type="text" placeholder="CBC, chemo #6, medication…" required></label>
+      <label class="field"><span>Category</span><select name="category"><option value="monitoring">Monitoring</option><option value="treatment">Treatment</option><option value="staging">Staging / restaging</option><option value="diagnosis">Diagnosis</option><option value="medication">Medication</option><option value="mixed">Mixed care</option><option value="other">Other</option></select></label>
+      <div class="privacy-note">Only the amount paid, date, provider and care context are stored. No bank account or payment-card information is collected.</div>
+      <div class="sheet-actions">
+        <button class="secondary-button" type="button" data-close-dialog="costDialog">Cancel</button>
+        <button class="primary-button" type="submit">Save cost</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="toastTemplate"><div class="toast" role="status"></div></template>
+  <div id="toastRegion" class="toast-region" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
