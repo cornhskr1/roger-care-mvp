@@ -61,3 +61,15 @@ Document upload is real and persists locally, but automated medical-document ext
 GitHub Pages deployment target:
 
 https://cornhskr1.github.io/roger-care-mvp/
+
+
+## Medication tracking and aligned dates (v9)
+
+- Four synchronized lanes for vinblastine, bloodwork, medications, and owner observations.
+- Selected treatment windows label every calendar date; swipe the chart on phones. Dashed guides align medication dates, and selecting an event highlights its date across all lanes.
+- Tablet counts are computed from actual given administrations and confirmed tablet strengths. Held doses and prescribed daily courses do not add pills automatically.
+- Cerenia summaries show per-cycle usage, recorded nausea days, same-date use, purchased quantity, and purchase-based spending.
+- Medication purchase allocations reference their existing care cost by `costId`; they never add the medication charge again. A new separate purchase creates one care expense and its allocation together.
+- New purchases can be entered through Costs → + Cost → Medication. Choose an existing bill when its total already includes that purchase.
+- Purchase quantities and line totals were reconciled from K-State invoices 149569 (8/4), 150910 (8/14), 154654 (9/11), and 157866 (10/2). Cerenia: 23 × 60 mg tablets for $237.64, with 11 tablets documented given through 10/2.
+- Canonical refresh preserves owner-entered administrations and purchases.

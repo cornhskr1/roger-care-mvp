@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=8">
+  <link rel="manifest" href="manifest.webmanifest?v=9">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -53,7 +53,7 @@
           <div class="card-head">
             <div>
               <div class="section-kicker">CLINICAL COURSE</div>
-              <h2>Dose → bloodwork → symptoms</h2>
+              <h2>Dose → bloodwork → medications → observations</h2>
             </div>
           </div>
           <div id="clinicalCourse"></div>
@@ -86,8 +86,9 @@
           </div>
           <div id="treatmentOverlayChart" class="response-chart"></div>
           <div id="treatmentOverlayDetail" class="response-detail" aria-live="polite">
-            Tap a chemo, lab, or symptom marker to inspect that point.
+            Tap a treatment, lab, medication, or observation marker to inspect that point.
           </div>
+          <div id="treatmentMedicationSummary"></div>
           <div id="treatmentWindowDetails" class="treatment-window-details"></div>
           <div class="overlay-method-note">Treatment association window: from the chemo date through the day before the next chemo. This keeps nadir/recovery labs and home observations attached to the cycle that preceded them.</div>
         </section>
@@ -310,6 +311,7 @@
       </div>
       <label class="field"><span>Medication</span><select id="medicationSelect" name="medicationId" required></select></label>
       <label class="field"><span>Dose given</span><input id="medicationDose" name="dose" type="text" placeholder="e.g. 60 mg" required></label>
+      <label class="field"><span>Tablets given (optional if quantity is unknown)</span><input id="medicationTabletQuantity" name="tabletQuantity" type="number" min="0" step="0.25" inputmode="decimal"></label>
       <label class="field"><span>Status</span><select name="status"><option value="given">Given</option><option value="held">Held / not given</option></select></label>
       <label class="field"><span>Reason / observation</span><textarea name="reason" rows="3" placeholder="Nausea, diarrhea, pre-visit…"></textarea></label>
       <div id="medicationPrescriptionHint" class="privacy-note"></div>
@@ -333,7 +335,16 @@
       </div>
       <label class="field"><span>Provider</span><input name="provider" type="text" placeholder="K-State, Optimum…" required></label>
       <label class="field"><span>What was it for?</span><input name="label" type="text" placeholder="CBC, chemo #6, medication…" required></label>
-      <label class="field"><span>Category</span><select name="category"><option value="monitoring">Monitoring</option><option value="treatment">Treatment</option><option value="staging">Initial staging</option><option value="restaging">Restaging</option><option value="diagnosis">Diagnosis</option><option value="medication">Medication</option><option value="mixed">Mixed care</option><option value="other">Other</option></select></label>
+      <label class="field"><span>Category</span><select id="costCategory" name="category"><option value="monitoring">Monitoring</option><option value="treatment">Treatment</option><option value="staging">Initial staging</option><option value="restaging">Restaging</option><option value="diagnosis">Diagnosis</option><option value="medication">Medication</option><option value="mixed">Mixed care</option><option value="other">Other</option></select></label>
+      <div id="medicationPurchaseFields" class="form-stack" hidden>
+        <label class="field"><span>Medication</span><select id="purchaseMedication" name="purchaseMedication"></select></label>
+        <div class="form-grid two">
+          <label class="field"><span>Tablets purchased</span><input id="purchaseQuantity" name="purchaseQuantity" type="number" min="0.25" step="0.25" inputmode="decimal"></label>
+          <label class="field"><span>Tablet strength (mg)</span><input id="purchaseStrength" name="purchaseStrength" type="number" min="0.01" step="0.01" inputmode="decimal"></label>
+        </div>
+        <label class="field"><span>Purchase accounting</span><select id="purchaseCostId" name="purchaseCostId"><option value="">New expense — add to total care cost</option></select></label>
+        <p class="medication-note">If this medication was included in a visit bill already recorded, select that bill. Enter only the medication's cost above; it will not be added to the total again.</p>
+      </div>
       <div class="privacy-note">Only the amount paid, date, provider and care context are stored. No bank account or payment-card information is collected.</div>
       <div class="sheet-actions">
         <button class="secondary-button" type="button" data-close-dialog="costDialog">Cancel</button>
@@ -344,6 +355,7 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=9" defer></script>
 </body>
 </html>
+

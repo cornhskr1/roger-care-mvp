@@ -86,6 +86,7 @@ function mergeCanonicalSeed(canonical, saved){
   merged.medicationAdministrations = mergeById(canonical.medicationAdministrations, migratedSaved.medicationAdministrations, false);
   merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
   merged.medicationCourses = mergeById(canonical.medicationCourses, migratedSaved.medicationCourses, false);
+  merged.medicationPurchases = mergeById(canonical.medicationPurchases, migratedSaved.medicationPurchases, false);
 
   // Owner-entered items have generated IDs and are not present in canonical data.
   for (const row of migratedSaved.observations || []) if (String(row.id||'').includes('-') && !merged.observations.some(x=>x.id===row.id)) merged.observations.push(row);
@@ -105,6 +106,7 @@ function migrateState(input){
   next.medications = Array.isArray(next.medications) ? next.medications : [];
   next.medicationCourses = Array.isArray(next.medicationCourses) ? next.medicationCourses : [];
   next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
+  next.medicationPurchases = Array.isArray(next.medicationPurchases) ? next.medicationPurchases : [];
 
   const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
   if (combinedIndex >= 0) {
@@ -121,7 +123,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),3);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),4);
   return next;
 }
 
@@ -143,8 +145,14 @@ function bindDialogs(){
   q('#journalAddButton').addEventListener('click', openJournalDialog);
   q('#medicationAddButton').addEventListener('click', openMedicationDialog);
   q('#costAddButton').addEventListener('click', () => {
+    q('#costForm').reset();
     q('#costDate').value = todayIso();
+    configureMedicationPurchase();
     els.costDialog.showModal();
+  });
+  q('#costCategory').addEventListener('change',configureMedicationPurchase);
+  q('#purchaseMedication').addEventListener('change',()=>{
+    q('#purchaseStrength').value=state.medications.find(m=>m.id===q('#purchaseMedication').value)?.tabletStrengthMg||'';
   });
   qa('[data-close-dialog]').forEach(btn => btn.addEventListener('click', () => q(`#${btn.dataset.closeDialog}`).close()));
   qa('.sheet-dialog').forEach(d => d.addEventListener('click', event => {
@@ -191,9 +199,26 @@ function bindForms(){
   q('#costForm').addEventListener('submit', event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
-    state.costs.push({
-      id: uid('cost'), date: fd.get('date'), provider: fd.get('provider'), label: fd.get('label'),
-      amountPaid: Number(fd.get('amountPaid')), category: fd.get('category'), status:'confirmed', source:'owner_entered'
+    const isMedication=fd.get('category')==='medication';
+    const amount=Number(fd.get('amountPaid'));
+    const quantity=Number(fd.get('purchaseQuantity')),strength=Number(fd.get('purchaseStrength'));
+    if(isMedication&&(!fd.get('purchaseMedication')||quantity<=0||strength<=0))return toast('Enter medication, tablet quantity, and tablet strength',true);
+    const parentId=isMedication?String(fd.get('purchaseCostId')||''):'';
+    const parent=state.costs.find(c=>c.id===parentId);
+    if(parentId&&!parent)return toast('Select an existing visit bill',true);
+    if(parent){
+      const allocated=state.medicationPurchases.filter(p=>p.costId===parentId).reduce((n,p)=>n+Number(p.amountPaid),0);
+      if(allocated+amount>Number(parent.amountPaid)+.005)return toast('Medication allocations exceed the selected bill amount',true);
+    }
+    const costId=parentId||uid('cost');
+    if(!parent)state.costs.push({
+      id: costId, date: fd.get('date'), provider: fd.get('provider'), label: fd.get('label'),
+      amountPaid: amount, category: fd.get('category'), status:'confirmed', source:'owner_entered'
+    });
+    if(isMedication)state.medicationPurchases.push({
+      id:uid('purchase'),medicationId:fd.get('purchaseMedication'),date:fd.get('date'),
+      quantity,tabletStrengthMg:strength,amountPaid:amount,costId,status:'confirmed',
+      source:String(fd.get('provider'))+' · '+String(fd.get('label'))
     });
     state.costs.sort((a,b)=>a.date.localeCompare(b.date));
     persist(); renderAll(); els.costDialog.close(); event.currentTarget.reset(); toast('Cost saved');
@@ -208,6 +233,7 @@ function bindForms(){
       date:fd.get('date'),
       time:fd.get('time') || null,
       dose:String(fd.get('dose')||'').trim(),
+      tabletQuantity: fd.get('tabletQuantity') === '' ? null : Number(fd.get('tabletQuantity')),
       status:fd.get('status') || 'given',
       reason:String(fd.get('reason')||'').trim(),
       source:'owner journal'
@@ -233,6 +259,7 @@ function bindForms(){
 }
 
 function openMedicationDialog(){
+  q('#medicationForm').reset();
   const select=q('#medicationSelect');
   select.innerHTML=(state.medications||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
   q('#medicationDate').value=todayIso();
@@ -240,6 +267,7 @@ function openMedicationDialog(){
   selectMedicationDefaultDose();
   select.onchange=selectMedicationDefaultDose;
   q('#medicationDate').onchange=selectMedicationDefaultDose;
+  q('#medicationDose').oninput=suggestTabletQuantity;
   els.medicationDialog.showModal();
 }
 
@@ -251,7 +279,25 @@ function selectMedicationDefaultDose(){
   const hint=q('#medicationPrescriptionHint');
   if(!med||!dose||!hint)return;
   dose.value=defaultDoseForMedication(medId,date);
+  suggestTabletQuantity();
   hint.innerHTML=`<strong>Prescribed:</strong> ${esc(med.prescribedDose)}<br><strong>Use:</strong> ${esc(med.indication)}`;
+}
+
+function suggestTabletQuantity(){
+  const med=state.medications.find(m=>m.id===q('#medicationSelect').value);
+  const match=q('#medicationDose').value.match(/^(\d+(?:\.\d+)?)\s*mg$/i);
+  q('#medicationTabletQuantity').value=match&&med?.tabletStrengthMg?Number(match[1])/med.tabletStrengthMg:'';
+}
+
+function configureMedicationPurchase(){
+  const isMedication=q('#costCategory').value==='medication';
+  q('#medicationPurchaseFields').hidden=!isMedication;
+  for(const id of ['purchaseMedication','purchaseQuantity','purchaseStrength'])q('#'+id).required=isMedication;
+  const previous=q('#purchaseMedication').value;
+  q('#purchaseMedication').innerHTML=state.medications.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+  q('#purchaseMedication').value=previous||'med-cerenia';
+  q('#purchaseStrength').value=state.medications.find(m=>m.id===q('#purchaseMedication').value)?.tabletStrengthMg||'';
+  q('#purchaseCostId').innerHTML='<option value="">New expense — add to total care cost</option>'+state.costs.map(c=>`<option value="${esc(c.id)}">Included in: ${fmtDate(c.date)} · ${esc(c.label)} · ${money(c.amountPaid)}</option>`).join('');
 }
 
 function defaultDoseForMedication(medId,date){
@@ -386,192 +432,104 @@ function severityChip(o){
 function daysBetween(a,b){ return Math.round((new Date(`${b}T12:00:00Z`)-new Date(`${a}T12:00:00Z`))/86400000); }
 
 function renderTreatmentOverlay(){
-  const root=q('#treatmentOverlayChart');
-  const detail=q('#treatmentOverlayDetail');
-  const selector=q('#overlayMetric');
-  const legend=q('#overlayBloodLegend');
-  const windowSelector=q('#treatmentWindowSelector');
-  const windowDetails=q('#treatmentWindowDetails');
+  const root=q('#treatmentOverlayChart'),detail=q('#treatmentOverlayDetail');
+  const selector=q('#overlayMetric'),windowSelector=q('#treatmentWindowSelector'),windowDetails=q('#treatmentWindowDetails');
   if(!root||!detail||!selector||!windowSelector||!windowDetails||!state)return;
-
   const metric=selector.value||'Neutrophils';
-  if(legend)legend.textContent=metric;
-
-  const allTreatments=state.treatments.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  q('#overlayBloodLegend').textContent=metric;
+  const allTreatments=[...state.treatments].sort((a,b)=>a.date.localeCompare(b.date));
   renderTreatmentWindowSelector(windowSelector,allTreatments);
-
-  const selectedCycle=selectedTreatmentWindow==='all'
-    ? null
-    : allTreatments.find(t=>String(t.number)===String(selectedTreatmentWindow));
+  const selectedCycle=allTreatments.find(t=>String(t.number)===selectedTreatmentWindow);
   const window=selectedCycle?cycleWindowFor(selectedCycle,allTreatments):null;
-  const firstTreatmentDate=allTreatments[0]?.date;
-
-  const bloodAll=state.labs.filter(x=>x.metric===metric).slice().sort((a,b)=>a.date.localeCompare(b.date));
-  const symptomAll=state.observations
-    .map(o=>({...o,severity:symptomSeverity(o)}))
-    .filter(o=>o.severity>0)
-    .sort((a,b)=>a.date.localeCompare(b.date));
-  const medicationAll=(state.medicationAdministrations||[])
-    .filter(a=>a.status==='given')
-    .slice()
-    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-
-  const blood=selectedCycle
-    ? bloodAll.filter(p=>inCycleWindow(p.date,window))
-    : bloodAll.filter(p=>p.date>=firstTreatmentDate);
-  const symptoms=selectedCycle
-    ? symptomAll.filter(o=>inCycleWindow(o.date,window))
-    : symptomAll.filter(o=>o.date>=firstTreatmentDate);
-  const medicationEvents=selectedCycle
-    ? medicationAll.filter(a=>inCycleWindow(a.date,window))
-    : medicationAll.filter(a=>a.date>=firstTreatmentDate);
+  const startDate=window?.start||allTreatments[0]?.date;
+  if(!startDate){root.innerHTML='<div class="empty-state">No treatment data available yet.</div>';return;}
+  const inView=date=>window?inCycleWindow(date,window):date>=startDate;
+  const blood=state.labs.filter(p=>p.metric===metric&&inView(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const symptoms=state.observations.filter(o=>inView(o.date)).map(o=>({...o,severity:symptomSeverity(o)})).filter(o=>o.severity>0);
+  const medications=(state.medicationAdministrations||[]).filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
   const treatments=selectedCycle?[selectedCycle]:allTreatments;
-
-  if(!treatments.length){
-    root.innerHTML='<div class="empty-state">No treatment data available yet.</div>';
-    windowDetails.innerHTML='';
-    return;
-  }
-
-  const startDate=selectedCycle?window.start:firstTreatmentDate;
-  const endDate=selectedCycle
-    ? window.displayEnd
-    : [...blood.map(x=>x.date),...symptoms.map(x=>x.date),...treatments.map(x=>x.date)].sort().at(-1);
-  const startMs=Date.parse(startDate+'T12:00:00Z');
-  let endMs=Date.parse(endDate+'T12:00:00Z');
-  if(endMs<=startMs)endMs=startMs+7*86400000;
-  const span=Math.max(1,endMs-startMs);
-
-  // Three aligned tracks: dose, bloodwork and symptoms. One shared time axis.
-  const W=360,H=334,L=48,R=14;
-  const doseTop=38,doseBottom=94;
-  const bloodTop=124,bloodBottom=218;
-  const symptomTop=250,symptomBottom=286;
-  const axisY=316;
-  const x=date=>L+((Date.parse(date+'T12:00:00Z')-startMs)/span)*(W-L-R);
-
-  const thresholdMap={Neutrophils:2,Hematocrit:25,Platelets:75};
-  const unitMap={Neutrophils:'K/µL',Hematocrit:'%',Platelets:'K/µL'};
+  const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).sort().at(-1)||startDate;
+  const days=Math.max(1,daysBetween(startDate,endDate));
+  const laneMeds=[...new Set(medications.map(a=>a.medicationId))].sort((a,b)=>(a==='med-cerenia'?-1:b==='med-cerenia'?1:a.localeCompare(b)));
+  const W=Math.max(root.clientWidth||340,selectedCycle?160+days*48:680),L=130,R=26;
+  const doseTop=52,doseBottom=108,bloodTop=160,bloodBottom=274,medTop=340;
+  const medBottom=medTop+Math.max(1,laneMeds.length)*32;
+  const symptomTop=medBottom+56,symptomBottom=symptomTop+54,axisY=symptomBottom+38,H=axisY+28;
+  const x=date=>L+daysBetween(startDate,date)/days*(W-L-R);
+  const thresholdMap={Neutrophils:2,Hematocrit:25,Platelets:75},unitMap={Neutrophils:'K/µL',Hematocrit:'%',Platelets:'K/µL'};
   const threshold=thresholdMap[metric],unit=unitMap[metric]||'';
-
-  const doseValues=allTreatments.map(t=>Number(t.doseMgM2)||0);
-  const doseLow=Math.min(...doseValues)-0.08;
-  const doseHigh=Math.max(...doseValues)+0.08;
-  const yDose=value=>doseBottom-((Number(value)-doseLow)/(doseHigh-doseLow))*(doseBottom-doseTop);
-
-  const bloodValues=blood.map(x=>Number(x.value)||0);
-  const bloodMaxRaw=Math.max(...bloodValues,threshold||0,1);
-  const bloodMax=Math.max(1,bloodMaxRaw*1.12);
-  const yBlood=value=>bloodBottom-(Number(value)/bloodMax)*(bloodBottom-bloodTop);
-
-  let svg='';
-
-  // Lane labels and separators.
-  svg+=`<text x="4" y="${doseTop-9}" font-size="9" font-weight="800" fill="#512888">DOSE · mg/m²</text>`;
-  svg+=`<line x1="${L}" y1="${doseBottom+10}" x2="${W-R}" y2="${doseBottom+10}" stroke="#dedfea"/>`;
-  svg+=`<text x="4" y="${bloodTop-9}" font-size="9" font-weight="800" fill="#b44f5c">${metric.toUpperCase()} · ${unit}</text>`;
-  svg+=`<line x1="${L}" y1="${bloodBottom+10}" x2="${W-R}" y2="${bloodBottom+10}" stroke="#dedfea"/>`;
-  svg+=`<text x="4" y="${symptomTop-8}" font-size="9" font-weight="800" fill="#5e7895">OWNER SYMPTOMS</text>`;
-
-  // Treatment vertical guides anchor all tracks to the same cycles.
-  treatments.forEach(tr=>{
-    const xx=x(tr.date);
-    svg+=`<line x1="${xx}" y1="${doseTop-3}" x2="${xx}" y2="${symptomBottom+2}" stroke="#512888" stroke-opacity=".15" stroke-dasharray="3 4"/>`;
+  const doseValues=allTreatments.map(t=>Number(t.doseMgM2)||0),low=Math.min(...doseValues)-.1,high=Math.max(...doseValues)+.1;
+  const yDose=value=>doseBottom-(Number(value)-low)/(high-low)*(doseBottom-doseTop);
+  const bloodMax=Math.max(...blood.map(p=>Number(p.value)),threshold||0,1)*1.18;
+  const yBlood=value=>bloodBottom-Number(value)/bloodMax*(bloodBottom-bloodTop);
+  const shortDate=date=>date.split('-').slice(1).map(Number).join('/');
+  const hit=(kind,index,cx,cy,label,shape='circle',fill='#5e7895',held=false)=>`<g class="chart-hit" role="button" tabindex="0" data-kind="${kind}" data-index="${index}" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${cx-14}" y="${cy-14}" width="28" height="28" fill="transparent"/>${shape==='square'?`<rect x="${cx-6}" y="${cy-6}" width="12" height="12" rx="3" fill="${held?'#fff':fill}" stroke="${held?fill:'#fff'}" stroke-width="2"/>`:`<circle cx="${cx}" cy="${cy}" r="6" fill="${fill}" stroke="#fff" stroke-width="2"/>`}</g>`;
+  let svg=`<rect width="${W}" height="${H}" fill="#fff"/>`;
+  // Every medication date shares a dashed guide across all four lanes.
+  const guideDates=[...new Set([...medications,...treatments].map(p=>p.date))];
+  if(selectedCycle)for(let i=0;i<=days;i++)svg+=`<line x1="${x(addDays(startDate,i))}" x2="${x(addDays(startDate,i))}" y1="38" y2="${symptomBottom+5}" stroke="#edf0f5"/>`;
+  guideDates.forEach(date=>svg+=`<line data-guide-date="${date}" x1="${x(date)}" x2="${x(date)}" y1="38" y2="${symptomBottom+5}" stroke="#667085" stroke-opacity=".35" stroke-dasharray="4 5"/>`);
+  svg+=`<line id="selectedEventGuide" x1="0" x2="0" y1="38" y2="${symptomBottom+5}" stroke="#512888" stroke-width="2" stroke-dasharray="4 5" visibility="hidden"/>`;
+  const heading=(label,y,color)=>`<text x="8" y="${y}" font-size="13" font-weight="800" fill="${color}">${esc(label)}</text>`;
+  svg+=heading('VINBLASTINE · mg/m²',22,'#512888');
+  svg+=heading(`${metric.toUpperCase()} · ${unit}`,140,'#b44f5c');
+  svg+=heading('MEDICATIONS · □ given  ▫ held',medTop-24,'#667085');
+  svg+=heading('OWNER OBSERVATIONS · severity',symptomTop-22,'#5e7895');
+  [doseBottom+18,bloodBottom+20,medBottom+8,symptomBottom].forEach(y=>svg+=`<line x1="8" x2="${W-R}" y1="${y}" y2="${y}" stroke="#dedfea"/>`);
+  if(treatments.length>1)svg+=`<path d="${treatments.map((t,i)=>`${i?'L':'M'}${x(t.date)},${yDose(t.doseMgM2)}`).join(' ')}" fill="none" stroke="#512888" stroke-width="3"/>`;
+  treatments.forEach((t,i)=>{
+    const yy=yDose(t.doseMgM2),xx=x(t.date);
+    svg+=hit('treatment',i,xx,yy,`${fmtDate(t.date)} · Chemo #${t.number} · ${t.doseMgM2} mg/m²`,'circle','#512888');
+    svg+=`<text x="${xx}" y="${yy-16}" text-anchor="middle" font-size="12" font-weight="800" fill="#512888">#${t.number} · ${t.doseMgM2}</text>`;
   });
-
-  // Dose track.
-  if(treatments.length>1){
-    const path=treatments.map((tr,i)=>`${i?'L':'M'}${x(tr.date)},${yDose(tr.doseMgM2)}`).join(' ');
-    svg+=`<path d="${path}" fill="none" stroke="#512888" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }
-  treatments.forEach((tr,i)=>{
-    const xx=x(tr.date),yy=yDose(tr.doseMgM2);
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="treatment" data-index="${i}" cx="${xx}" cy="${yy}" r="6" fill="#512888" stroke="#fff" stroke-width="2.5"/>`;
-    svg+=`<text x="${xx}" y="${yy-10}" text-anchor="middle" font-size="8.5" font-weight="800" fill="#512888">#${tr.number} · ${tr.doseMgM2}</text>`;
-  });
-
-  // Bloodwork track with its own scale and treatment threshold.
   for(let i=0;i<3;i++){
-    const value=bloodMax*(2-i)/2;
-    const yy=bloodTop+i*(bloodBottom-bloodTop)/2;
-    const label=metric==='Platelets'?Math.round(value):(value<10?value.toFixed(1):Math.round(value));
-    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#e7e8ef"/>`;
-    svg+=`<text x="${L-6}" y="${yy+3}" text-anchor="end" font-size="8" fill="#707181">${label}</text>`;
+    const value=bloodMax*(2-i)/2,yy=yBlood(value);
+    svg+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="#e7e8ef"/><text x="${L-8}" y="${yy+4}" text-anchor="end" font-size="12" fill="#707181">${metric==='Platelets'?Math.round(value):value.toFixed(1)}</text>`;
   }
-  if(threshold!=null&&threshold<=bloodMax){
-    const yy=yBlood(threshold);
-    svg+=`<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" stroke="#707181" stroke-dasharray="5 4" stroke-width="1.2"/>`;
-    svg+=`<text x="${W-R-2}" y="${yy-4}" text-anchor="end" font-size="8" fill="#707181">treatment threshold</text>`;
-  }
-  if(blood.length>1){
-    const path=blood.map((p,i)=>`${i?'L':'M'}${x(p.date)},${yBlood(p.value)}`).join(' ');
-    svg+=`<path d="${path}" fill="none" stroke="#b44f5c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }
+  svg+=`<line x1="${L}" x2="${W-R}" y1="${yBlood(threshold)}" y2="${yBlood(threshold)}" stroke="#707181" stroke-dasharray="6 5"/><text x="${W-R}" y="${yBlood(threshold)-7}" text-anchor="end" font-size="12" fill="#707181">treatment threshold</text>`;
+  if(blood.length>1)svg+=`<path d="${blood.map((p,i)=>`${i?'L':'M'}${x(p.date)},${yBlood(p.value)}`).join(' ')}" fill="none" stroke="#b44f5c" stroke-width="3"/>`;
   blood.forEach((p,i)=>{
-    const xx=x(p.date),yy=yBlood(p.value);
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="blood" data-index="${i}" cx="${xx}" cy="${yy}" r="5.5" fill="#b44f5c" stroke="#fff" stroke-width="2.5"/>`;
-    svg+=`<text x="${xx}" y="${yy-9}" text-anchor="middle" font-size="7.8" font-weight="750" fill="#b44f5c">${p.displayValue||p.value}</text>`;
+    svg+=hit('blood',i,x(p.date),yBlood(p.value),`${fmtDate(p.date)} · ${metric} ${p.value} ${unit}`,'circle','#b44f5c');
+    svg+=`<text x="${x(p.date)}" y="${yBlood(p.value)-16}" text-anchor="middle" font-size="12" font-weight="800" fill="#b44f5c">${esc(p.displayValue||p.value)}</text>`;
   });
-
-  // Owner-observed symptom severity track.
-  svg+=`<line x1="${L}" y1="${symptomBottom}" x2="${W-R}" y2="${symptomBottom}" stroke="#dedfea"/>`;
+  laneMeds.forEach((id,row)=>{
+    const y=medTop+row*32;
+    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
+  });
+  if(!medications.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication doses recorded in this window</text>`;
+  medications.forEach((a,i)=>{
+    const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
+    const offset=same.length>1?(position-(same.length-1)/2)*14:0;
+    svg+=hit('medication',i,x(a.date)+offset,medTop+laneMeds.indexOf(a.medicationId)*32,`${fmtDate(a.date)} · ${medicationName(a.medicationId)} ${a.dose} · ${a.status}`,'square',a.medicationId==='med-cerenia'?'#512888':'#667085',a.status==='held');
+  });
   symptoms.forEach((o,i)=>{
-    const xx=x(o.date);
-    const yy=symptomBottom-(Math.min(3,o.severity)/3)*(symptomBottom-symptomTop);
-    svg+=`<line x1="${xx}" y1="${symptomBottom}" x2="${xx}" y2="${yy}" stroke="#5e7895" stroke-width="4" stroke-linecap="round"/>`;
-    svg+=`<circle class="chart-hit" tabindex="0" data-kind="symptom" data-index="${i}" cx="${xx}" cy="${yy}" r="5" fill="#5e7895" stroke="#fff" stroke-width="2"/>`;
+    const yy=symptomBottom-Math.min(3,o.severity)/3*(symptomBottom-symptomTop);
+    svg+=`<line x1="${x(o.date)}" x2="${x(o.date)}" y1="${symptomBottom}" y2="${yy}" stroke="#5e7895" stroke-width="4"/>`;
+    svg+=hit('symptom',i,x(o.date),yy,`${fmtDate(o.date)} · ${compactObservation(o)}`);
   });
-  medicationEvents.forEach((a,i)=>{
-    const xx=x(a.date);
-    const yy=symptomBottom+8;
-    svg+=`<rect class="chart-hit" tabindex="0" data-kind="medication" data-index="${i}" x="${xx-4}" y="${yy}" width="8" height="8" rx="2" fill="#5e7895" stroke="#fff" stroke-width="1.5"/>`;
+  [0,3].forEach(n=>svg+=`<text x="${L-8}" y="${symptomBottom-n/3*(symptomBottom-symptomTop)+4}" text-anchor="end" font-size="12" fill="#707181">${n}</text>`);
+  const dates=selectedCycle?Array.from({length:days+1},(_,i)=>addDays(startDate,i)):treatments.map(t=>t.date);
+  dates.forEach((date,i)=>{
+    svg+=`<line x1="${x(date)}" x2="${x(date)}" y1="${symptomBottom+5}" y2="${symptomBottom+13}" stroke="#707181"/><text x="${x(date)}" y="${axisY}" text-anchor="middle" font-size="13" fill="#454556">${selectedCycle?shortDate(date):`#${treatments[i].number}`}</text>`;
+    if(!selectedCycle)svg+=`<text x="${x(date)}" y="${axisY+17}" text-anchor="middle" font-size="12" fill="#707181">${shortDate(date)}</text>`;
   });
-  svg+=`<text x="${L-7}" y="${symptomTop+3}" text-anchor="end" font-size="7.5" fill="#707181">3</text>`;
-  svg+=`<text x="${L-7}" y="${symptomBottom+3}" text-anchor="end" font-size="7.5" fill="#707181">0</text>`;
-
-  // Shared time axis.
-  svg+=`<line x1="${L}" y1="${axisY-12}" x2="${W-R}" y2="${axisY-12}" stroke="#dedfea"/>`;
-  const labels=selectedCycle?[window.start,window.displayEnd]:treatments.map(t=>t.date);
-  [...new Set(labels)].forEach((d,i,arr)=>{
-    const xx=x(d);
-    const anchor=i===0?'start':i===arr.length-1?'end':'middle';
-    const dateLabel=fmtDate(d).replace(', 2026','');
-    const dayLabel=selectedCycle?(`Day +${Math.max(0,daysBetween(window.start,d))}`):'';
-    svg+=`<text x="${xx}" y="${axisY}" text-anchor="${anchor}" font-size="8" fill="#707181">${dateLabel}</text>`;
-    if(dayLabel)svg+=`<text x="${xx}" y="${axisY+11}" text-anchor="${anchor}" font-size="7.5" fill="#5e7895">${dayLabel}</text>`;
-  });
-
-  root.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Aligned treatment response tracks">${svg}</svg>`;
-
+  root.innerHTML=`<svg style="font-family:system-ui,sans-serif" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="Treatment, bloodwork, medication and observation timelines">${svg}</svg>`;
   root.querySelectorAll('.chart-hit').forEach(node=>{
     const show=()=>{
       const kind=node.dataset.kind,i=Number(node.dataset.index);
-      if(kind==='blood'){
-        const p=blood[i];
-        detail.innerHTML=`<strong>${fmtDate(p.date)} · ${esc(metric)} ${esc(p.displayValue||p.value)} ${esc(p.unit)}</strong>${esc(p.context)} · ${esc(p.source)}`;
-      }else if(kind==='treatment'){
-        const tr=treatments[i];
-        detail.innerHTML=`<strong>${fmtDate(tr.date)} · Chemo #${tr.number}</strong>Vinblastine ${tr.doseMg} mg · ${tr.doseMgM2} mg/m² · ${tr.weightLb} lb. ${esc(tr.doseReason)}`;
-      }else if(kind==='symptom'){
-        const o=symptoms[i];
-        detail.innerHTML=`<strong>${fmtDate(o.date)} · Owner-observed symptoms</strong>${esc(compactObservation(o))}. ${esc(o.notes)}`;
-      }else{
-        const a=medicationEvents[i];
-        const time=a.time?` · ${esc(a.time)}`:'';
-        detail.innerHTML=`<strong>${fmtDate(a.date)}${time} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</strong>${esc(a.reason||'Medication administered')}`;
-      }
+      const point=({blood,treatment:treatments,symptom:symptoms,medication:medications})[kind][i];
+      const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(point.date));guide.setAttribute('x2',x(point.date));guide.setAttribute('visibility','visible');
+      const when=`${fmtDate(point.date)}${selectedCycle?` · Day +${daysBetween(startDate,point.date)}`:''}`;
+      if(kind==='blood')detail.innerHTML=`<strong>${when} · ${esc(metric)} ${esc(point.displayValue||point.value)} ${esc(point.unit)}</strong>${esc(point.context)} · ${esc(point.source)}`;
+      else if(kind==='treatment')detail.innerHTML=`<strong>${when} · Chemo #${point.number}</strong>Vinblastine ${point.doseMg} mg · ${point.doseMgM2} mg/m² · ${point.weightLb} lb. ${esc(point.doseReason)}`;
+      else if(kind==='symptom')detail.innerHTML=`<strong>${when} · Owner observations</strong>${esc(compactObservation(point))}. ${esc(point.notes)}`;
+      else detail.innerHTML=`<strong>${when}${point.time?` · ${esc(point.time)}`:''} · ${esc(medicationName(point.medicationId))} ${esc(point.dose)}</strong>${esc(point.status)}${point.status==='given'&&tabletQuantity(point)!=null?` · ${tabletQuantity(point)} tablet(s)`:''} · ${esc(point.reason||'No reason recorded')}`;
     };
-    node.addEventListener('click',show);
-    node.addEventListener('focus',show);
+    node.addEventListener('click',show);node.addEventListener('focus',show);node.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();show();}});
   });
-
-  if(selectedCycle){
-    detail.innerHTML=`<strong>Chemo #${selectedCycle.number} treatment window</strong>${fmtDate(window.start)} through ${fmtDate(window.displayEnd)} · ${selectedCycle.doseMg} mg (${selectedCycle.doseMgM2} mg/m²). Select a point above for exact source detail.`;
-    windowDetails.innerHTML=renderCycleDetails(selectedCycle,window);
-  }else{
-    detail.innerHTML='<strong>All treatment cycles</strong>Purple shows dose, blue shows bloodwork, and the symptom track shows owner-observed severity. Select a treatment above to zoom into one complete cycle.';
-    windowDetails.innerHTML='';
-  }
+  detail.innerHTML=selectedCycle?`<strong>Chemo #${selectedCycle.number} · ${fmtDate(startDate)}–${fmtDate(endDate)}</strong>Calendar dates align every lane. Swipe the chart for later dates; tap a marker for dose and source details.`:'<strong>All treatment cycles</strong>Purple: treatment. Red: bloodwork. Separate medication and blue observation lanes share the same dates. Tap a marker to highlight its date.';
+  windowDetails.innerHTML=selectedCycle?renderCycleDetails(selectedCycle,window):'';
+  q('#treatmentMedicationSummary').innerHTML=renderMedicationOverview(window);
 }
 
 function renderTreatmentWindowSelector(container,treatments){
@@ -595,7 +553,9 @@ function cycleWindowFor(treatment,treatments){
     const candidateDates=[
       ...state.labs.map(x=>x.date),
       ...state.observations.map(x=>x.date),
-      ...state.costs.map(x=>x.date)
+      ...state.costs.map(x=>x.date),
+      ...state.medicationAdministrations.map(x=>x.date),
+      ...state.medicationPurchases.map(x=>x.date)
     ].filter(d=>d>=start).sort();
     const last=candidateDates.at(-1)||start;
     const minimum=addDays(start,14);
@@ -698,6 +658,50 @@ function observationChips(o){
   return chips.map(x=>`<span class="chip">${esc(x)}</span>`).join('');
 }
 
+function tabletQuantity(administration){
+  if(administration.status!=='given')return 0;
+  if(administration.tabletQuantity!=null&&Number.isFinite(Number(administration.tabletQuantity)))return Number(administration.tabletQuantity);
+  // Physical tablet counts need a known tablet strength and a simple recorded mg dose.
+  const med=state.medications.find(m=>m.id===administration.medicationId);
+  const match=String(administration.dose||'').match(/^(\d+(?:\.\d+)?)\s*mg$/i);
+  return med?.tabletStrengthMg&&match?Number(match[1])/med.tabletStrengthMg:null;
+}
+
+function medicationStats(id,window=null){
+  const given=state.medicationAdministrations.filter(a=>a.medicationId===id&&a.status==='given'&&(!window||inCycleWindow(a.date,window)));
+  const quantities=given.map(tabletQuantity);
+  const purchases=state.medicationPurchases.filter(p=>p.medicationId===id&&(!window||inCycleWindow(p.date,window)));
+  const purchased=purchases.reduce((n,p)=>n+Number(p.quantity||0),0);
+  const spent=purchases.reduce((n,p)=>n+Number(p.amountPaid||0),0);
+  return {given,tablets:quantities.reduce((n,q)=>n+(q||0),0),unknown:quantities.filter(q=>q==null).length,purchases,purchased,spent,unitCost:purchased?spent/purchased:null,last:given.map(a=>a.date).sort().at(-1)};
+}
+
+function renderMedicationOverview(window=null){
+  const c=medicationStats('med-cerenia',window),total=medicationStats('med-cerenia');
+  const nauseaDates=new Set(state.observations.filter(o=>Number(o.nausea)>0&&(!window||inCycleWindow(o.date,window))).map(o=>o.date));
+  const medDates=new Set(c.given.map(a=>a.date)),treated=[...nauseaDates].filter(d=>medDates.has(d)).length;
+  const heading=window?'Cerenia in this treatment window':'Cerenia across Roger’s care';
+  const cycles=[...state.treatments].sort((a,b)=>a.number-b.number);
+  const cycleCounts=cycles.map(t=>{
+    const n=medicationStats('med-cerenia',cycleWindowFor(t,cycles));
+    return `<div class="cerenia-cycle"><span>Chemo #${t.number}</span><strong>${n.tablets}${n.unknown?' + ?':''}</strong><small>tablets given</small></div>`;
+  }).join('');
+  return `<section class="medication-overview"><div class="section-kicker">MEDICATION USE & COST</div><h3>${heading}</h3>
+    <div class="medication-kpis"><div><strong>${c.tablets}${c.unknown?' + ?':''}</strong><span>60 mg tablets given</span></div><div><strong>${nauseaDates.size}</strong><span>recorded nausea days</span></div><div class="owner-only"><strong>${total.purchased}</strong><span>tablets purchased to date</span></div><div class="owner-only"><strong>${money(total.spent)}</strong><span>Cerenia spent to date</span></div></div>
+    <p class="medication-note">${treated} of ${nauseaDates.size} recorded nausea days${nauseaDates.size?` (${Math.round(treated/nauseaDates.size*100)}%)`:""} have a Cerenia dose logged on the same date. ${c.last?`Last given: ${fmtDate(c.last)}.`:'No Cerenia dose logged in this window.'} Counts reflect recorded administrations; daily prescriptions alone do not add pills.</p>
+    <div class="medication-note owner-only">Average purchase cost: ${total.unitCost==null?'not recorded':money(total.unitCost)+' / tablet'}. ${window?`${c.purchased} tablets purchased for ${money(c.spent)} during this window. `:''}Medication spending is already included in the visit or purchase bills.</div>
+    ${!window?`<div class="cerenia-cycle-grid">${cycleCounts}</div>`:''}
+  </section>`;
+}
+
+function renderMedicationLedger(){
+  return `<div class="medication-ledger">${state.medications.map(m=>{
+    const a=medicationStats(m.id),held=state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length;
+    const purchases=a.purchases.map(p=>`<div class="medication-purchase-row"><span>${fmtDate(p.date)} · ${p.quantity} × ${p.tabletStrengthMg} mg<br><small>${esc(p.source)}</small></span><strong>${money(p.amountPaid)}<br><small>${money(p.amountPaid/p.quantity)} / tablet</small></strong></div>`).join('');
+    return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${a.tablets}${a.unknown?' + ?':''}</strong><span>tablets documented given</span></div><div><strong>${a.given.length}</strong><span>doses logged${held?` · ${held} held`:''}</span></div><div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div></div><p class="medication-note">${esc(m.prescribedDose)}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last?` · Last given ${fmtDate(a.last)}.`:''}</p><div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div></article>`;
+  }).join('')}</div>`;
+}
+
 function renderMedications(){
   const administrations=[...(state.medicationAdministrations||[])].sort((a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||''));
   const given=administrations.filter(a=>a.status==='given');
@@ -707,11 +711,13 @@ function renderMedications(){
   const currentPred=(state.medicationCourses||[]).find(c=>c.medicationId==='med-prednisone'&&!c.endDate);
 
   els.medicationSummary.innerHTML=`<div class="summary-grid medication-grid">
-    <div class="summary-tile med-summary owner-med"><div class="summary-value">${cerenia.length}</div><div class="summary-label">CERENIA GIVEN</div><div class="item-meta">60 mg PRN</div></div>
-    <div class="summary-tile med-summary owner-med"><div class="summary-value">${metro.length}</div><div class="summary-label">METRONIDAZOLE</div><div class="item-meta">250 mg PRN</div></div>
+    <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-cerenia').tablets}</div><div class="summary-label">CERENIA TABLETS</div><div class="item-meta">60 mg PRN</div></div>
+    <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-metronidazole').tablets}</div><div class="summary-label">METRONIDAZOLE TABLETS</div><div class="item-meta">250 mg PRN</div></div>
     <div class="summary-tile med-summary ksu-med"><div class="summary-value">${currentPred?.dose||'10 mg'}</div><div class="summary-label">PREDNISONE NOW</div><div class="item-meta">every 24 hours</div></div>
     <div class="summary-tile med-summary neutral-med"><div class="summary-value">${traz.length}</div><div class="summary-label">TRAZODONE DAYS</div><div class="item-meta">200 mg pre-visit</div></div>
   </div>`;
+
+  els.medicationSummary.innerHTML += renderMedicationOverview() + renderMedicationLedger();
 
   els.medicationHistory.innerHTML=administrations.map(a=>{
     const med=(state.medications||[]).find(m=>m.id===a.medicationId);

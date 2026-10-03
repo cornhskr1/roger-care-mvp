@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "profile": {
     "name": "Roger",
     "species": "Canine",
@@ -18,7 +18,7 @@
       "sourceType": "clinician_note",
       "provider": "K-State Veterinary Health Center",
       "label": "Oncology consultation",
-      "summary": "Recommended 8 vinblastine injections (4 weekly, then 4 every two weeks), CBC before each treatment, restaging at doses 4 and 8. Estimated complete treatment-course cost approximately $3,500–$4,000; approximately $250 per chemotherapy injection excluding primary-veterinarian bloodwork; restaging approximately $700."
+      "summary": "Recommended 8 vinblastine injections (4 weekly, then 4 every two weeks), CBC before each treatment, restaging at doses 4 and 8. Estimated complete treatment-course cost approximately $3,500\u2013$4,000; approximately $250 per chemotherapy injection excluding primary-veterinarian bloodwork; restaging approximately $700."
     },
     {
       "id": "src-pathology-0721",
@@ -53,7 +53,7 @@
       "weightLb": 53.4,
       "prednisone": "20 mg daily",
       "doseReason": "20% dose reduction after post-treatment neutropenia.",
-      "clinicalSummary": "K-State documented decreased energy after treatment #1. Neutrophils were 0.25 K/µL on 8/20; amoxicillin was started.",
+      "clinicalSummary": "K-State documented decreased energy after treatment #1. Neutrophils were 0.25 K/\u00b5L on 8/20; amoxicillin was started.",
       "source": "K-State clinical note"
     },
     {
@@ -92,7 +92,7 @@
       "weightLb": 51.8,
       "prednisone": "10 mg daily beginning 10/2",
       "doseReason": "Continued dose escalation with hematologic recovery.",
-      "clinicalSummary": "Clinical note records vinblastine 2.0 mg (2.42 mg/m²). Prednisone decreased to 10 mg daily.",
+      "clinicalSummary": "Clinical note records vinblastine 2.0 mg (2.42 mg/m\u00b2). Prednisone decreased to 10 mg daily.",
       "recordCheck": "The 10/2 invoice contains two separate 2 mL vinblastine billing lines. Clinical note states 2.0 mg total; verify with K-State.",
       "source": "K-State clinical note + invoice"
     }
@@ -102,7 +102,7 @@
       "date": "2026-06-30",
       "metric": "Neutrophils",
       "value": 4.92,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Baseline",
       "source": "Optimum / IDEXX"
     },
@@ -110,7 +110,7 @@
       "date": "2026-08-20",
       "metric": "Neutrophils",
       "value": 0.25,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Post-chemo #1 nadir",
       "source": "Optimum / IDEXX"
     },
@@ -118,7 +118,7 @@
       "date": "2026-08-27",
       "metric": "Neutrophils",
       "value": 14.43,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -126,7 +126,7 @@
       "date": "2026-09-03",
       "metric": "Neutrophils",
       "value": 1.79,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Post-chemo #2; #3 delayed",
       "source": "Optimum / IDEXX"
     },
@@ -134,7 +134,7 @@
       "date": "2026-09-10",
       "metric": "Neutrophils",
       "value": 7.44,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #3",
       "source": "Optimum / IDEXX"
     },
@@ -142,7 +142,7 @@
       "date": "2026-09-17",
       "metric": "Neutrophils",
       "value": 2.5,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #4",
       "source": "Optimum / IDEXX"
     },
@@ -150,7 +150,7 @@
       "date": "2026-10-01",
       "metric": "Neutrophils",
       "value": 13.89,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #5",
       "source": "Optimum / IDEXX"
     },
@@ -214,7 +214,7 @@
       "date": "2026-06-30",
       "metric": "Platelets",
       "value": 331,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Baseline",
       "source": "Optimum / IDEXX"
     },
@@ -222,7 +222,7 @@
       "date": "2026-08-20",
       "metric": "Platelets",
       "value": 384,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Post-chemo #1",
       "source": "Optimum / IDEXX"
     },
@@ -230,7 +230,7 @@
       "date": "2026-08-27",
       "metric": "Platelets",
       "value": 337,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -238,7 +238,7 @@
       "date": "2026-09-03",
       "metric": "Platelets",
       "value": 385,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Post-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -246,7 +246,7 @@
       "date": "2026-09-10",
       "metric": "Platelets",
       "value": 395,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #3",
       "source": "Optimum / IDEXX"
     },
@@ -254,7 +254,7 @@
       "date": "2026-09-17",
       "metric": "Platelets",
       "value": 367,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #4",
       "source": "Optimum / IDEXX"
     },
@@ -262,7 +262,7 @@
       "date": "2026-10-01",
       "metric": "Platelets",
       "value": 442,
-      "unit": "K/µL",
+      "unit": "K/\u00b5L",
       "context": "Pre-chemo #5",
       "source": "Optimum / IDEXX"
     },
@@ -420,7 +420,7 @@
       "energy": "",
       "nausea": 2,
       "vomiting": 0,
-      "stool": "5–6",
+      "stool": "5\u20136",
       "hydration": "",
       "urination": "",
       "pain": 0,
@@ -452,14 +452,14 @@
       "energy": "",
       "nausea": 2,
       "vomiting": 0,
-      "stool": "5–6",
+      "stool": "5\u20136",
       "hydration": "",
       "urination": "house urination",
       "pain": 0,
       "medications": [
         "Cerenia 60 mg"
       ],
-      "notes": "Nausea with lip licking and drooling. Stool 5–6 with bright-red blood; urinated in the house. Cerenia administered.",
+      "notes": "Nausea with lip licking and drooling. Stool 5\u20136 with bright-red blood; urinated in the house. Cerenia administered.",
       "source": "owner_observation"
     },
     {
@@ -700,7 +700,7 @@
           403.75
         ],
         [
-          "Cytology ×2",
+          "Cytology \u00d72",
           115.5
         ],
         [
@@ -803,14 +803,14 @@
       "date": "2026-08-20",
       "type": "lab",
       "title": "Severe neutropenia after chemo #1",
-      "detail": "Neutrophils 0.25 K/µL; amoxicillin started.",
+      "detail": "Neutrophils 0.25 K/\u00b5L; amoxicillin started.",
       "source": "Optimum lab + K-State history"
     },
     {
       "date": "2026-09-03",
       "type": "lab",
       "title": "Treatment delay",
-      "detail": "Neutrophils 1.79 K/µL; chemotherapy #3 delayed one week.",
+      "detail": "Neutrophils 1.79 K/\u00b5L; chemotherapy #3 delayed one week.",
       "source": "Optimum lab + K-State note"
     },
     {
@@ -828,35 +828,40 @@
       "name": "Prednisone",
       "prescribedDose": "20 mg by mouth every 24 hours through 10/1/2026; 10 mg by mouth every 24 hours beginning 10/2/2026",
       "indication": "Part of mast cell tumor chemotherapy protocol",
-      "source": "K-State clinical note"
+      "source": "K-State clinical note",
+      "tabletStrengthMg": 20
     },
     {
       "id": "med-cerenia",
       "name": "Cerenia / maropitant",
       "prescribedDose": "60 mg by mouth every 24 hours as needed",
       "indication": "Chemotherapy-associated nausea or vomiting",
-      "source": "K-State clinical note"
+      "source": "K-State clinical note",
+      "tabletStrengthMg": 60
     },
     {
       "id": "med-metronidazole",
       "name": "Metronidazole",
       "prescribedDose": "250 mg by mouth every 12 hours as needed with food",
       "indication": "Chemotherapy-associated diarrhea",
-      "source": "K-State clinical note"
+      "source": "K-State clinical note",
+      "tabletStrengthMg": 250
     },
     {
       "id": "med-trazodone",
       "name": "Trazodone",
       "prescribedDose": "200 mg by mouth approximately 2 hours before veterinary appointments",
       "indication": "Pre-visit anxiety/sedation support",
-      "source": "K-State clinical note"
+      "source": "K-State clinical note",
+      "tabletStrengthMg": 100
     },
     {
       "id": "med-amoxicillin",
       "name": "Amoxicillin",
       "prescribedDose": "Dose not established in the records currently loaded",
       "indication": "Started after severe neutropenia",
-      "source": "Owner journal + K-State history"
+      "source": "Owner journal + K-State history",
+      "tabletStrengthMg": null
     }
   ],
   "medicationCourses": [
@@ -900,7 +905,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0821",
@@ -910,7 +916,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0831",
@@ -920,7 +927,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea/restlessness",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0901",
@@ -930,7 +938,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0913",
@@ -940,7 +949,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea signs",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0914",
@@ -950,7 +960,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea signs",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0921",
@@ -960,7 +971,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea/lip licking/drooling",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0922",
@@ -970,7 +982,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0923",
@@ -980,7 +993,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-0928-held",
@@ -1000,7 +1014,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "recurrent nausea/gurgling/restlessness",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-cer-1001",
@@ -1010,7 +1025,8 @@
       "dose": "60 mg",
       "status": "given",
       "reason": "nausea",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-met-0924",
@@ -1020,7 +1036,8 @@
       "dose": "250 mg",
       "status": "given",
       "reason": "diarrhea / possible blood",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-met-0925",
@@ -1030,7 +1047,8 @@
       "dose": "250 mg",
       "status": "given",
       "reason": "diarrhea follow-up",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 1
     },
     {
       "id": "adm-traz-0814",
@@ -1040,7 +1058,8 @@
       "dose": "200 mg",
       "status": "given",
       "reason": "pre-visit",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 2
     },
     {
       "id": "adm-traz-0828",
@@ -1050,7 +1069,8 @@
       "dose": "200 mg",
       "status": "given",
       "reason": "pre-visit",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 2
     },
     {
       "id": "adm-traz-0911",
@@ -1060,7 +1080,8 @@
       "dose": "200 mg",
       "status": "given",
       "reason": "pre-visit",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 2
     },
     {
       "id": "adm-traz-0918",
@@ -1070,7 +1091,8 @@
       "dose": "200 mg",
       "status": "given",
       "reason": "pre-visit",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 2
     },
     {
       "id": "adm-traz-1002",
@@ -1080,7 +1102,87 @@
       "dose": "200 mg",
       "status": "given",
       "reason": "pre-visit",
-      "source": "owner journal"
+      "source": "owner journal",
+      "tabletQuantity": 2
+    }
+  ],
+  "medicationPurchases": [
+    {
+      "id": "purchase-trazodone-2026-08-04",
+      "medicationId": "med-trazodone",
+      "date": "2026-08-04",
+      "quantity": 30,
+      "tabletStrengthMg": 100,
+      "amountPaid": 20.9,
+      "costId": "cost-0804",
+      "source": "K-State invoice #149569",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-prednisone-2026-08-14",
+      "medicationId": "med-prednisone",
+      "date": "2026-08-14",
+      "quantity": 40,
+      "tabletStrengthMg": 20,
+      "amountPaid": 11,
+      "costId": "cost-0814",
+      "source": "K-State invoice #150910",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-cerenia-2026-08-14",
+      "medicationId": "med-cerenia",
+      "date": "2026-08-14",
+      "quantity": 7,
+      "tabletStrengthMg": 60,
+      "amountPaid": 72.76,
+      "costId": "cost-0814",
+      "source": "K-State invoice #150910",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-metronidazole-2026-08-14",
+      "medicationId": "med-metronidazole",
+      "date": "2026-08-14",
+      "quantity": 30,
+      "tabletStrengthMg": 250,
+      "amountPaid": 20.3,
+      "costId": "cost-0814",
+      "source": "K-State invoice #150910",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-prednisone-2026-09-11",
+      "medicationId": "med-prednisone",
+      "date": "2026-09-11",
+      "quantity": 35,
+      "tabletStrengthMg": 20,
+      "amountPaid": 10.25,
+      "costId": "cost-0911",
+      "source": "K-State invoice #154654",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-cerenia-2026-09-11",
+      "medicationId": "med-cerenia",
+      "date": "2026-09-11",
+      "quantity": 8,
+      "tabletStrengthMg": 60,
+      "amountPaid": 82.44,
+      "costId": "cost-0911",
+      "source": "K-State invoice #154654",
+      "status": "confirmed"
+    },
+    {
+      "id": "purchase-cerenia-2026-10-02",
+      "medicationId": "med-cerenia",
+      "date": "2026-10-02",
+      "quantity": 8,
+      "tabletStrengthMg": 60,
+      "amountPaid": 82.44,
+      "costId": "cost-1002",
+      "source": "K-State invoice #157866",
+      "status": "confirmed"
     }
   ]
 }
