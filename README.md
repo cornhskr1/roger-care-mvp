@@ -44,6 +44,12 @@ Financial records deliberately do **not** store bank names, account numbers, car
 
 Document upload is real and persists locally, but automated medical-document extraction is **not** implemented yet. That needs a secure backend / ingestion service and should not be simulated in the client.
 
+The published starter record (including patient IDs) is public in the GitHub Pages site and repository. Owner-entered entries, corrections, photo, and document files remain on this device. There is no authenticated private sharing yet. Use the local vet handoff download/print to share deliberately.
+
+The complete JSON backup includes document file data, profile personalization, owner edits, and a correction history. Importing a complete backup replaces current on-device entries and documents after a confirmation; older state-only backups preserve existing device documents.
+
+Upcoming treatment and restaging slots deliberately have no dates until confirmed. Vet call instructions are blank until entered with a source. The handoff includes a first-page snapshot and a longer sourced record; it does not attach the source documents themselves.
+
 ## Next technical milestones
 
 1. Secure authentication and encrypted cloud sync
@@ -67,7 +73,7 @@ https://cornhskr1.github.io/roger-care-mvp/
 
 - Four synchronized lanes for vinblastine, bloodwork, medications, and owner observations.
 - Selected treatment windows label every calendar date; swipe the chart on phones. Dashed guides align medication dates, and selecting an event highlights its date across all lanes.
-- Tablet counts are computed from actual given administrations and confirmed tablet strengths. Held doses and prescribed daily courses do not add pills automatically.
+- Tablet counts are computed from recorded administrations and owner-confirmed daily courses with known strengths. Held doses and future prescribed days do not add pills automatically.
 - Cerenia summaries show per-cycle usage, recorded nausea days, same-date use, purchased quantity, and purchase-based spending.
 - Medication purchase allocations reference their existing care cost by `costId`; they never add the medication charge again. A new separate purchase creates one care expense and its allocation together.
 - New purchases can be entered through Costs → + Cost → Medication. Choose an existing bill when its total already includes that purchase.

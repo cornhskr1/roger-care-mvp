@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=11">
+  <link rel="manifest" href="manifest.webmanifest?v=12">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=11">
+  <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -48,6 +48,11 @@
             <button id="openJournalComposer" type="button" class="primary-button compact">Log today</button>
           </div>
           <div id="latestObservation" class="empty-state"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Appointments & vet instructions</h2></div></div>
+          <div id="upcomingCare"></div>
         </section>
 
         <section class="card">
@@ -197,6 +202,8 @@
           </div>
         </div>
 
+        <div class="privacy-note"><strong>Sharing:</strong> The starter medical record and patient IDs in this published site are public. New journal entries, photo, uploaded files, and corrections stay on this device unless you export them. The care-team handoff is a local download or printout; this version has no private share link.</div>
+
         <section class="card">
           <div class="card-head">
             <div>
@@ -234,14 +241,24 @@
           <div class="card-head">
             <div>
               <div class="section-kicker">CARE TEAM</div>
-              <h2>Share a clean summary</h2>
+              <h2>Vet handoff</h2>
             </div>
           </div>
-          <p class="body-copy">The care-team export includes longitudinal clinical data, owner-observed symptoms, and financial burden totals. It excludes bank/payment account information and private app backup data.</p>
+          <p class="body-copy">A visit snapshot with medications, prior complications, upcoming care, and source labels, followed by the longitudinal record.</p>
           <div class="button-stack">
             <button id="downloadCareSummary" class="primary-button" type="button">Download care-team summary</button>
             <button id="printCareSummary" class="secondary-button" type="button">Print / Save as PDF</button>
           </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Confirm dates and call instructions</h2></div></div>
+          <form id="carePlanForm" class="form-stack">
+            <div id="carePlanFields" class="form-grid two"></div>
+            <label class="field"><span>When to call the vet (use the vet’s exact instructions)</span><textarea id="vetCallInstructions" name="vetCallInstructions" rows="3" placeholder="Awaiting Roger’s veterinarian’s guidance"></textarea></label>
+            <label class="field"><span>Instruction source / date</span><input id="vetCallSource" name="vetCallSource" type="text" placeholder="K-State discharge instructions, date…"></label>
+            <button type="submit" class="secondary-button">Save care plan</button>
+          </form>
         </section>
 
         <section class="card owner-only">
@@ -252,9 +269,10 @@
             </div>
           </div>
           <div class="button-stack">
-            <button id="exportBackup" class="secondary-button" type="button">Export app backup (.json)</button>
+            <button id="exportBackup" class="secondary-button" type="button">Export complete backup (.json)</button>
             <label class="secondary-button file-button">Import app backup<input id="importBackup" type="file" accept="application/json" hidden></label>
           </div>
+          <p class="medication-note">Includes uploaded document files and on-device changes. Keep the downloaded backup somewhere you trust.</p>
         </section>
 
         <section class="card">
@@ -275,6 +293,7 @@
 
   <dialog id="journalDialog" class="sheet-dialog">
     <form id="journalForm" method="dialog" class="sheet-card">
+      <input id="journalEditId" name="editId" type="hidden">
       <div class="sheet-handle"></div>
       <div class="sheet-head">
         <div><div class="section-kicker">OWNER OBSERVATION</div><h2>Daily check-in</h2></div>
@@ -308,6 +327,7 @@
 
   <dialog id="medicationDialog" class="sheet-dialog">
     <form id="medicationForm" method="dialog" class="sheet-card">
+      <input id="medicationEditId" name="editId" type="hidden">
       <div class="sheet-handle"></div>
       <div class="sheet-head">
         <div><div class="section-kicker">MEDICATION ADMINISTRATION</div><h2>Log medication</h2></div>
@@ -361,8 +381,20 @@
     </form>
   </dialog>
 
+  <dialog id="costCorrectionDialog" class="sheet-dialog">
+    <form id="costCorrectionForm" method="dialog" class="sheet-card">
+      <div class="sheet-handle"></div><div class="sheet-head"><div><div class="section-kicker">RECORD CORRECTION</div><h2>Correct a care cost</h2></div><button class="icon-button" type="button" data-close-dialog="costCorrectionDialog" aria-label="Close">×</button></div>
+      <input name="editId" type="hidden">
+      <div class="form-grid two"><label class="field"><span>Date</span><input name="date" type="date" required></label><label class="field"><span>Amount paid</span><input name="amountPaid" type="number" min="0" step="0.01" required></label></div>
+      <label class="field"><span>Provider</span><input name="provider" type="text" required></label>
+      <label class="field"><span>Care description</span><input name="label" type="text" required></label>
+      <p class="medication-note">The original value stays in correction history. Medication purchase allocations remain tied to this bill.</p>
+      <div class="sheet-actions"><button class="secondary-button" type="button" data-close-dialog="costCorrectionDialog">Cancel</button><button class="primary-button" type="submit">Save correction</button></div>
+    </form>
+  </dialog>
+
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=11" defer></script>
+  <script src="app.js?v=12" defer></script>
 </body>
 </html>

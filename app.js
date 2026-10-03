@@ -3,6 +3,12 @@
 const STORAGE_KEY = 'rogerCareState_v1';
 const DOC_DB = 'rogerCareDocuments_v1';
 const DOC_STORE = 'documents';
+const DEFAULT_VISITS = [
+  {id:'chemo-6',label:'Vinblastine #6 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
+  {id:'chemo-7',label:'Vinblastine #7 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
+  {id:'chemo-8',label:'Vinblastine #8 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
+  {id:'restaging',label:'Final restaging',date:null,source:'K-State treatment plan; appointment date not confirmed'}
+];
 
 const els = {};
 let state = null;
@@ -46,7 +52,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','clinicalCourse','homeCostSummary','openItems','journalSummary','journalEntries','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','upcomingCare','clinicalCourse','homeCostSummary','openItems','journalSummary','journalEntries','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -87,6 +93,14 @@ function mergeCanonicalSeed(canonical, saved){
   merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
   merged.medicationCourses = mergeById(canonical.medicationCourses, migratedSaved.medicationCourses, false);
   merged.medicationPurchases = mergeById(canonical.medicationPurchases, migratedSaved.medicationPurchases, false);
+  merged.carePlan = migratedSaved.carePlan?.visits?.length ? structuredClone(migratedSaved.carePlan) : structuredClone(canonical.carePlan);
+  merged.recordCorrections = migratedSaved.recordCorrections||[];
+  for (const correction of merged.recordCorrections){
+    const rows=merged[correction.collection];
+    if(!['observations','medicationAdministrations','costs'].includes(correction.collection)||!Array.isArray(rows))continue;
+    const index=rows.findIndex(row=>row.id===correction.id);
+    if(index>=0)rows[index]={...rows[index],...correction.after};
+  }
 
   // Owner-entered items have generated IDs and are not present in canonical data.
   for (const row of migratedSaved.observations || []) if (String(row.id||'').includes('-') && !merged.observations.some(x=>x.id===row.id)) merged.observations.push(row);
@@ -107,6 +121,9 @@ function migrateState(input){
   next.medicationCourses = Array.isArray(next.medicationCourses) ? next.medicationCourses : [];
   next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
   next.medicationPurchases = Array.isArray(next.medicationPurchases) ? next.medicationPurchases : [];
+  next.recordCorrections = Array.isArray(next.recordCorrections) ? next.recordCorrections : [];
+  next.carePlan = next.carePlan||{visits:structuredClone(DEFAULT_VISITS),vetCallInstructions:'',vetCallSource:''};
+  if(!Array.isArray(next.carePlan.visits)||!next.carePlan.visits.length)next.carePlan.visits=structuredClone(DEFAULT_VISITS);
 
   const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
   if (combinedIndex >= 0) {
@@ -123,7 +140,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),4);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),6);
   return next;
 }
 
@@ -141,9 +158,9 @@ function navigate(view){
 }
 
 function bindDialogs(){
-  q('#openJournalComposer').addEventListener('click', openJournalDialog);
-  q('#journalAddButton').addEventListener('click', openJournalDialog);
-  q('#medicationAddButton').addEventListener('click', openMedicationDialog);
+  q('#openJournalComposer').addEventListener('click', () => openJournalDialog());
+  q('#journalAddButton').addEventListener('click', () => openJournalDialog());
+  q('#medicationAddButton').addEventListener('click', () => openMedicationDialog());
   q('#costAddButton').addEventListener('click', () => {
     q('#costForm').reset();
     q('#costDate').value = todayIso();
@@ -171,13 +188,43 @@ function bindDialogs(){
     qa('[data-timeline-filter]').forEach(b => b.classList.toggle('active', b === btn));
     renderTimeline();
   }));
+  document.addEventListener('click',event=>{
+    const journal=event.target.closest('[data-edit-observation]');
+    if(journal)openJournalDialog(journal.dataset.editObservation);
+    const medication=event.target.closest('[data-edit-medication]');
+    if(medication)openMedicationDialog(medication.dataset.editMedication);
+    const cost=event.target.closest('[data-edit-cost]');
+    if(cost)openCostCorrectionDialog(cost.dataset.editCost);
+  });
 }
 
-function openJournalDialog(){
-  q('#journalDate').value = todayIso();
-  q('#journalForm').reset();
-  q('#journalDate').value = todayIso();
+function openCostCorrectionDialog(id){
+  const row=state.costs.find(c=>c.id===id);if(!row)return;
+  const form=q('#costCorrectionForm');
+  for(const name of ['date','amountPaid','provider','label'])form.elements.namedItem(name).value=row[name]??'';
+  form.elements.namedItem('editId').value=id;
+  q('#costCorrectionDialog').showModal();
+}
+
+function openJournalDialog(id=''){
+  const form=q('#journalForm');form.reset();q('#journalEditId').value=id;
+  const row=state.observations.find(o=>o.id===id);
+  if(row)for(const [name,value] of Object.entries(row)){
+    const field=form.elements.namedItem(name);
+    if(field&&name!=='medications')field.value=value??'';
+  }
+  if(row)form.elements.namedItem('medications').value=(row.medications||[]).join(', ');
+  q('#journalDate').value=row?.date||todayIso();
   els.journalDialog.showModal();
+}
+
+function recordCorrection(collection,id,after){
+  const rows=state[collection],index=rows.findIndex(row=>row.id===id);
+  if(index<0)return false;
+  const before=structuredClone(rows[index]);
+  rows[index]={...before,...after};
+  state.recordCorrections.push({collection,id,before,after:structuredClone(after),at:new Date().toISOString()});
+  return true;
 }
 
 function bindForms(){
@@ -191,9 +238,11 @@ function bindForms(){
       medications: String(fd.get('medications') || '').split(',').map(x=>x.trim()).filter(Boolean),
       notes: fd.get('notes'), source:'owner_observation'
     };
-    state.observations.push(obs);
+    const editId=String(fd.get('editId')||'');
+    if(editId){if(!recordCorrection('observations',editId,{...obs,id:editId}))return toast('Entry no longer found',true);}
+    else state.observations.push(obs);
     state.observations.sort((a,b)=>a.date.localeCompare(b.date));
-    persist(); renderAll(); els.journalDialog.close(); toast('Observation saved');
+    persist(); renderAll(); els.journalDialog.close(); toast(editId?'Observation corrected':'Observation saved');
   });
 
   q('#costForm').addEventListener('submit', event => {
@@ -227,7 +276,8 @@ function bindForms(){
   q('#medicationForm').addEventListener('submit', event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
-    state.medicationAdministrations.push({
+    const editId=String(fd.get('editId')||'');
+    const administration={
       id:uid('medadm'),
       medicationId:fd.get('medicationId'),
       date:fd.get('date'),
@@ -237,9 +287,30 @@ function bindForms(){
       status:fd.get('status') || 'given',
       reason:String(fd.get('reason')||'').trim(),
       source:'owner journal'
-    });
+    };
+    if(editId){if(!recordCorrection('medicationAdministrations',editId,{...administration,id:editId}))return toast('Dose no longer found',true);}
+    else state.medicationAdministrations.push(administration);
     state.medicationAdministrations.sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-    persist(); renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast('Medication administration saved');
+    persist(); renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast(editId?'Medication record corrected':'Medication administration saved');
+  });
+
+  q('#carePlanForm').addEventListener('submit',event=>{
+    event.preventDefault();const fd=new FormData(event.currentTarget);
+    const instructions=String(fd.get('vetCallInstructions')||'').trim(),source=String(fd.get('vetCallSource')||'').trim();
+    if(instructions&&!source)return toast('Add the vet instruction source or date',true);
+    state.carePlan.visits.forEach(v=>{v.date=String(fd.get(v.id)||'')||null;if(v.date)v.source='Owner-entered appointment date; confirm with clinic';});
+    state.carePlan.vetCallInstructions=instructions;
+    state.carePlan.vetCallSource=source;
+    persist();renderUpcomingCare();toast('Care plan saved');
+  });
+
+  q('#costCorrectionForm').addEventListener('submit',event=>{
+    event.preventDefault();const fd=new FormData(event.currentTarget),id=String(fd.get('editId')||'');
+    const amount=Number(fd.get('amountPaid'));
+    const allocated=state.medicationPurchases.filter(p=>p.costId===id).reduce((n,p)=>n+Number(p.amountPaid||0),0);
+    if(!Number.isFinite(amount)||amount<allocated-.005)return toast(`Amount cannot be below allocated medication purchases (${money(allocated)})`,true);
+    if(!recordCorrection('costs',id,{date:fd.get('date'),amountPaid:amount,provider:String(fd.get('provider')||'').trim(),label:String(fd.get('label')||'').trim()}))return toast('Cost no longer found',true);
+    persist();renderAll();q('#costCorrectionDialog').close();toast('Cost corrected');
   });
 
   q('#documentForm').addEventListener('submit', async event => {
@@ -258,7 +329,7 @@ function bindForms(){
   });
 }
 
-function openMedicationDialog(){
+function openMedicationDialog(id=''){
   q('#medicationForm').reset();
   const select=q('#medicationSelect');
   select.innerHTML=(state.medications||[]).map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
@@ -268,6 +339,16 @@ function openMedicationDialog(){
   select.onchange=selectMedicationDefaultDose;
   q('#medicationDate').onchange=selectMedicationDefaultDose;
   q('#medicationDose').oninput=suggestTabletQuantity;
+  q('#medicationEditId').value=id;
+  const row=state.medicationAdministrations.find(a=>a.id===id);
+  if(row){
+    for(const name of ['medicationId','date','time','dose','tabletQuantity','status','reason']){
+      const field=q('#medicationForm').elements.namedItem(name);
+      if(field)field.value=row[name]??'';
+    }
+    selectMedicationDefaultDose();q('#medicationDose').value=row.dose||'';
+    q('#medicationTabletQuantity').value=row.tabletQuantity??'';
+  }
   els.medicationDialog.showModal();
 }
 
@@ -367,7 +448,15 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
+  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
+}
+
+function renderUpcomingCare(){
+  const plan=state.carePlan||{visits:[]};
+  els.upcomingCare.innerHTML=`<div class="care-plan-list">${(plan.visits||[]).map(v=>`<div class="care-plan-row"><strong>${esc(v.label)}</strong><span>${v.date?fmtDate(v.date):'Date pending'}</span></div>`).join('')}</div><p class="medication-note"><strong>When to call:</strong> ${plan.vetCallInstructions?esc(plan.vetCallInstructions):'Awaiting Roger’s veterinarian’s instructions.'}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`;
+  q('#carePlanFields').innerHTML=(plan.visits||[]).map(v=>`<label class="field"><span>${esc(v.label)}</span><input type="date" name="${esc(v.id)}" value="${esc(v.date||'')}"></label>`).join('');
+  q('#vetCallInstructions').value=plan.vetCallInstructions||'';
+  q('#vetCallSource').value=plan.vetCallSource||'';
 }
 
 function renderProfile(){
@@ -681,7 +770,7 @@ function renderJournal(){
     [medDays,'MEDICATION DAYS'],
     [fmtDate(state.journalCoverageThrough||obs[0]?.date||'2026-10-02').replace(', 2026',''),'CURRENT THROUGH']
   ].map(x=>`<div class="summary-tile"><div class="summary-value">${x[0]}</div><div class="summary-label">${x[1]}</div></div>`).join('');
-  els.journalEntries.innerHTML = obs.map(o=>`<article class="observation-card"><div class="row-between"><div><div class="item-title">${fmtDate(o.date)}</div><div class="item-meta">Owner observation</div></div>${severityChip(o)}</div><div class="chip-row">${observationChips(o)}</div><div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta" style="margin-top:8px"><strong>Medication:</strong> ${esc(o.medications.join(', '))}</div>`:''}</article>`).join('');
+  els.journalEntries.innerHTML = obs.map(o=>`<article class="observation-card"><div class="row-between"><div><div class="item-title">${fmtDate(o.date)}</div><div class="item-meta">Owner observation</div></div><div class="row-actions">${severityChip(o)}<button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div></div><div class="chip-row">${observationChips(o)}</div><div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta" style="margin-top:8px"><strong>Medication:</strong> ${esc(o.medications.join(', '))}</div>`:''}</article>`).join('');
 }
 function observationChips(o){
   const chips=[];
@@ -758,7 +847,7 @@ function renderMedications(){
     const time=a.time?` · ${esc(a.time)}`:'';
     const prescribed=med?.prescribedDose?`<div class="item-meta"><strong>Prescribed:</strong> ${esc(med.prescribedDose)}</div>`:'';
     return `<article class="observation-card medication-card">
-      <div class="row-between"><div><div class="item-title">${esc(medicationName(a.medicationId))} · ${esc(a.dose||'dose not recorded')}</div><div class="item-meta">${fmtDate(a.date)}${time}</div></div><span class="chip ${a.status==='held'?'warn':'info'}">${esc(a.status)}</span></div>
+      <div class="row-between"><div><div class="item-title">${esc(medicationName(a.medicationId))} · ${esc(a.dose||'dose not recorded')}</div><div class="item-meta">${fmtDate(a.date)}${time}</div></div><div class="row-actions"><span class="chip ${a.status==='held'?'warn':'info'}">${esc(a.status)}</span><button class="text-button" type="button" data-edit-medication="${esc(a.id)}">Correct</button></div></div>
       ${a.reason?`<div class="item-copy">${esc(a.reason)}</div>`:''}
       ${prescribed}
     </article>`;
@@ -799,7 +888,7 @@ function renderCosts(){
     .map(c=>`<article class="cost-card">
       <div class="row-between">
         <div><div class="item-title">${esc(c.label)}</div><div class="item-meta">${fmtDate(c.date)} · ${esc(c.provider)}</div></div>
-        <div class="cost-amount">${money(c.amountPaid)}</div>
+        <div class="row-actions"><div class="cost-amount">${money(c.amountPaid)}</div><button class="text-button" type="button" data-edit-cost="${esc(c.id)}">Correct</button></div>
       </div>
       <div class="chip-row">
         <span class="chip ${c.status==='confirmed'?'':'warn'}">${esc(c.status)}</span>
@@ -877,6 +966,13 @@ function openDocDb(){
 async function saveDocument(record){
   const db=await openDocDb(); return new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,'readwrite');tx.objectStore(DOC_STORE).put(record);tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);});
 }
+async function replaceDocuments(records){
+  const db=await openDocDb();return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DOC_STORE,'readwrite'),store=tx.objectStore(DOC_STORE);
+    store.clear();records.forEach(record=>store.put(record));
+    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+  });
+}
 async function loadDocuments(){
   try{const db=await openDocDb();documents=await new Promise((resolve,reject)=>{const tx=db.transaction(DOC_STORE,'readonly');const req=tx.objectStore(DOC_STORE).getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>reject(req.error);});}catch(_){documents=[];}
 }
@@ -891,16 +987,75 @@ async function openDocument(id){
 function bindExports(){
   q('#downloadCareSummary').addEventListener('click',()=>downloadText('roger-care-team-summary.html',buildCareSummaryHtml(),'text/html'));
   q('#printCareSummary').addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return toast('Pop-up blocked. Use Download instead.',true);w.document.write(buildCareSummaryHtml());w.document.close();w.focus();setTimeout(()=>w.print(),300);});
-  q('#exportBackup').addEventListener('click',()=>downloadText('roger-care-backup.json',JSON.stringify(state,null,2),'application/json'));
-  q('#importBackup').addEventListener('change',async event=>{const f=event.target.files[0];if(!f)return;try{const parsed=JSON.parse(await f.text());if(!parsed.profile||!parsed.treatments||!parsed.costs)throw new Error('shape');state=parsed;persist();renderAll();toast('Backup imported');}catch(_){toast('That backup could not be imported',true);}event.target.value='';});
+  q('#exportBackup').addEventListener('click',async()=>{
+    try{await loadDocuments();const packed=await Promise.all(documents.map(async d=>{
+      const {file,...metadata}=d;return {...metadata,dataUrl:await blobToDataUrl(file)};
+    }));
+      downloadText('roger-care-complete-backup.json',JSON.stringify({format:'roger-care-backup',version:2,state,documents:packed},null,2),'application/json');
+      toast(`Backup downloaded with ${packed.length} document${packed.length===1?'':'s'}`);
+    }catch(_){toast('Could not export complete backup',true);}
+  });
+  q('#importBackup').addEventListener('change',async event=>{
+    const f=event.target.files[0];if(!f)return;
+    try{
+      const parsed=JSON.parse(await f.text());
+      const incoming=parsed.format==='roger-care-backup'?parsed.state:parsed;
+      if(!incoming?.profile||!Array.isArray(incoming.treatments)||!Array.isArray(incoming.costs))throw new Error('shape');
+      const hasDocuments=parsed.format==='roger-care-backup';
+      if(hasDocuments&&!Array.isArray(parsed.documents))throw new Error('documents');
+      const restored=hasDocuments?parsed.documents.map(d=>{
+        if(!d.id||!d.name||!d.dataUrl?.startsWith('data:'))throw new Error('document');
+        const {dataUrl,...metadata}=d;
+        return {...metadata,file:dataUrlToBlob(dataUrl)};
+      }):null;
+      if(!window.confirm(`Restore this backup? It will replace the app's current entries${hasDocuments?' and uploaded documents':''} on this device.`))return;
+      if(restored)await replaceDocuments(restored);
+      state=migrateState(incoming);persist();await loadDocuments();renderAll();
+      toast(hasDocuments?'Complete backup restored':'Older backup restored; existing device documents kept');
+    }catch(_){toast('That backup could not be imported',true);}
+    finally{event.target.value='';}
+  });
 }
+function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
+function dataUrlToBlob(url){const [header,payload]=url.split(',',2);if(!header?.includes(';base64')||!payload)throw new Error('data');const binary=atob(payload),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:header.slice(5).split(';')[0]||'application/octet-stream'});}
 function downloadText(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
 function buildCareSummaryHtml(){
-  const p=state.profile,t=latestTreatment(),total=totalPaid();
+  const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]};
   const rows=state.treatments.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>#${x.number}</td><td>${x.doseMg} mg</td><td>${x.doseMgM2}</td><td>${x.weightLb} lb</td><td>${esc(x.doseReason)}</td></tr>`).join('');
   const labs=state.labs.filter(x=>['Neutrophils','Hematocrit','Platelets','ALT','ALP'].includes(x.metric)).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.metric)}</td><td>${esc(x.displayValue||x.value)} ${esc(x.unit)}</td><td>${esc(x.context)}</td><td>${esc(x.source)}</td></tr>`).join('');
-  const obs=[...state.observations].sort((a,b)=>a.date.localeCompare(b.date)).map(o=>`<tr><td>${fmtDate(o.date)}</td><td>${esc(compactObservation(o))}</td><td>${esc(o.medications?.join(', ')||'')}</td><td>${esc(o.notes)}</td></tr>`).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} care-team summary</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:32px auto;padding:0 18px;color:#17201d}h1{margin-bottom:4px}h2{margin-top:28px;border-bottom:1px solid #ddd;padding-bottom:6px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}.note{background:#f3f6f5;padding:12px;border-radius:8px}.money{font-size:28px;font-weight:700}</style></head><body><h1>${esc(p.fullName||p.name)} — longitudinal oncology summary</h1><p><strong>KSU patient ID:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum patient ID:</strong> ${esc(p.patientIds?.optimum||'Not recorded')}<br>${esc(p.breed)} · ${esc(p.sex)} · ${esc(p.reproductiveStatus)} · DOB ${fmtDate(p.dob)}</p><div class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Current status:</strong> Vinblastine ${t.number}/8 complete.</div><h2>Clinical course</h2><p>Mid-protocol restaging on 9/18 found no evidence of mast cell tumor involvement in liver/spleen cytology and no ultrasonographic evidence of metastatic disease in the supplied K-State record.</p><table><thead><tr><th>Date</th><th>Treatment</th><th>Dose</th><th>mg/m²</th><th>Weight</th><th>Dose context</th></tr></thead><tbody>${rows}</tbody></table><h2>Selected labs</h2><table><thead><tr><th>Date</th><th>Metric</th><th>Result</th><th>Context</th><th>Source</th></tr></thead><tbody>${labs}</tbody></table><h2>Owner-observed course</h2><table><thead><tr><th>Date</th><th>Structured observation</th><th>Medication</th><th>Original note</th></tr></thead><tbody>${obs}</tbody></table><h2>Family financial burden</h2><div class="money">${money(total)} paid to date</div><p>Amounts shown are care costs only. No bank, card, payment-account, balance or transaction-source information is included.</p><p><strong>K-State 8/4 treatment estimate:</strong> approximately $3,500–$4,000 for the complete treatment course; approximately $250 per chemotherapy injection excluding primary-veterinarian pre-treatment bloodwork; restaging approximately $700.</p><h2>Record integrity</h2><p>Owner observations remain labeled as owner-reported. Clinical notes, labs and pathology remain labeled by source. Conflicting statements are not silently reconciled.</p></body></html>`;
+  const obs=[...state.observations].sort((a,b)=>a.date.localeCompare(b.date));
+  const obsRows=obs.map(o=>`<tr><td>${fmtDate(o.date)}</td><td>${esc(compactObservation(o))}</td><td>${esc(o.medications?.join(', ')||'')}</td><td>${esc(o.notes)}</td></tr>`).join('');
+  const recentObs=obs.slice(-5).reverse().map(o=>`<li><strong>${fmtDate(o.date)}:</strong> ${esc(o.notes)}</li>`).join('');
+  const neut=state.labs.filter(l=>l.metric==='Neutrophils').sort((a,b)=>a.date.localeCompare(b.date));
+  const nadir=neut.reduce((a,b)=>!a||Number(b.value)<Number(a.value)?b:a,null),latest=neut.at(-1);
+  const pred=medicationStats('med-prednisone');
+  const courseRows=(state.medicationCourses||[]).map(c=>`<tr><td>${esc(medicationName(c.medicationId))}</td><td>${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))}</td><td>${esc(c.dose||'Unknown')} · ${esc(c.frequency||'Frequency unknown')}</td><td>${esc(c.status)}<br><small>${esc(c.source)}</small></td></tr>`).join('');
+  const prnRows=(state.medications||[]).filter(m=>!['med-prednisone','med-amoxicillin'].includes(m.id)).map(m=>{const a=medicationStats(m.id);return `<tr><td>${esc(m.name)}</td><td>${a.given.length} given; ${state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length} held</td><td>${a.last?fmtDate(a.last):'No dose logged'}</td><td>${esc(m.prescribedDose)}</td></tr>`;}).join('');
+  const medicationEvents=state.medicationAdministrations.filter(a=>a.medicationId==='med-metronidazole').map(a=>`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${a.dose} ${a.status} (${a.reason||'reason unrecorded'})`).join('; ');
+  const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date pending'}</strong>${v.date?' (owner-entered; confirm with clinic)':''}</li>`).join('');
+  const docs=documents.map(d=>`<li>${esc(d.name)} · ${fmtDate(d.date)} · ${esc(d.provider||d.type)}</li>`).join('');
+  const correctionCount=state.recordCorrections?.length||0;
+  const correctionRows=(state.recordCorrections||[]).map(c=>{
+    const changed=Object.entries(c.after||{}).filter(([key,value])=>key!=='id'&&JSON.stringify(value)!==JSON.stringify(c.before?.[key])).map(([key,value])=>`${key}: ${JSON.stringify(c.before?.[key]??'')} → ${JSON.stringify(value)}`).join('; ');
+    return `<li>${esc(c.at?.slice(0,10)||'Date unknown')} · ${esc(c.collection)} · ${esc(c.id)}: ${esc(changed||'No field differences')}</li>`;
+  }).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} vet handoff</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
+  <section class="snapshot"><h1>${esc(p.fullName||p.name)} · vet handoff</h1><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
+  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}. Source-backed restaging on 9/18 found no metastatic involvement in the supplied K-State record.</p>
+  <div class="grid"><div><h2>Key bloodwork</h2><p><strong>Neutrophil nadir:</strong> ${nadir?`${esc(nadir.displayValue||nadir.value)} ${esc(nadir.unit)} on ${fmtDate(nadir.date)}`:'Not recorded'} (250/µL on 8/20).<br><strong>Latest:</strong> ${latest?`${esc(latest.displayValue||latest.value)} ${esc(latest.unit)} on ${fmtDate(latest.date)}`:'Not recorded'}.</p><p>Chemo #3 was delayed one week after the 9/3 count of 1.79 K/µL.</p></div>
+  <div><h2>Medication now / recently</h2><p><strong>Prednisone:</strong> prescribed 10 mg every 24 hours from 10/2; owner-confirmed daily administration through ${pred.last?fmtDate(pred.last):'date unknown'} (${pred.given.length} days total). Do not infer subsequent doses.</p><p><strong>Amoxicillin:</strong> seven-day owner-reported course 8/20–8/26 after neutrophils 250/µL; dose and frequency not recorded.</p><p><strong>Metronidazole:</strong> ${esc(medicationEvents||'No administrations logged')}.</p></div></div>
+  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  <h2>Recent owner observations</h2><ul>${recentObs}</ul><p class="small">Owner observations and medication use are owner reported. Dates without a confirmed visit or dose remain pending; this handoff is a record for discussion with the care team.</p></section>
+  <h2>Medication courses</h2><table><thead><tr><th>Medication</th><th>Reported dates</th><th>Dose / frequency</th><th>Basis</th></tr></thead><tbody>${courseRows}</tbody></table>
+  <h2>PRN / visit medications</h2><table><thead><tr><th>Medication</th><th>Logged use</th><th>Last given</th><th>Prescription on file</th></tr></thead><tbody>${prnRows}</tbody></table>
+  <h2>Clinical course</h2><table><thead><tr><th>Date</th><th>Treatment</th><th>Dose</th><th>mg/m²</th><th>Weight</th><th>Dose context</th></tr></thead><tbody>${rows}</tbody></table>
+  <h2>Selected labs</h2><table><thead><tr><th>Date</th><th>Metric</th><th>Result</th><th>Context</th><th>Source</th></tr></thead><tbody>${labs}</tbody></table>
+  <h2>Owner-observed course</h2><table><thead><tr><th>Date</th><th>Structured observation</th><th>Medication noted</th><th>Original / corrected note</th></tr></thead><tbody>${obsRows}</tbody></table>
+  <h2>Document index</h2><ul>${docs||'<li>No source files uploaded to this device.</li>'}</ul><p class="small">The document index lists on-device files; this HTML summary does not attach them. ${correctionCount} owner correction${correctionCount===1?'':'s'} recorded in the app history.</p>
+  <h2>Owner corrections</h2><ul>${correctionRows||'<li>No corrections recorded.</li>'}</ul>
+  <h2>Record checks</h2><ul><li>Verify the duplicate vinblastine billing lines on the 10/2 K-State invoice; clinical note states 2.0 mg total.</li><li>Reconcile the 7/14 Optimum surgery/dental invoice when received.</li><li>Amoxicillin dose and frequency remain unrecorded.</li></ul>
+  <h2>Family financial burden</h2><p><strong>${money(totalPaid())}</strong> documented owner-paid care to date. Amounts shown are care costs only; bank and payment-account details are excluded.</p>
+  <p class="small">Clinical, lab, and pathology facts remain attributed to their sources. Owner observations are labeled separately. Corrections are retained in the app backup.</p></body></html>`;
 }
 
 function toast(message,isError=false){
