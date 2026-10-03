@@ -451,7 +451,8 @@ function renderTreatmentOverlay(){
   const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).sort().at(-1)||startDate;
   const days=Math.max(1,daysBetween(startDate,endDate));
   const laneMeds=[...new Set(medications.map(a=>a.medicationId))].sort((a,b)=>(a==='med-cerenia'?-1:b==='med-cerenia'?1:a.localeCompare(b)));
-  const W=Math.max(root.clientWidth||340,selectedCycle?160+days*48:680),L=130,R=26;
+  const viewport=root.clientWidth||340;
+  const W=viewport>=680?viewport:Math.max(viewport,selectedCycle?160+days*48:680),L=130,R=26;
   const doseTop=52,doseBottom=108,bloodTop=160,bloodBottom=274,medTop=340;
   const medBottom=medTop+Math.max(1,laneMeds.length)*32;
   const symptomTop=medBottom+56,symptomBottom=symptomTop+54,axisY=symptomBottom+38,H=axisY+28;
@@ -742,6 +743,7 @@ function renderTimeline(){
 }
 
 function renderCosts(){
+  q('#medicationCostBreakdown').innerHTML=renderMedicationLedger();
   const total=totalPaid(),confirmed=confirmedPaid(),provisional=provisionalPaid();
   els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">TOTAL OWNER-PAID CARE</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
 
