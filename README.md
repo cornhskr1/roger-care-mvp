@@ -54,3 +54,10 @@ Document upload is real and persists locally, but automated medical-document ext
 6. Notification/reminder engine
 7. De-identified research export with explicit owner consent
 8. Audit trail / record provenance and correction history
+
+
+## Live app
+
+GitHub Pages deployment target:
+
+https://cornhskr1.github.io/roger-care-mvp/
