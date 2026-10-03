@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "profile": {
     "name": "Roger",
     "species": "Canine",
@@ -18,7 +18,7 @@
       "sourceType": "clinician_note",
       "provider": "K-State Veterinary Health Center",
       "label": "Oncology consultation",
-      "summary": "Recommended 8 vinblastine injections (4 weekly, then 4 every two weeks), CBC before each treatment, restaging at doses 4 and 8. Estimated complete treatment-course cost approximately $3,500\u2013$4,000; approximately $250 per chemotherapy injection excluding primary-veterinarian bloodwork; restaging approximately $700."
+      "summary": "Recommended 8 vinblastine injections (4 weekly, then 4 every two weeks), CBC before each treatment, restaging at doses 4 and 8. Estimated complete treatment-course cost approximately $3,500–$4,000; approximately $250 per chemotherapy injection excluding primary-veterinarian bloodwork; restaging approximately $700."
     },
     {
       "id": "src-pathology-0721",
@@ -53,7 +53,7 @@
       "weightLb": 53.4,
       "prednisone": "20 mg daily",
       "doseReason": "20% dose reduction after post-treatment neutropenia.",
-      "clinicalSummary": "K-State documented decreased energy after treatment #1. Neutrophils were 0.25 K/\u00b5L on 8/20; amoxicillin was started.",
+      "clinicalSummary": "K-State documented decreased energy after treatment #1. Neutrophils were 0.25 K/µL on 8/20; amoxicillin was started.",
       "source": "K-State clinical note"
     },
     {
@@ -92,7 +92,7 @@
       "weightLb": 51.8,
       "prednisone": "10 mg daily beginning 10/2",
       "doseReason": "Continued dose escalation with hematologic recovery.",
-      "clinicalSummary": "Clinical note records vinblastine 2.0 mg (2.42 mg/m\u00b2). Prednisone decreased to 10 mg daily.",
+      "clinicalSummary": "Clinical note records vinblastine 2.0 mg (2.42 mg/m²). Prednisone decreased to 10 mg daily.",
       "recordCheck": "The 10/2 invoice contains two separate 2 mL vinblastine billing lines. Clinical note states 2.0 mg total; verify with K-State.",
       "source": "K-State clinical note + invoice"
     }
@@ -102,7 +102,7 @@
       "date": "2026-06-30",
       "metric": "Neutrophils",
       "value": 4.92,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Baseline",
       "source": "Optimum / IDEXX"
     },
@@ -110,7 +110,7 @@
       "date": "2026-08-20",
       "metric": "Neutrophils",
       "value": 0.25,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Post-chemo #1 nadir",
       "source": "Optimum / IDEXX"
     },
@@ -118,7 +118,7 @@
       "date": "2026-08-27",
       "metric": "Neutrophils",
       "value": 14.43,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -126,7 +126,7 @@
       "date": "2026-09-03",
       "metric": "Neutrophils",
       "value": 1.79,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Post-chemo #2; #3 delayed",
       "source": "Optimum / IDEXX"
     },
@@ -134,7 +134,7 @@
       "date": "2026-09-10",
       "metric": "Neutrophils",
       "value": 7.44,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #3",
       "source": "Optimum / IDEXX"
     },
@@ -142,7 +142,7 @@
       "date": "2026-09-17",
       "metric": "Neutrophils",
       "value": 2.5,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #4",
       "source": "Optimum / IDEXX"
     },
@@ -150,7 +150,7 @@
       "date": "2026-10-01",
       "metric": "Neutrophils",
       "value": 13.89,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #5",
       "source": "Optimum / IDEXX"
     },
@@ -214,7 +214,7 @@
       "date": "2026-06-30",
       "metric": "Platelets",
       "value": 331,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Baseline",
       "source": "Optimum / IDEXX"
     },
@@ -222,7 +222,7 @@
       "date": "2026-08-20",
       "metric": "Platelets",
       "value": 384,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Post-chemo #1",
       "source": "Optimum / IDEXX"
     },
@@ -230,7 +230,7 @@
       "date": "2026-08-27",
       "metric": "Platelets",
       "value": 337,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -238,7 +238,7 @@
       "date": "2026-09-03",
       "metric": "Platelets",
       "value": 385,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Post-chemo #2",
       "source": "Optimum / IDEXX"
     },
@@ -246,7 +246,7 @@
       "date": "2026-09-10",
       "metric": "Platelets",
       "value": 395,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #3",
       "source": "Optimum / IDEXX"
     },
@@ -254,7 +254,7 @@
       "date": "2026-09-17",
       "metric": "Platelets",
       "value": 367,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #4",
       "source": "Optimum / IDEXX"
     },
@@ -262,7 +262,7 @@
       "date": "2026-10-01",
       "metric": "Platelets",
       "value": 442,
-      "unit": "K/\u00b5L",
+      "unit": "K/µL",
       "context": "Pre-chemo #5",
       "source": "Optimum / IDEXX"
     },
@@ -420,7 +420,7 @@
       "energy": "",
       "nausea": 2,
       "vomiting": 0,
-      "stool": "5\u20136",
+      "stool": "5–6",
       "hydration": "",
       "urination": "",
       "pain": 0,
@@ -452,14 +452,14 @@
       "energy": "",
       "nausea": 2,
       "vomiting": 0,
-      "stool": "5\u20136",
+      "stool": "5–6",
       "hydration": "",
       "urination": "house urination",
       "pain": 0,
       "medications": [
         "Cerenia 60 mg"
       ],
-      "notes": "Nausea with lip licking and drooling. Stool 5\u20136 with bright-red blood; urinated in the house. Cerenia administered.",
+      "notes": "Nausea with lip licking and drooling. Stool 5–6 with bright-red blood; urinated in the house. Cerenia administered.",
       "source": "owner_observation"
     },
     {
@@ -476,8 +476,8 @@
       "medications": [
         "Metronidazole"
       ],
-      "notes": "Diarrhea; possible blood. Metronidazole given.",
-      "source": "owner_observation"
+      "notes": "Bloody diarrhea; Metronidazole given.",
+      "source": "owner observation; clarified 10/3"
     },
     {
       "id": "obs-0925",
@@ -700,7 +700,7 @@
           403.75
         ],
         [
-          "Cytology \u00d72",
+          "Cytology ×2",
           115.5
         ],
         [
@@ -803,14 +803,14 @@
       "date": "2026-08-20",
       "type": "lab",
       "title": "Severe neutropenia after chemo #1",
-      "detail": "Neutrophils 0.25 K/\u00b5L; amoxicillin started.",
+      "detail": "Neutrophils 0.25 K/µL; amoxicillin started.",
       "source": "Optimum lab + K-State history"
     },
     {
       "date": "2026-09-03",
       "type": "lab",
       "title": "Treatment delay",
-      "detail": "Neutrophils 1.79 K/\u00b5L; chemotherapy #3 delayed one week.",
+      "detail": "Neutrophils 1.79 K/µL; chemotherapy #3 delayed one week.",
       "source": "Optimum lab + K-State note"
     },
     {
@@ -872,8 +872,8 @@
       "endDate": "2026-10-01",
       "dose": "20 mg",
       "frequency": "Every 24 hours",
-      "status": "owner-reported daily use",
-      "source": "owner journal + K-State prescription"
+      "status": "owner-confirmed daily given",
+      "source": "owner report: daily since first dose; K-State prescribed regimen"
     },
     {
       "id": "course-pred-10",
@@ -882,8 +882,9 @@
       "endDate": null,
       "dose": "10 mg",
       "frequency": "Every 24 hours",
-      "status": "started 10/2",
-      "source": "owner journal + K-State prescription"
+      "status": "owner-confirmed daily given through 10/3; prescribed daily thereafter",
+      "source": "owner report 10/3; K-State prescribed regimen",
+      "confirmedThrough": "2026-10-03"
     },
     {
       "id": "course-amoxicillin",
@@ -892,8 +893,8 @@
       "endDate": "2026-08-26",
       "dose": null,
       "frequency": null,
-      "status": "course administered; dose not available in current record",
-      "source": "owner journal"
+      "status": "owner-confirmed seven-day course after 8/20 neutrophils 0.25 K/µL; dose and frequency unrecorded",
+      "source": "owner report 10/3 + K-State treatment history"
     }
   ],
   "medicationAdministrations": [
@@ -1035,8 +1036,8 @@
       "time": null,
       "dose": "250 mg",
       "status": "given",
-      "reason": "diarrhea / possible blood",
-      "source": "owner journal",
+      "reason": "bloody diarrhea / hematochezia",
+      "source": "owner journal; clarified by owner 10/3",
       "tabletQuantity": 1
     },
     {

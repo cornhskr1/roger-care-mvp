@@ -447,10 +447,11 @@ function renderTreatmentOverlay(){
   const blood=state.labs.filter(p=>p.metric===metric&&inView(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
   const symptoms=state.observations.filter(o=>inView(o.date)).map(o=>({...o,severity:symptomSeverity(o)})).filter(o=>o.severity>0);
   const medications=(state.medicationAdministrations||[]).filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  const courses=(state.medicationCourses||[]).filter(c=>courseRecordedEnd(c)&&c.startDate<=(window?.displayEnd||'9999-12-31')&&courseRecordedEnd(c)>=startDate);
   const treatments=selectedCycle?[selectedCycle]:allTreatments;
-  const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).sort().at(-1)||startDate;
+  const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).concat(courses.map(courseRecordedEnd)).sort().at(-1)||startDate;
   const days=Math.max(1,daysBetween(startDate,endDate));
-  const laneMeds=[...new Set(medications.map(a=>a.medicationId))].sort((a,b)=>(a==='med-cerenia'?-1:b==='med-cerenia'?1:a.localeCompare(b)));
+  const laneMeds=[...new Set([...medications.map(a=>a.medicationId),...courses.map(c=>c.medicationId)])].sort((a,b)=>(a==='med-cerenia'?-1:b==='med-cerenia'?1:a.localeCompare(b)));
   const viewport=root.clientWidth||340;
   const W=viewport>=680?viewport:Math.max(viewport,selectedCycle?160+days*48:680),L=130,R=26;
   const doseTop=52,doseBottom=108,bloodTop=160,bloodBottom=274,medTop=340;
@@ -467,14 +468,14 @@ function renderTreatmentOverlay(){
   const hit=(kind,index,cx,cy,label,shape='circle',fill='#5e7895',held=false)=>`<g class="chart-hit" role="button" tabindex="0" data-kind="${kind}" data-index="${index}" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${cx-14}" y="${cy-14}" width="28" height="28" fill="transparent"/>${shape==='square'?`<rect x="${cx-6}" y="${cy-6}" width="12" height="12" rx="3" fill="${held?'#fff':fill}" stroke="${held?fill:'#fff'}" stroke-width="2"/>`:`<circle cx="${cx}" cy="${cy}" r="6" fill="${fill}" stroke="#fff" stroke-width="2"/>`}</g>`;
   let svg=`<rect width="${W}" height="${H}" fill="#fff"/>`;
   // Every medication date shares a dashed guide across all four lanes.
-  const guideDates=[...new Set([...medications,...treatments].map(p=>p.date))];
+  const guideDates=[...new Set([...medications,...treatments].map(p=>p.date).concat(courses.map(c=>c.startDate).filter(d=>d>=startDate&&d<=endDate)))];
   if(selectedCycle)for(let i=0;i<=days;i++)svg+=`<line x1="${x(addDays(startDate,i))}" x2="${x(addDays(startDate,i))}" y1="38" y2="${symptomBottom+5}" stroke="#edf0f5"/>`;
   guideDates.forEach(date=>svg+=`<line data-guide-date="${date}" x1="${x(date)}" x2="${x(date)}" y1="38" y2="${symptomBottom+5}" stroke="#667085" stroke-opacity=".35" stroke-dasharray="4 5"/>`);
   svg+=`<line id="selectedEventGuide" x1="0" x2="0" y1="38" y2="${symptomBottom+5}" stroke="#512888" stroke-width="2" stroke-dasharray="4 5" visibility="hidden"/>`;
   const heading=(label,y,color)=>`<text x="8" y="${y}" font-size="13" font-weight="800" fill="${color}">${esc(label)}</text>`;
   svg+=heading('VINBLASTINE · mg/m²',22,'#512888');
   svg+=heading(`${metric.toUpperCase()} · ${unit}`,140,'#b44f5c');
-  svg+=heading('MEDICATIONS · □ given  ▫ held',medTop-24,'#667085');
+  svg+=heading('MEDICATIONS · ▰ reported course  □ given  ▫ held',medTop-24,'#667085');
   svg+=heading('OWNER OBSERVATIONS · severity',symptomTop-22,'#5e7895');
   [doseBottom+18,bloodBottom+20,medBottom+8,symptomBottom].forEach(y=>svg+=`<line x1="8" x2="${W-R}" y1="${y}" y2="${y}" stroke="#dedfea"/>`);
   if(treatments.length>1)svg+=`<path d="${treatments.map((t,i)=>`${i?'L':'M'}${x(t.date)},${yDose(t.doseMgM2)}`).join(' ')}" fill="none" stroke="#512888" stroke-width="3"/>`;
@@ -497,7 +498,13 @@ function renderTreatmentOverlay(){
     const y=medTop+row*32;
     svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
-  if(!medications.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication doses recorded in this window</text>`;
+  courses.forEach((c,i)=>{
+    const left=x(c.startDate<startDate?startDate:c.startDate),right=x(courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c));
+    const y=medTop+laneMeds.indexOf(c.medicationId)*32;
+    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · reported course`;
+    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${c.medicationId==='med-prednisone'?'#512888':'#667085'}" stroke-width="8" opacity=".58" stroke-linecap="round"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+  });
+  if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
     const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
     const offset=same.length>1?(position-(same.length-1)/2)*14:0;
@@ -518,8 +525,13 @@ function renderTreatmentOverlay(){
   root.querySelectorAll('.chart-hit').forEach(node=>{
     const show=()=>{
       const kind=node.dataset.kind,i=Number(node.dataset.index);
-      const point=({blood,treatment:treatments,symptom:symptoms,medication:medications})[kind][i];
-      const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(point.date));guide.setAttribute('x2',x(point.date));guide.setAttribute('visibility','visible');
+      const point=({blood,treatment:treatments,symptom:symptoms,medication:medications,course:courses})[kind][i];
+      const date=kind==='course'?(point.startDate<startDate?startDate:point.startDate):point.date;
+      const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(date));guide.setAttribute('x2',x(date));guide.setAttribute('visibility','visible');
+      if(kind==='course'){
+        detail.innerHTML=`<strong>${esc(medicationName(point.medicationId))} · ${fmtDate(point.startDate)}–${fmtDate(courseRecordedEnd(point))}</strong>${esc(point.dose||'Dose unrecorded')} · ${esc(point.frequency||'Frequency unrecorded')}. ${esc(point.status)}. ${esc(point.source)}`;
+        return;
+      }
       const when=`${fmtDate(point.date)}${selectedCycle?` · Day +${daysBetween(startDate,point.date)}`:''}`;
       if(kind==='blood')detail.innerHTML=`<strong>${when} · ${esc(metric)} ${esc(point.displayValue||point.value)} ${esc(point.unit)}</strong>${esc(point.context)} · ${esc(point.source)}`;
       else if(kind==='treatment')detail.innerHTML=`<strong>${when} · Chemo #${point.number}</strong>Vinblastine ${point.doseMg} mg · ${point.doseMgM2} mg/m² · ${point.weightLb} lb. ${esc(point.doseReason)}`;
@@ -528,7 +540,7 @@ function renderTreatmentOverlay(){
     };
     node.addEventListener('click',show);node.addEventListener('focus',show);node.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();show();}});
   });
-  detail.innerHTML=selectedCycle?`<strong>Chemo #${selectedCycle.number} · ${fmtDate(startDate)}–${fmtDate(endDate)}</strong>Calendar dates align every lane. Swipe the chart for later dates; tap a marker for dose and source details.`:'<strong>All treatment cycles</strong>Purple: treatment. Red: bloodwork. Separate medication and blue observation lanes share the same dates. Tap a marker to highlight its date.';
+  detail.innerHTML=selectedCycle?`<strong>Chemo #${selectedCycle.number} · ${fmtDate(startDate)}–${fmtDate(endDate)}</strong>Calendar dates align every lane. Swipe the chart for later dates; tap a course bar or dose marker for details.`:'<strong>All treatment cycles</strong>Purple: treatment. Red: bloodwork. Medication course bars, dose markers, and blue observations share the same dates. Tap an event for details.';
   windowDetails.innerHTML=selectedCycle?renderCycleDetails(selectedCycle,window):'';
   q('#treatmentMedicationSummary').innerHTML=renderMedicationOverview(window);
 }
@@ -575,11 +587,28 @@ function inCycleWindow(date,window){
   return date>=window.start&&date<window.endExclusive;
 }
 
+function courseRecordedEnd(course){
+  return course.endDate||course.confirmedThrough||null;
+}
+
+function reportedCourseDays(id,window=null){
+  const explicit=new Set((state.medicationAdministrations||[]).filter(a=>a.medicationId===id).map(a=>a.date));
+  const days=[];
+  for(const course of state.medicationCourses||[]){
+    if(course.medicationId!==id||!course.status?.includes('owner-confirmed daily given')||!courseRecordedEnd(course))continue;
+    for(let date=course.startDate;date<=courseRecordedEnd(course);date=addDays(date,1)){
+      if(!explicit.has(date)&&(!window||inCycleWindow(date,window)))days.push({medicationId:id,date,dose:course.dose,status:'given',reason:'Owner-confirmed daily course',source:course.source,reportedFromCourse:course.id});
+    }
+  }
+  return days;
+}
+
 function renderCycleDetails(treatment,window){
   const allTreatments=state.treatments.slice().sort((a,b)=>a.number-b.number);
   const labs=state.labs.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||a.metric.localeCompare(b.metric));
   const observations=state.observations.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date));
   const medications=(state.medicationAdministrations||[]).filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  const courses=(state.medicationCourses||[]).filter(c=>courseRecordedEnd(c)&&c.startDate<=window.displayEnd&&courseRecordedEnd(c)>=window.start);
   const costs=state.costs.filter(x=>inCycleWindow(x.date,window));
   const cyclePaid=costs.reduce((sum,c)=>sum+Number(c.amountPaid||0),0);
 
@@ -617,7 +646,7 @@ function renderCycleDetails(treatment,window){
     <div class="cycle-section"><div class="cycle-section-title ksu-title">WHY THIS DOSE</div><div class="item-copy" style="margin-top:0">${esc(treatment.doseReason)}</div></div>
     <div class="cycle-section"><div class="cycle-section-title blood-title">BLOODWORK & CHEMISTRY</div>${labRows}</div>
     <div class="cycle-section"><div class="cycle-section-title owner-title">OWNER-OBSERVED SYMPTOMS</div>${obsRows}</div>
-    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION ADMINISTRATIONS</div>${medications.length?medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join(''):'<div class="empty-state">No structured medication administrations in this cycle.</div>'}</div>
+    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION USE</div>${courses.map(c=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${esc(medicationName(c.medicationId))} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))}</div><div class="cycle-observation-copy">${esc(c.dose||'Dose unrecorded')} · ${esc(c.frequency||'Frequency unrecorded')} · ${esc(c.status)}</div></div>`).join('')}${medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join('')}${!courses.length&&!medications.length?'<div class="empty-state">No medication use recorded in this cycle.</div>':''}</div>
     ${treatment.recordCheck?`<div class="alert"><strong>Record check:</strong> ${esc(treatment.recordCheck)}</div>`:''}
   </section>`;
 }
@@ -644,7 +673,7 @@ function symptomSeverity(o){
 function renderJournal(){
   const obs=[...state.observations].sort((a,b)=>b.date.localeCompare(a.date));
   const nauseaDays=obs.filter(o=>Number(o.nausea)>0).length;
-  const medDays=new Set((state.medicationAdministrations||[]).filter(a=>a.status==='given').map(a=>a.date)).size;
+  const medDays=new Set([...state.medicationAdministrations.filter(a=>a.status==='given').map(a=>a.date),...reportedCourseDays('med-prednisone').map(a=>a.date)]).size;
   els.journalSummary.innerHTML = [
     [obs.length,'STRUCTURED ENTRIES'],
     [nauseaDays,'NAUSEA DAYS'],
@@ -669,12 +698,13 @@ function tabletQuantity(administration){
 }
 
 function medicationStats(id,window=null){
-  const given=state.medicationAdministrations.filter(a=>a.medicationId===id&&a.status==='given'&&(!window||inCycleWindow(a.date,window)));
+  const reported=reportedCourseDays(id,window);
+  const given=[...state.medicationAdministrations.filter(a=>a.medicationId===id&&a.status==='given'&&(!window||inCycleWindow(a.date,window))),...reported];
   const quantities=given.map(tabletQuantity);
   const purchases=state.medicationPurchases.filter(p=>p.medicationId===id&&(!window||inCycleWindow(p.date,window)));
   const purchased=purchases.reduce((n,p)=>n+Number(p.quantity||0),0);
   const spent=purchases.reduce((n,p)=>n+Number(p.amountPaid||0),0);
-  return {given,tablets:quantities.reduce((n,q)=>n+(q||0),0),unknown:quantities.filter(q=>q==null).length,purchases,purchased,spent,unitCost:purchased?spent/purchased:null,last:given.map(a=>a.date).sort().at(-1)};
+  return {given,reported,tablets:quantities.reduce((n,q)=>n+(q||0),0),unknown:quantities.filter(q=>q==null).length,purchases,purchased,spent,unitCost:purchased?spent/purchased:null,last:given.map(a=>a.date).sort().at(-1)};
 }
 
 function renderMedicationOverview(window=null){
@@ -700,7 +730,8 @@ function renderMedicationLedger(){
     const a=medicationStats(m.id),held=state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length;
     const courseOnly=!a.given.length&&state.medicationCourses.some(c=>c.medicationId===m.id);
     const purchases=a.purchases.map(p=>`<div class="medication-purchase-row"><span>${fmtDate(p.date)} · ${p.quantity} × ${p.tabletStrengthMg} mg<br><small>${esc(p.source)}</small></span><strong>${money(p.amountPaid)}<br><small>${money(p.amountPaid/p.quantity)} / tablet</small></strong></div>`).join('');
-    return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${courseOnly?'—':a.tablets}${a.unknown?' + ?':''}</strong><span>tablets documented given</span></div><div><strong>${a.given.length}</strong><span>doses logged${held?` · ${held} held`:''}</span></div><div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div></div><p class="medication-note">${esc(m.prescribedDose)}${courseOnly?' · Use is recorded as a course; individual tablet counts are not itemized.':''}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last?` · Last given ${fmtDate(a.last)}.`:''}</p><div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div></article>`;
+    const courseDays=state.medicationCourses.filter(c=>c.medicationId===m.id&&c.status?.includes('owner-confirmed seven-day')).reduce((n,c)=>n+daysBetween(c.startDate,courseRecordedEnd(c))+1,0);
+    return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${courseOnly?'—':a.tablets}${a.unknown?' + ?':''}</strong><span>${a.reported.length?'tablet equivalents, owner-reported':'tablets documented given'}</span></div><div><strong>${courseDays||a.given.length}</strong><span>${courseDays?'course days reported':a.reported.length?'daily doses reported':'doses logged'}${held?` · ${held} held`:''}</span></div><div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div></div><p class="medication-note">${esc(m.prescribedDose)}${courseDays?' · Seven days after the 8/20 neutrophil result (250/µL); dose, frequency, and tablet count unrecorded.':''}${a.reported.length?` · Owner confirms daily use from ${fmtDate(a.reported[0].date)} through ${fmtDate(a.last)}; ${a.tablets} ${m.tabletStrengthMg} mg tablet equivalents across ${a.given.length} days. Future prescribed days are not counted.`:''}${courseOnly&&!courseDays?' · Use is recorded as a course; individual tablet counts are not itemized.':''}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last&&!a.reported.length?` · Last given ${fmtDate(a.last)}.`:''}</p><div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div></article>`;
   }).join('')}</div>`;
 }
 

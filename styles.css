@@ -233,4 +233,5 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 #medicationPurchaseFields[hidden]{display:none}
 .overlay-legend{font-size:12px}
 .legend-square.med{background:#667085}
+.legend-line.course{border-color:var(--ksu);border-top-width:5px;opacity:.55}
 @media(min-width:680px){.medication-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
