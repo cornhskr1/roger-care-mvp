@@ -2,6 +2,11 @@
   "schemaVersion": 5,
   "profile": {
     "name": "Roger",
+    "fullName": "Roger Oberle",
+    "patientIds": {
+      "ksu": "CA264F93",
+      "optimum": "20618"
+    },
     "species": "Canine",
     "breed": "Australian Shepherd",
     "sex": "Male",
