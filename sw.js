@@ -1,16 +1,44 @@
-const CACHE = 'roger-care-v4';
-const ASSETS = ['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./data/seed.json','./icons/icon.svg'];
+const CACHE = 'roger-care-v5';
+const CORE = ['./','./index.html','./styles.css?v=5','./app.js?v=5','./manifest.webmanifest?v=5','./data/seed.json','./icons/icon.svg'];
+
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
 });
+
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(response => {
-    const copy = response.clone();
-    caches.open(CACHE).then(cache => cache.put(event.request, copy));
-    return response;
-  }).catch(() => caches.match('./index.html'))));
+
+  // Always prefer the network for page navigations and app code so a newly
+  // deployed version appears immediately; fall back to cache when offline.
+  if (event.request.mode === 'navigate' ||
+      event.request.url.includes('/app.js') ||
+      event.request.url.includes('/styles.css') ||
+      event.request.url.includes('/manifest.webmanifest')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => caches.match(event.request).then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(hit => hit || fetch(event.request).then(response => {
+      const copy = response.clone();
+      caches.open(CACHE).then(cache => cache.put(event.request, copy));
+      return response;
+    }))
+  );
 });
