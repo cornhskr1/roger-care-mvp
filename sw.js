@@ -1,8 +1,12 @@
-const CACHE = 'roger-care-v5';
-const CORE = ['./','./index.html','./styles.css?v=5','./app.js?v=5','./manifest.webmanifest?v=5','./data/seed.json','./icons/icon.svg'];
+const CACHE = 'roger-care-v6';
+const CORE = ['./','./index.html','./styles.css?v=6','./app.js?v=6','./manifest.webmanifest?v=6','./data/seed.json','./icons/icon.svg'];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(CORE))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', event => {
@@ -16,14 +20,16 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
-  // Always prefer the network for page navigations and app code so a newly
-  // deployed version appears immediately; fall back to cache when offline.
-  if (event.request.mode === 'navigate' ||
-      event.request.url.includes('/app.js') ||
-      event.request.url.includes('/styles.css') ||
-      event.request.url.includes('/manifest.webmanifest')) {
+  const isAppShell =
+    event.request.mode === 'navigate' ||
+    event.request.url.includes('/app.js') ||
+    event.request.url.includes('/styles.css') ||
+    event.request.url.includes('/manifest.webmanifest') ||
+    event.request.url.includes('/data/seed.json');
+
+  if (isAppShell) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, {cache:'no-store'})
         .then(response => {
           const copy = response.clone();
           caches.open(CACHE).then(cache => cache.put(event.request, copy));
