@@ -124,6 +124,20 @@
           <button id="journalAddButton" class="primary-button compact" type="button">+ Entry</button>
         </div>
         <div id="journalSummary" class="summary-grid"></div>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">MEDICATION TRACKING</div>
+              <h2>Prescribed vs actually given</h2>
+              <p class="body-copy">PRN medication use is counted from the owner journal, not from the prescription alone.</p>
+            </div>
+            <button id="medicationAddButton" class="primary-button compact" type="button">+ Medication</button>
+          </div>
+          <div id="medicationSummary"></div>
+          <div id="medicationHistory" class="stack compact-stack"></div>
+        </section>
+
         <div id="journalEntries" class="stack"></div>
       </section>
 
@@ -279,6 +293,29 @@
       <div class="sheet-actions">
         <button class="secondary-button" type="button" data-close-dialog="journalDialog">Cancel</button>
         <button class="primary-button" type="submit">Save observation</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="medicationDialog" class="sheet-dialog">
+    <form id="medicationForm" method="dialog" class="sheet-card">
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <div><div class="section-kicker">MEDICATION ADMINISTRATION</div><h2>Log medication</h2></div>
+        <button class="icon-button" type="button" data-close-dialog="medicationDialog" aria-label="Close">×</button>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Date</span><input id="medicationDate" name="date" type="date" required></label>
+        <label class="field"><span>Time</span><input id="medicationTime" name="time" type="time"></label>
+      </div>
+      <label class="field"><span>Medication</span><select id="medicationSelect" name="medicationId" required></select></label>
+      <label class="field"><span>Dose given</span><input id="medicationDose" name="dose" type="text" placeholder="e.g. 60 mg" required></label>
+      <label class="field"><span>Status</span><select name="status"><option value="given">Given</option><option value="held">Held / not given</option></select></label>
+      <label class="field"><span>Reason / observation</span><textarea name="reason" rows="3" placeholder="Nausea, diarrhea, pre-visit…"></textarea></label>
+      <div id="medicationPrescriptionHint" class="privacy-note"></div>
+      <div class="sheet-actions">
+        <button class="secondary-button" type="button" data-close-dialog="medicationDialog">Cancel</button>
+        <button class="primary-button" type="submit">Save medication</button>
       </div>
     </form>
   </dialog>
