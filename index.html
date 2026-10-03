@@ -56,6 +56,34 @@
           <div id="clinicalCourse"></div>
         </section>
 
+        <section class="card response-card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">TREATMENT RESPONSE OVERLAY</div>
+              <h2>Dose vs bloodwork vs symptoms</h2>
+              <p class="body-copy overlay-intro">Everything shares the same treatment timeline, so the relationship between dosing, blood-count response, and what you observed at home stays visible.</p>
+            </div>
+            <label class="overlay-select-label">
+              <span>Blood metric</span>
+              <select id="overlayMetric">
+                <option value="Neutrophils">Neutrophils</option>
+                <option value="Hematocrit">Hematocrit</option>
+                <option value="Platelets">Platelets</option>
+              </select>
+            </label>
+          </div>
+          <div class="overlay-legend" aria-label="Chart legend">
+            <span><i class="legend-line blood"></i><b id="overlayBloodLegend">Neutrophils</b></span>
+            <span><i class="legend-line dose"></i>Vinblastine dose</span>
+            <span><i class="legend-dot symptom"></i>Owner symptom</span>
+            <span><i class="legend-line threshold"></i>Treatment threshold</span>
+          </div>
+          <div id="treatmentOverlayChart" class="response-chart"></div>
+          <div id="treatmentOverlayDetail" class="response-detail" aria-live="polite">
+            Tap a chemo, lab, or symptom marker to inspect that point.
+          </div>
+        </section>
+
         <section class="card owner-only">
           <div class="card-head">
             <div>
