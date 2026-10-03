@@ -25,7 +25,10 @@
           <h1 id="petName">Roger</h1>
           <p id="petSubtitle">Australian Shepherd · Male · Neutered</p>
         </div>
-        <button id="careModeButton" class="quiet-button" type="button" aria-pressed="false">Care team</button>
+        <div class="header-actions">
+          <button id="refreshAppButton" class="refresh-button" type="button" aria-label="Refresh Roger Care" title="Refresh app">↻</button>
+          <button id="careModeButton" class="quiet-button" type="button" aria-pressed="false">Care team</button>
+        </div>
       </div>
       <input id="profilePhotoInput" type="file" accept="image/*" hidden>
     </header>
@@ -59,9 +62,9 @@
         <section class="card response-card">
           <div class="card-head">
             <div>
-              <div class="section-kicker">TREATMENT RESPONSE OVERLAY</div>
-              <h2>Dose vs bloodwork vs symptoms</h2>
-              <p class="body-copy overlay-intro">Everything shares the same treatment timeline, so the relationship between dosing, blood-count response, and what you observed at home stays visible.</p>
+              <div class="section-kicker">TREATMENT RESPONSE EXPLORER</div>
+              <h2>Follow each treatment cycle</h2>
+              <p class="body-copy overlay-intro">Select a chemo cycle and the dose, bloodwork, symptoms, medications, and cost all refocus to that treatment window.</p>
             </div>
             <label class="overlay-select-label">
               <span>Blood metric</span>
