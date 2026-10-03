@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#21483d">
+  <meta name="theme-color" content="#512888">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=5">
+  <link rel="manifest" href="manifest.webmanifest?v=6">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -81,6 +81,7 @@
             <span><i class="legend-line blood"></i><b id="overlayBloodLegend">Neutrophils</b></span>
             <span><i class="legend-line dose"></i>Vinblastine dose</span>
             <span><i class="legend-dot symptom"></i>Owner symptom</span>
+            <span><i class="legend-square med"></i>Supportive med</span>
             <span><i class="legend-line threshold"></i>Treatment threshold</span>
           </div>
           <div id="treatmentOverlayChart" class="response-chart"></div>
@@ -241,11 +242,11 @@
     </main>
 
     <nav class="bottom-nav" aria-label="Primary navigation">
-      <button class="nav-item active" type="button" data-nav="home"><span class="nav-icon">⌂</span><span>Home</span></button>
-      <button class="nav-item" type="button" data-nav="journal"><span class="nav-icon">✎</span><span>Journal</span></button>
-      <button class="nav-item" type="button" data-nav="timeline"><span class="nav-icon">↕</span><span>Timeline</span></button>
-      <button class="nav-item" type="button" data-nav="costs"><span class="nav-icon">$</span><span>Costs</span></button>
-      <button class="nav-item" type="button" data-nav="more"><span class="nav-icon">•••</span><span>More</span></button>
+      <button class="nav-item active" type="button" data-nav="home"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2v8.3a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z"/></svg></span><span>Home</span></button>
+      <button class="nav-item" type="button" data-nav="journal"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h9a2 2 0 0 1 2 2V20H6a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z"/><path d="M8 8h5M8 12h5M8 16h3"/></svg></span><span>Journal</span></button>
+      <button class="nav-item" type="button" data-nav="timeline"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16"/><circle cx="8" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="8" cy="17" r="2"/><path d="M12 7h7M12 12h5M12 17h7"/></svg></span><span>Timeline</span></button>
+      <button class="nav-item" type="button" data-nav="costs"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M14.5 8.5c-.8-.7-1.6-1-2.6-1-1.4 0-2.4.7-2.4 1.8 0 2.8 5.3 1.4 5.3 4.5 0 1.2-1 2.1-2.7 2.1-1.1 0-2.2-.4-3-1.2M12 6v12"/></svg></span><span>Costs</span></button>
+      <button class="nav-item" type="button" data-nav="more"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg></span><span>More</span></button>
     </nav>
   </div>
 
@@ -295,7 +296,7 @@
       </div>
       <label class="field"><span>Provider</span><input name="provider" type="text" placeholder="K-State, Optimum…" required></label>
       <label class="field"><span>What was it for?</span><input name="label" type="text" placeholder="CBC, chemo #6, medication…" required></label>
-      <label class="field"><span>Category</span><select name="category"><option value="monitoring">Monitoring</option><option value="treatment">Treatment</option><option value="staging">Staging / restaging</option><option value="diagnosis">Diagnosis</option><option value="medication">Medication</option><option value="mixed">Mixed care</option><option value="other">Other</option></select></label>
+      <label class="field"><span>Category</span><select name="category"><option value="monitoring">Monitoring</option><option value="treatment">Treatment</option><option value="staging">Initial staging</option><option value="restaging">Restaging</option><option value="diagnosis">Diagnosis</option><option value="medication">Medication</option><option value="mixed">Mixed care</option><option value="other">Other</option></select></label>
       <div class="privacy-note">Only the amount paid, date, provider and care context are stored. No bank account or payment-card information is collected.</div>
       <div class="sheet-actions">
         <button class="secondary-button" type="button" data-close-dialog="costDialog">Cancel</button>
@@ -306,6 +307,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=5" defer></script>
+  <script src="app.js?v=6" defer></script>
 </body>
 </html>
