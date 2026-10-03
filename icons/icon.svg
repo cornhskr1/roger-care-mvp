@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Roger Care">
+  <rect width="512" height="512" rx="116" fill="#21483d"/>
+  <circle cx="256" cy="236" r="128" fill="#edf3f0"/>
+  <circle cx="204" cy="218" r="18" fill="#21483d"/>
+  <circle cx="308" cy="218" r="18" fill="#21483d"/>
+  <path d="M218 275c23 24 53 24 76 0" fill="none" stroke="#21483d" stroke-width="18" stroke-linecap="round"/>
+  <path d="M160 150l-42-55c-12-16 8-38 25-27l78 52M352 150l42-55c12-16-8-38-25-27l-78 52" fill="#edf3f0"/>
+  <path d="M256 250l-18-22h36z" fill="#21483d"/>
+  <path d="M150 385h212" stroke="#edf3f0" stroke-width="24" stroke-linecap="round"/>
+  <path d="M256 346v78M217 385h78" stroke="#edf3f0" stroke-width="20" stroke-linecap="round"/>
+</svg>
