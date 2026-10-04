@@ -306,10 +306,10 @@ async function publishCloud(firstUpload){
     return true;
   }finally{cloudBusy=false;renderSharedStatus();}
 }
-function sameCloudValue(a,b){
-  const stable=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]])):item);
-  return stable(a)===stable(b);
+function stableCloudValue(value){
+  return JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]])):item);
 }
+function sameCloudValue(a,b){return stableCloudValue(a)===stableCloudValue(b);}
 function mergeIndependentChanges(local,online){
   const merged=structuredClone(online);
   for(const key of new Set([...Object.keys(local),...Object.keys(online)])){
@@ -323,16 +323,21 @@ function mergeIndependentChanges(local,online){
     }
     if(Array.isArray(local[key])&&Array.isArray(online[key])){
       const rows=structuredClone(online[key]);
-      const existing=new Map(rows.map((row,i)=>[row?.id||JSON.stringify(row),i]));
+      const rowKey=row=>key==='labs'?(row?.id||`${row?.date}|${row?.metric}`):(row?.id||stableCloudValue(row));
+      const existing=new Map(rows.map((row,i)=>[rowKey(row),i]));
       for(const row of local[key]){
-        const id=row?.id||JSON.stringify(row);
+        const id=rowKey(row);
         if(existing.has(id)){
           const onlineRow=rows[existing.get(id)];
           if(!sameCloudValue(row,onlineRow)){
             const correction=(local.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
               sameCloudValue(change.before,onlineRow)&&sameCloudValue({...onlineRow,...change.after},row));
-            if(!correction)return null;
-            rows[existing.get(id)]=structuredClone(row);
+            if(correction)rows[existing.get(id)]=structuredClone(row);
+            else {
+              const onlineCorrection=(online.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
+                sameCloudValue(change.before,row)&&sameCloudValue({...row,...change.after},onlineRow));
+              if(!onlineCorrection)return null;
+            }
           }
         }
         else {existing.set(id,rows.length);rows.push(structuredClone(row));}
