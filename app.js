@@ -298,7 +298,8 @@ function renderSharedStatus(){
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
-    toast(error?'Sign-in email could not be sent. Try again.':'In the email, press and hold Sign in, then Copy Link. Paste it here without opening it.',Boolean(error));
+    const emailLimit=error&&(error.status===429||error.code==='over_email_send_rate_limit');
+    toast(error?(emailLimit?'Email limit reached. Wait an hour after the last email, then request one new link. Roger’s journal is safe.':'Sign-in email could not be sent. Please try again later.'):'In the email, press and hold Sign in, then Copy Link. Paste it here without opening it.',Boolean(error));
   });
   q('#ownerLinkPaste')?.addEventListener('submit',async event=>{
     event.preventDefault();
