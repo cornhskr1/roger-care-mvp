@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=22">
+  <link rel="manifest" href="manifest.webmanifest?v=23">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=22">
+  <link rel="stylesheet" href="styles.css?v=23">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -337,10 +337,11 @@
       <input id="journalEditId" name="editId" type="hidden">
       <div class="sheet-handle"></div>
       <div class="sheet-head">
-        <div><div class="section-kicker">OWNER OBSERVATION</div><h2>Daily check-in</h2></div>
+        <div><div class="section-kicker">OWNER OBSERVATION</div><h2 id="journalDialogTitle">New daily entry</h2></div>
         <button class="icon-button" type="button" data-close-dialog="journalDialog" aria-label="Close">×</button>
       </div>
       <label class="field"><span>Date</span><input id="journalDate" name="date" type="date" required></label>
+      <p id="journalEditHelp" class="field-help">Start now and come back later to add more to this same day.</p>
       <div class="form-grid two">
         <label class="field"><span>Appetite</span><select name="appetite"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>refused food</option></select></label>
         <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>slightly reduced</option><option>low</option><option>very low</option></select></label>
@@ -361,10 +362,10 @@
       <label class="field"><span>GI observations</span><input name="gi" placeholder="Gurgling, drooling, no vomiting…"></label>
       <label class="field"><span>Medication mentioned in notes</span><input name="medications" type="text" placeholder="Prednisone, Cerenia…"></label>
       <p class="field-help">For a dose, use + Medication so it appears in the dose history and charts.</p>
-      <label class="field"><span>What did you notice?</span><textarea name="notes" rows="5" placeholder="Roger things, symptoms, anything unusual…" required></textarea></label>
+      <label class="field"><span>What did you notice?</span><textarea name="notes" rows="5" placeholder="Roger things, symptoms, anything unusual…"></textarea></label>
       <div class="sheet-actions">
         <button class="secondary-button" type="button" data-close-dialog="journalDialog">Cancel</button>
-        <button class="primary-button" type="submit">Save observation</button>
+        <button id="journalSaveButton" class="primary-button" type="submit">Save entry</button>
       </div>
     </form>
   </dialog>
@@ -439,6 +440,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=22" defer></script>
+  <script src="app.js?v=23" defer></script>
 </body>
 </html>

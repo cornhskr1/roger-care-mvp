@@ -201,7 +201,7 @@ function navigate(view){
 }
 
 function bindDialogs(){
-  q('#openJournalComposer').addEventListener('click', () => openJournalDialog());
+  q('#openJournalComposer').addEventListener('click', () => openJournalDialog(todayAppEntry()?.id||''));
   q('#journalAddButton').addEventListener('click', () => openJournalDialog());
   q('#medicationAddButton').addEventListener('click', () => openMedicationDialog());
   q('#addStoolRow').addEventListener('click',()=>addStoolRow());
@@ -278,7 +278,14 @@ function openJournalDialog(id=''){
   const events=row?.stoolEvents?.length?row.stoolEvents:row?.stool?[{period:'Unspecified',score:parseFloat(row.stool)||null,status:'observed',notes:row.stool}]:[];
   if(events.length)events.forEach(addStoolRow);else addStoolRow();
   q('#journalDate').value=row?.date||todayIso();
+  q('#journalDialogTitle').textContent=row?(row.rawEntry?'Correct original note':'Edit daily entry'):'New daily entry';
+  q('#journalSaveButton').textContent=row?'Save changes':'Save entry';
+  q('#journalEditHelp').textContent=row?.rawEntry?'The original text below this entry stays intact. Your changes are saved with a correction record.':'Start now and come back later to add more to this same day.';
   els.journalDialog.showModal();
+}
+
+function todayAppEntry(){
+  return [...state.observations].reverse().find(o=>o.date===todayIso()&&!o.rawEntry&&o.source==='owner_observation');
 }
 
 function addStoolRow(row={}){
@@ -325,6 +332,8 @@ function bindForms(){
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const stoolEvents=collectStoolRows();
+    const tracked=['appetite','energy','nausea','vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
+    if(!stoolEvents.length&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
     const obs = {
       id: uid('obs'), date: fd.get('date'), appetite: fd.get('appetite'), energy: fd.get('energy'),
       nausea:fd.get('nausea')===''?null:Number(fd.get('nausea')), vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
@@ -332,14 +341,14 @@ function bindForms(){
       hydration: fd.get('hydration'), urination: fd.get('urination'), pain:fd.get('pain')===''?null:Number(fd.get('pain')),
       mood:fd.get('mood'),play:fd.get('play'),sleep:fd.get('sleep'),rogerThings:fd.get('rogerThings'),gi:fd.get('gi'),
       medications: String(fd.get('medications') || '').split(',').map(x=>x.trim()).filter(Boolean),
-      notes: fd.get('notes'), source:'owner_observation'
+      notes: String(fd.get('notes')||'').trim(), source:'owner_observation'
     };
     const editId=String(fd.get('editId')||'');
     if(editId){if(!recordCorrection('observations',editId,{...obs,id:editId}))return toast('Entry no longer found',true);}
     else state.observations.push(obs);
     state.observations.sort((a,b)=>a.date.localeCompare(b.date));
     if(!state.journalCoverageThrough||obs.date>state.journalCoverageThrough)state.journalCoverageThrough=obs.date;
-    if(!await saveChanges())return; renderAll(); els.journalDialog.close(); toast(editId?'Observation corrected':'Observation saved');
+    if(!await saveChanges())return; renderAll(); els.journalDialog.close(); toast(editId?'Entry updated':'Entry saved');
   });
 
   q('#costForm').addEventListener('submit', async event => {
@@ -597,6 +606,7 @@ function metricLatest(name){ return [...state.labs].filter(x=>x.metric===name).s
 
 function renderHome(){
   const t = latestTreatment();
+  q('#openJournalComposer').textContent=todayAppEntry()?"Continue today's entry":'Log today';
   els.statusHero.innerHTML = `
     <div class="hero-row"><div><div class="hero-title">Treatment ${t.number} of 8 complete</div><div class="hero-sub">${esc(state.profile.diagnosis)}</div></div><div class="status-pill">Restaging: no metastasis identified</div></div>
     <div class="progress-wrap"><div class="progress-track"><div class="progress-fill" style="width:${(t.number/8)*100}%"></div></div><div class="progress-copy"><span>${t.number}/8 vinblastine</span><span>${Math.round((t.number/8)*100)}%</span></div></div>`;
@@ -957,7 +967,7 @@ function renderJournal(){
     const sources=entries.map(o=>{
       const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
       const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
-      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
+      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">${o.rawEntry?'Correct':'Edit entry'}</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
     }).join('');
     const severity=entries.reduce((a,b)=>symptomSeverity(a)>symptomSeverity(b)?a:b);
     return `<article class="observation-card"><div class="row-between"><div class="item-title">${fmtDate(date)}${entries.length>1?` <small class="journal-source-count">· ${entries.length} notes</small>`:''}</div>${severityChip(severity)}</div>${sources}</article>`;
