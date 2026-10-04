@@ -10,11 +10,21 @@
   const num=value=>Number(String(value).replace(/,/g,''));
   function analyze(text,kind,filename=''){
     const normalized=String(text||'').replace(/[\u00a0\u202f]/g,' ').replace(/²/g,'2');
-    const isLab=kind==='lab';
-    if(!/ROGER\s+OBERLE/i.test(normalized)||!(isLab?/PATIENT ID:\s*20618/i.test(normalized):/CA264F93/i.test(normalized)))throw Error('This file does not clearly identify Roger and his patient ID. No changes were made.');
+    const isLab=kind==='lab',isOptimum=kind==='optimumInvoice';
+    if(!/ROGER\s+OBERLE/i.test(normalized)||!(isLab||isOptimum?/PATIENT ID:\s*20618/i.test(normalized):/CA264F93/i.test(normalized)))throw Error('This file does not clearly identify Roger and his patient ID. No changes were made.');
     const resultDate=isLab?normalized.match(/DATE OF RESULT:\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i):null;
-    const date=dateFromText(resultDate?resultDate[1]:normalized);
+    const optimumDate=isOptimum?normalized.match(/Invoice Date:\s*(\d{1,2})-([A-Za-z]{3})\s+(20\d{2})/i):null;
+    const optimumIso=optimumDate?`${optimumDate[3]}-${String(['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(optimumDate[2].toLowerCase())+1).padStart(2,'0')}-${optimumDate[1].padStart(2,'0')}`:null;
+    const date=optimumIso||dateFromText(resultDate?resultDate[1]:normalized);
     if(!date)throw Error('The visit date could not be read. No changes were made.');
+    if(isOptimum){
+      const invoice=normalized.match(/Invoice Number:\s*(\d+)/i);
+      const due=normalized.match(/AMOUNT\s+DUE\s*\$?\s*([\d,]+\.\d{2})/i);
+      const balance=normalized.match(/INVOICE\s+BALANCE\s*\$?\s*([\d,]+\.\d{2})/i);
+      if(!invoice||!due||!balance||Math.abs(num(due[1])-num(balance[1]))>.005)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
+      const category=/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
+      return {kind,date,invoiceNumber:invoice[1],amountPaid:num(due[1]),category,paymentUnconfirmed:true,filename,evidence:`Invoice #${invoice[1]} · Amount due $${due[1]} · Invoice balance $${balance[1]}`};
+    }
     if(isLab){
       const values={};
       for(const metric of ['Neutrophils','Hematocrit','Platelets']){
