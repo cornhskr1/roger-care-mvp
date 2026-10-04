@@ -256,6 +256,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .trend-owner{background:var(--owner)}.trend-chemo{background:var(--ksu)}.trend-cbc{background:var(--blood)}
 .journal-stool-line{font-size:13px;line-height:1.5;margin-top:9px;color:var(--ink)}
 .journal-med-line{margin-top:8px}
+.journal-history-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:22px 2px 8px}.journal-history-head .secondary-button{font-size:13px;min-height:40px;padding:7px 10px}
 .original-entry{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}
 .original-entry summary{cursor:pointer;color:var(--owner);font-size:13px;font-weight:800;min-height:28px}
 .original-entry pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.55 inherit;margin:7px 0 0;color:var(--ink)}

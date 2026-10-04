@@ -19,6 +19,7 @@ let timelineFilter = 'all';
 let careTeamMode = false;
 let selectedTreatmentWindow = 'all';
 let journalMetric = 'stoolCount';
+let journalShowAll = false;
 
 const q = sel => document.querySelector(sel);
 const qa = sel => [...document.querySelectorAll(sel)];
@@ -179,6 +180,7 @@ function bindDialogs(){
   q('#addStoolRow').addEventListener('click',()=>addStoolRow());
   q('#stoolRows').addEventListener('click',event=>{if(event.target.closest('[data-remove-stool]'))event.target.closest('.stool-input-row').remove();});
   q('#journalMetric').addEventListener('change',event=>{journalMetric=event.target.value;renderJournalTrend();});
+  q('#journalHistoryToggle').addEventListener('click',()=>{journalShowAll=!journalShowAll;renderJournal();});
   q('#costAddButton').addEventListener('click', () => {
     q('#costForm').reset();
     q('#costDate').value = todayIso();
@@ -249,10 +251,11 @@ function addStoolRow(row={}){
   const wrap=document.createElement('div');wrap.className='stool-input-row';
   wrap.innerHTML=`<div class="stool-input-main"><label class="field"><span>When</span><select data-stool-period><option>AM</option><option>PM</option><option>Before bed</option><option>Overnight</option><option>Other</option></select></label><label class="field"><span>Time (optional)</span><input data-stool-time type="time"></label><label class="field"><span>Score (1–8)</span><input data-stool-score type="number" min="1" max="8" step="1" inputmode="numeric"></label></div><div class="stool-input-detail"><label class="field"><span>Notes (blood, urgency, volume…)</span><input data-stool-notes placeholder="Optional detail"></label><label class="field stool-status"><span>Status</span><select data-stool-status><option value="observed">Observed</option><option value="not observed">Not observed</option><option value="none">No stool</option></select></label><button class="text-button" type="button" data-remove-stool aria-label="Remove bowel movement">Remove</button></div>`;
   q('#stoolRows').append(wrap);
-  wrap.querySelector('[data-stool-period]').value=['AM','PM','Before bed','Overnight'].includes(row.period)?row.period:'Other';
+  wrap.querySelector('[data-stool-period]').value=['AM','PM','Before bed','Overnight'].includes(row.period)?row.period:row.period?'Other':'AM';
   wrap.querySelector('[data-stool-time]').value=row.time||'';
   wrap.querySelector('[data-stool-score]').value=row.score??'';
   wrap.querySelector('[data-stool-notes]').value=row.notes||'';
+  wrap.querySelector('[data-stool-status]').add(new Option('Not recorded','not recorded'),2);
   wrap.querySelector('[data-stool-status]').value=row.status||'observed';
 }
 
@@ -570,11 +573,18 @@ function renderHome(){
 }
 
 function compactObservation(o){
-  const parts=[]; if(o.energy)parts.push(`energy ${o.energy}`); if(o.nausea)parts.push(`nausea ${['none','mild','moderate','severe'][o.nausea]}`); if(o.vomiting)parts.push(`${o.vomiting} vomit`); if(o.stool)parts.push(`stool ${o.stool}`); return parts.join(', ') || o.notes.slice(0,60);
+  const parts=[]; if(o.energy)parts.push(`energy ${o.energy}`); if(o.nausea)parts.push(o.nausea===1?'nausea signs':`nausea ${['none','mild','moderate','severe'][o.nausea]}`); if(o.vomiting)parts.push(`${o.vomiting} vomit`);
+  const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
+  const scored=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
+  if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}`);
+  else if(o.stool)parts.push(`stool ${o.stool}`);
+  return parts.join(', ') || (o.notes||'').slice(0,60);
 }
 function severityChip(o){
-  if(o.nausea>=2 || o.vomiting>0 || Number(o.pain)>=2) return '<span class="chip warn">symptoms logged</span>';
-  return '<span class="chip">stable / mild</span>';
+  const severity=symptomSeverity(o);
+  if(severity>=2)return '<span class="chip warn">symptoms logged</span>';
+  if(severity>=1)return '<span class="chip info">signs logged</span>';
+  return '<span class="chip">owner note</span>';
 }
 function daysBetween(a,b){ return Math.round((new Date(`${b}T12:00:00Z`)-new Date(`${a}T12:00:00Z`))/86400000); }
 
@@ -800,9 +810,12 @@ function renderCycleDetails(treatment,window){
 
 function symptomSummary(o){
   const parts=[];
-  if(Number(o.nausea)>0) parts.push(`${['none','mild','moderate','severe'][Number(o.nausea)]} nausea`);
+  if(Number(o.nausea)>0) parts.push(Number(o.nausea)===1?'nausea signs':`${['none','mild','moderate','severe'][Number(o.nausea)]} nausea`);
   if(Number(o.vomiting)>0) parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}`);
-  if(o.stool) parts.push(`stool ${o.stool}`);
+  const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
+  const scores=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
+  if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scores.length?', highest '+Math.max(...scores):''}`);
+  else if(o.stool)parts.push(`stool ${o.stool}`);
   if(String(o.energy||'').toLowerCase().includes('low')||String(o.energy||'').toLowerCase().includes('reduced')) parts.push(`energy ${o.energy}`);
   return `${fmtDate(o.date).replace(', 2026','')} · ${parts.join(', ')||o.notes.slice(0,80)}`;
 }
@@ -811,14 +824,17 @@ function symptomSeverity(o){
   let s=0;
   s=Math.max(s,Number(o.nausea)||0,Number(o.pain)||0);
   if(Number(o.vomiting)>0) s=Math.max(s,2);
-  const stool=parseFloat(o.stool);
+  const scores=(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
+  const stool=scores.length?Math.max(...scores):parseFloat(o.stool);
   if(Number.isFinite(stool) && stool>=6) s=Math.max(s,2);
-  if(String(o.energy||'').toLowerCase().includes('low')) s=Math.max(s,1);
+  if(/low|reduced/i.test(o.energy||'')) s=Math.max(s,1);
   return s;
 }
 
 function renderJournal(){
   const obs=[...state.observations].sort((a,b)=>b.date.localeCompare(a.date));
+  const recentDates=new Set([...new Set(obs.map(o=>o.date))].slice(0,7));
+  const shown=journalShowAll?obs:obs.filter(o=>recentDates.has(o.date));
   const nauseaDays=new Set(obs.filter(o=>Number(o.nausea)>0).map(o=>o.date)).size;
   const medDays=new Set([...state.medicationAdministrations.filter(a=>a.status==='given').map(a=>a.date),...reportedCourseDays('med-prednisone').map(a=>a.date)]).size;
   els.journalSummary.innerHTML = [
@@ -828,7 +844,8 @@ function renderJournal(){
     [fmtDate([state.journalCoverageThrough,obs[0]?.date].filter(Boolean).sort().at(-1)||'2026-10-03').replace(', 2026',''),'ENTRIES THROUGH']
   ].map(x=>`<div class="summary-tile"><div class="summary-value">${x[0]}</div><div class="summary-label">${x[1]}</div></div>`).join('');
   renderJournalTrend();
-  els.journalEntries.innerHTML = obs.map(o=>{
+  q('#journalHistoryToggle').textContent=journalShowAll?'Show recent entries':`Show all ${new Set(obs.map(o=>o.date)).size} days`;
+  els.journalEntries.innerHTML = shown.map(o=>{
     const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
     const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
     return `<article class="observation-card"><div class="row-between"><div><div class="item-title">${fmtDate(o.date)}</div><div class="item-meta">${o.rawEntry?'Original owner journal':'App entry'}${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div></div><div class="row-actions">${severityChip(o)}<button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</article>`;

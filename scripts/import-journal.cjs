@@ -17,7 +17,7 @@ function stools(text, date) {
   for (const part of parts) {
     const period=part.match(/^\s*(AM|PM|Before [Bb]ed)\s*-/)?.[1] || (part.includes('No AM stool') ? 'AM' : 'Unspecified');
     const description=part.trim();
-    const status=/did not observe|\bPM\s*-\s*$|\bBefore Bed\s*-\s*$/.test(description) ? 'not observed' : /No AM stool/.test(description) ? 'none' : 'observed';
+    const status=/did not observe/.test(description) ? 'not observed' : /No AM stool/.test(description) ? 'none' : /\b(?:PM|Before Bed)\s*-\s*$/.test(description) ? 'not recorded' : 'observed';
     if (date==='2026-08-15' && period==='PM') {
       events.push({period:'PM',score:4,status:'observed',notes:'First log was normal (4)'});
       events.push({period:'PM',score:5,status:'observed',notes:'followed by soft stool (5)'});

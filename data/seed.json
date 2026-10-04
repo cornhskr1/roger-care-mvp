@@ -1184,7 +1184,7 @@
         {
           "period": "PM",
           "score": null,
-          "status": "not observed",
+          "status": "not recorded",
           "notes": "PM -"
         }
       ],
@@ -2392,13 +2392,13 @@
         {
           "period": "PM",
           "score": null,
-          "status": "not observed",
+          "status": "not recorded",
           "notes": "PM -"
         },
         {
           "period": "Before Bed",
           "score": null,
-          "status": "not observed",
+          "status": "not recorded",
           "notes": "Before Bed -"
         }
       ],
