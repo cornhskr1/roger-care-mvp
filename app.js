@@ -4,10 +4,13 @@ const STORAGE_KEY = 'rogerCareState_v1';
 const DOC_DB = 'rogerCareDocuments_v1';
 const DOC_STORE = 'documents';
 const DEFAULT_VISITS = [
-  {id:'chemo-6',label:'Vinblastine #6 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
-  {id:'chemo-7',label:'Vinblastine #7 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
-  {id:'chemo-8',label:'Vinblastine #8 + pre-treatment CBC',date:null,source:'K-State protocol; appointment date not confirmed'},
-  {id:'restaging',label:'Final restaging',date:null,source:'K-State treatment plan; appointment date not confirmed'}
+  {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'cbc-7',label:'CBC before chemo #7',date:'2026-10-29',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'chemo-7',label:'Vinblastine #7',date:'2026-10-30',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'cbc-8',label:'CBC before chemo #8',date:'2026-11-12',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'chemo-8',label:'Vinblastine #8',date:'2026-11-13',source:'Owner-reported appointment schedule, 10/3/2026'},
+  {id:'restaging',label:'Final restaging',date:null,source:'Owner reported TBD, 10/3/2026'}
 ];
 
 const els = {};
@@ -72,6 +75,7 @@ async function loadState(){
 
 function mergeCanonicalSeed(canonical, saved){
   const merged = structuredClone(canonical);
+  const savedSchemaVersion=Number(saved.schemaVersion||0);
 
   // Preserve owner personalization and all owner-created records while allowing
   // corrected canonical clinical/journal backfill to flow in on refresh.
@@ -93,7 +97,16 @@ function mergeCanonicalSeed(canonical, saved){
   merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
   merged.medicationCourses = mergeById(canonical.medicationCourses, migratedSaved.medicationCourses, false);
   merged.medicationPurchases = mergeById(canonical.medicationPurchases, migratedSaved.medicationPurchases, false);
-  merged.carePlan = migratedSaved.carePlan?.visits?.length ? structuredClone(migratedSaved.carePlan) : structuredClone(canonical.carePlan);
+  const savedPlan=migratedSaved.carePlan||{};
+  merged.carePlan={
+    ...structuredClone(canonical.carePlan),
+    vetCallInstructions:savedPlan.vetCallInstructions||'',
+    vetCallSource:savedPlan.vetCallSource||'',
+    visits:canonical.carePlan.visits.map(visit=>{
+      const prior=savedPlan.visits?.find(v=>v.id===visit.id);
+      return savedSchemaVersion>=7&&prior?{...visit,date:prior.date||null,source:prior.source||visit.source}:visit;
+    })
+  };
   merged.recordCorrections = migratedSaved.recordCorrections||[];
   for (const correction of merged.recordCorrections){
     const rows=merged[correction.collection];
@@ -140,7 +153,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),6);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),7);
   return next;
 }
 
@@ -298,7 +311,7 @@ function bindForms(){
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const instructions=String(fd.get('vetCallInstructions')||'').trim(),source=String(fd.get('vetCallSource')||'').trim();
     if(instructions&&!source)return toast('Add the vet instruction source or date',true);
-    state.carePlan.visits.forEach(v=>{v.date=String(fd.get(v.id)||'')||null;if(v.date)v.source='Owner-entered appointment date; confirm with clinic';});
+    state.carePlan.visits.forEach(v=>{const date=String(fd.get(v.id)||'')||null;if(date!==v.date){v.date=date;v.source=date?'Owner-entered appointment update':'Owner marked date TBD';}});
     state.carePlan.vetCallInstructions=instructions;
     state.carePlan.vetCallSource=source;
     persist();renderUpcomingCare();toast('Care plan saved');
@@ -453,7 +466,7 @@ function renderAll(){
 
 function renderUpcomingCare(){
   const plan=state.carePlan||{visits:[]};
-  els.upcomingCare.innerHTML=`<div class="care-plan-list">${(plan.visits||[]).map(v=>`<div class="care-plan-row"><strong>${esc(v.label)}</strong><span>${v.date?fmtDate(v.date):'Date pending'}</span></div>`).join('')}</div><p class="medication-note"><strong>When to call:</strong> ${plan.vetCallInstructions?esc(plan.vetCallInstructions):'Awaiting Roger’s veterinarian’s instructions.'}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`;
+  els.upcomingCare.innerHTML=`<div class="care-plan-list">${(plan.visits||[]).map(v=>`<div class="care-plan-row"><strong>${esc(v.label)}</strong><span>${v.date?fmtDate(v.date):'TBD'}</span></div>`).join('')}</div><p class="medication-note"><strong>When to call:</strong> ${plan.vetCallInstructions?esc(plan.vetCallInstructions):'Awaiting Roger’s veterinarian’s instructions.'}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`;
   q('#carePlanFields').innerHTML=(plan.visits||[]).map(v=>`<label class="field"><span>${esc(v.label)}</span><input type="date" name="${esc(v.id)}" value="${esc(v.date||'')}"></label>`).join('');
   q('#vetCallInstructions').value=plan.vetCallInstructions||'';
   q('#vetCallSource').value=plan.vetCallSource||'';
@@ -506,7 +519,7 @@ function renderHome(){
   els.homeCostSummary.innerHTML = `<div class="estimate-grid"><div class="estimate-box"><div class="section-kicker">TOTAL PAID</div><div class="estimate-value">${money(totalPaid())}</div><div class="estimate-note">All documented care since mass workup, including the mixed surgery/dental day.</div></div><div class="estimate-box"><div class="section-kicker">ORIGINAL K-STATE COURSE ESTIMATE</div><div class="estimate-value">$3,500–$4,000</div><div class="estimate-note">8/4 oncology note; primary-vet pre-treatment bloodwork was excluded from the per-injection estimate.</div></div></div>`;
 
   const open=[];
-  open.push('Treatments #6–#8 and final restaging remain in the planned protocol.');
+  open.push('CBC and treatment dates for #6–#8 are scheduled; final restaging date remains TBD.');
   open.push('Verify the duplicate vinblastine billing lines on the 10/2 K-State invoice.');
   open.push('Reconcile the 7/14 Optimum surgery/dental invoice when received.');
   els.openItems.innerHTML = open.map(x=>`<div class="open-item"><span class="open-dot"></span><div class="item-copy" style="margin:0">${esc(x)}</div></div>`).join('');
@@ -856,11 +869,12 @@ function renderMedications(){
 
 function renderTimeline(){
   const events=[];
+  (state.carePlan?.visits||[]).filter(v=>v.date).forEach(v=>events.push({date:v.date,kind:'planned',source:v.source,title:v.label,detail:'Upcoming appointment · no treatment or lab result yet'}));
   state.milestones.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:x.title,detail:x.detail}));
   state.treatments.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:`Vinblastine #${x.number} · ${x.doseMg} mg`,detail:`${x.doseMgM2} mg/m² · ${x.weightLb} lb · ${x.doseReason}`}));
   state.labs.forEach(x=>{ if(['Neutrophils','ALT','ALP'].includes(x.metric)) events.push({date:x.date,kind:'lab',source:x.source,title:`${x.metric}: ${x.displayValue||x.value} ${x.unit}`,detail:x.context}); });
   state.observations.forEach(x=>events.push({date:x.date,kind:'owner',source:'Owner observation',title:'Home observation',detail:x.notes}));
-  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter||(timelineFilter==='clinical'&&x.kind==='lab')).sort((a,b)=>b.date.localeCompare(a.date));
+  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter||(timelineFilter==='clinical'&&['lab','planned'].includes(x.kind))).sort((a,b)=>b.date.localeCompare(a.date));
   els.timelineEntries.innerHTML=filtered.map(x=>`<article class="timeline-entry ${x.kind==='owner'?'owner':x.kind==='lab'?'lab':''}"><div class="timeline-date">${fmtDate(x.date).replace(', 2026','')}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-content"><div class="source-label">${esc(x.source)}</div><div class="item-title">${esc(x.title)}</div><div class="item-copy">${esc(x.detail)}</div></div></article>`).join('');
 }
 
@@ -1032,7 +1046,7 @@ function buildCareSummaryHtml(){
   const courseRows=(state.medicationCourses||[]).map(c=>`<tr><td>${esc(medicationName(c.medicationId))}</td><td>${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))}</td><td>${esc(c.dose||'Unknown')} · ${esc(c.frequency||'Frequency unknown')}</td><td>${esc(c.status)}<br><small>${esc(c.source)}</small></td></tr>`).join('');
   const prnRows=(state.medications||[]).filter(m=>!['med-prednisone','med-amoxicillin'].includes(m.id)).map(m=>{const a=medicationStats(m.id);return `<tr><td>${esc(m.name)}</td><td>${a.given.length} given; ${state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length} held</td><td>${a.last?fmtDate(a.last):'No dose logged'}</td><td>${esc(m.prescribedDose)}</td></tr>`;}).join('');
   const medicationEvents=state.medicationAdministrations.filter(a=>a.medicationId==='med-metronidazole').map(a=>`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${a.dose} ${a.status} (${a.reason||'reason unrecorded'})`).join('; ');
-  const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date pending'}</strong>${v.date?' (owner-entered; confirm with clinic)':''}</li>`).join('');
+  const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date TBD'}</strong> <small>(${esc(v.source||'Source unrecorded')})</small></li>`).join('');
   const docs=documents.map(d=>`<li>${esc(d.name)} · ${fmtDate(d.date)} · ${esc(d.provider||d.type)}</li>`).join('');
   const correctionCount=state.recordCorrections?.length||0;
   const correctionRows=(state.recordCorrections||[]).map(c=>{

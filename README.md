@@ -48,7 +48,7 @@ The published starter record (including patient IDs) is public in the GitHub Pag
 
 The complete JSON backup includes document file data, profile personalization, owner edits, and a correction history. Importing a complete backup replaces current on-device entries and documents after a confirmation; older state-only backups preserve existing device documents.
 
-Upcoming treatment and restaging slots deliberately have no dates until confirmed. Vet call instructions are blank until entered with a source. The handoff includes a first-page snapshot and a longer sourced record; it does not attach the source documents themselves.
+Owner-reported CBC dates (10/15, 10/29, 11/12) and vinblastine dates (10/16, 10/30, 11/13) are shown as scheduled events. Final restaging remains TBD. Vet call instructions are blank until entered with a source. The handoff includes a first-page snapshot and a longer sourced record; it does not attach the source documents themselves.
 
 ## Next technical milestones
 

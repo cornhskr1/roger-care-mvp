@@ -1,11 +1,14 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "carePlan": {
     "visits": [
-      {"id":"chemo-6","label":"Vinblastine #6 + pre-treatment CBC","date":null,"source":"K-State eight-dose protocol; appointment date not confirmed"},
-      {"id":"chemo-7","label":"Vinblastine #7 + pre-treatment CBC","date":null,"source":"K-State eight-dose protocol; appointment date not confirmed"},
-      {"id":"chemo-8","label":"Vinblastine #8 + pre-treatment CBC","date":null,"source":"K-State eight-dose protocol; appointment date not confirmed"},
-      {"id":"restaging","label":"Final restaging","date":null,"source":"K-State treatment plan; appointment date not confirmed"}
+      {"id":"cbc-6","label":"CBC before chemo #6","date":"2026-10-15","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"chemo-6","label":"Vinblastine #6","date":"2026-10-16","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"cbc-7","label":"CBC before chemo #7","date":"2026-10-29","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"chemo-7","label":"Vinblastine #7","date":"2026-10-30","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"cbc-8","label":"CBC before chemo #8","date":"2026-11-12","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"chemo-8","label":"Vinblastine #8","date":"2026-11-13","source":"Owner-reported appointment schedule, 10/3/2026"},
+      {"id":"restaging","label":"Final restaging","date":null,"source":"Owner reported TBD, 10/3/2026"}
     ],
     "vetCallInstructions": "",
     "vetCallSource": ""
