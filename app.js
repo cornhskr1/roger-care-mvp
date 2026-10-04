@@ -34,6 +34,7 @@ let journalShowAll = false;
 let recoveredFromSnapshot = false;
 let backupPreparedAt = null;
 let backupPreparedStateAt = null;
+let importDraft = null;
 
 const q = sel => document.querySelector(sel);
 const qa = sel => [...document.querySelectorAll(sel)];
@@ -58,6 +59,7 @@ async function boot(){
   bindNav();
   bindDialogs();
   bindForms();
+  bindImport();
   bindExports();
   bindProfilePhoto();
   bindOverlayControls();
@@ -119,7 +121,13 @@ function mergeCanonicalSeed(canonical, saved){
   const migratedSaved = migrateState(saved);
   merged.observations = mergeById(canonical.observations, migratedSaved.observations, false);
   merged.qualityOfLife = mergeById(canonical.qualityOfLife||[],migratedSaved.qualityOfLife||[],true);
-  merged.costs = mergeById(canonical.costs, migratedSaved.costs, false);
+  merged.costs = mergeById(canonical.costs, migratedSaved.costs, true);
+  merged.treatments = mergeById(canonical.treatments, migratedSaved.treatments, true);
+  const labKey=x=>x.id||`${x.date}|${x.metric}`;
+  const labMap=new Map((canonical.labs||[]).map(x=>[labKey(x),x]));
+  (migratedSaved.labs||[]).forEach(x=>labMap.set(labKey(x),{...labMap.get(labKey(x)),...x}));
+  merged.labs=[...labMap.values()];
+  merged.importHistory=migratedSaved.importHistory||[];
   merged.medicationAdministrations = mergeById(canonical.medicationAdministrations, migratedSaved.medicationAdministrations, false);
   merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
   merged.medicationCourses = mergeById(canonical.medicationCourses, migratedSaved.medicationCourses, false);
@@ -138,7 +146,7 @@ function mergeCanonicalSeed(canonical, saved){
   merged._savedAt = migratedSaved._savedAt||null;
   for (const correction of merged.recordCorrections){
     const rows=merged[correction.collection];
-    if(!['observations','medicationAdministrations','costs','qualityOfLife'].includes(correction.collection)||!Array.isArray(rows))continue;
+    if(!['observations','medicationAdministrations','costs','qualityOfLife','treatments'].includes(correction.collection)||!Array.isArray(rows))continue;
     const index=rows.findIndex(row=>row.id===correction.id);
     if(index>=0)rows[index]={...rows[index],...correction.after};
   }
@@ -158,6 +166,9 @@ function mergeCanonicalSeed(canonical, saved){
 function migrateState(input){
   const next = input || {};
   next.costs = Array.isArray(next.costs) ? next.costs : [];
+  next.treatments = Array.isArray(next.treatments) ? next.treatments : [];
+  next.labs = Array.isArray(next.labs) ? next.labs : [];
+  next.importHistory = Array.isArray(next.importHistory) ? next.importHistory : [];
   next.observations = Array.isArray(next.observations) ? next.observations : [];
   next.qualityOfLife = Array.isArray(next.qualityOfLife) ? next.qualityOfLife : [];
   next.medications = Array.isArray(next.medications) ? next.medications : [];
@@ -1567,6 +1578,113 @@ async function loadDocuments(){
 function renderDocuments(){
   els.documentList.innerHTML=documents.length?documents.sort((a,b)=>b.date.localeCompare(a.date)).map(d=>`<article class="document-card"><div class="row-between"><div><div class="item-title">${esc(d.name)}</div><div class="item-meta">${fmtDate(d.date)} · ${esc(d.provider||d.type)}</div></div><button type="button" class="text-button" data-open-doc="${esc(d.id)}">Open</button></div>${d.note?`<div class="item-copy">${esc(d.note)}</div>`:''}</article>`).join(''):'<div class="empty-state">No documents saved on this device yet.</div>';
   qa('[data-open-doc]').forEach(btn=>btn.addEventListener('click',()=>openDocument(btn.dataset.openDoc)));
+}
+
+function bindImport(){
+  q('#analyzeForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const file=q('#analyzeFile').files[0],kind=q('#analyzeType').value,button=event.submitter;
+    if(!file||!file.name.toLowerCase().endsWith('.pdf'))return toast('Choose a PDF.',true);
+    importDraft=null;
+    const panel=q('#importReview');panel.textContent='Reading the PDF on this device…';
+    button.disabled=true;
+    try{
+      const text=await readImportPdf(file,kind,panel);
+      importDraft=RogerImport.analyze(text,kind,file.name);
+      renderImportReview();
+    }catch(error){panel.innerHTML=`<p class="alert">${esc(error.message||'Could not read this PDF. No changes were made.')}</p>`;}
+    finally{button.disabled=false;}
+  });
+  q('#importReview').addEventListener('submit',async event=>{
+    if(event.target.id!=='importConfirm')return;
+    event.preventDefault();
+    if(!ownerCanEdit)return toast('Connect the owner app before saving an import.',true);
+    if(!importDraft)return;
+    const fd=new FormData(event.target),draft=importDraft;
+    const date=String(fd.get('date')||'');
+    if(!/^20\d\d-\d\d-\d\d$/.test(date)||Number.isNaN(new Date(date+'T12:00:00Z').getTime()))return toast('Check the date.',true);
+    const before=structuredClone(state);
+    try{
+      if(draft.kind==='summary'){
+        const doseMg=Number(fd.get('doseMg')),doseMgM2=Number(fd.get('doseMgM2'));
+        if(![doseMg,doseMgM2].every(n=>Number.isFinite(n)&&n>0&&n<20))throw Error('Check the dose fields.');
+        const existing=state.treatments.find(x=>x.number===draft.number);
+        if(existing){recordCorrection('treatments',existing.id,{date,doseMg,doseMgM2,weightLb:draft.weightLb??existing.weightLb,source:`K-State patient summary · ${draft.filename}`});}
+        else state.treatments.push({id:`chemo-${draft.number}`,number:draft.number,date,drug:'Vinblastine',doseMg,doseMgM2,weightLb:draft.weightLb,prednisone:'See patient summary',doseReason:'See K-State patient summary',clinicalSummary:'Dose transcribed from Treatments Performed.',source:`K-State patient summary · ${draft.filename}`});
+        state.treatments.sort((a,b)=>a.number-b.number);
+      }else if(draft.kind==='lab'){
+        for(const metric of ['Neutrophils','Hematocrit','Platelets']){
+          const value=Number(fd.get(metric));
+          if(!Number.isFinite(value)||value<0||value>100000)throw Error(`Check ${metric}.`);
+          const existing=state.labs.find(x=>x.date===date&&x.metric===metric);
+          const update={date,metric,value,displayValue:String(value),unit:metric==='Hematocrit'?'%':'K/µL',source:`IDEXX CBC · ${draft.filename}`,context:'Current-result column; owner reviewed'};
+          if(existing)Object.assign(existing,update);else state.labs.push(update);
+        }
+        state.labs.sort((a,b)=>a.date.localeCompare(b.date));
+      }else{
+        const amount=Number(fd.get('amountPaid'));
+        if(!Number.isFinite(amount)||amount<0||amount>100000)throw Error('Check the amount paid.');
+        const existing=invoiceCostMatch(draft);
+        const id=existing?.id||`cost-ksu-invoice-${draft.invoiceNumber}`;
+        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amount,source:`K-State invoice #${draft.invoiceNumber}`});
+        else state.costs.push({id,date,provider:'K-State Veterinary Health Center',label:`K-State visit · invoice #${draft.invoiceNumber}`,amountPaid:amount,category:'treatment',status:'confirmed',source:`K-State invoice #${draft.invoiceNumber}`});
+        state.costs.sort((a,b)=>a.date.localeCompare(b.date));
+        if(draft.cereniaQuantity&&draft.cereniaPaid!=null&&!state.medicationPurchases.some(p=>p.costId===id&&p.medicationId==='med-cerenia')){
+          state.medicationPurchases.push({id:`purchase-cerenia-invoice-${draft.invoiceNumber}`,medicationId:'med-cerenia',date,quantity:draft.cereniaQuantity,tabletStrengthMg:60,amountPaid:draft.cereniaPaid,costId:id,status:'confirmed',source:`K-State invoice #${draft.invoiceNumber}`});
+        }
+      }
+      state.importHistory=state.importHistory||[];
+      const key=draft.kind==='invoice'?`invoice:${draft.invoiceNumber}`:draft.kind==='lab'?`cbc:${date}`:`treatment:${draft.number}`;
+      state.importHistory=state.importHistory.filter(x=>x.key!==key);
+      state.importHistory.push({key,filename:draft.filename,date,reviewedAt:new Date().toISOString(),evidence:draft.evidence});
+      if(!await saveChanges())throw Error('Could not save the reviewed values.');
+      importDraft=null;q('#analyzeForm').reset();renderAll();q('#importReview').innerHTML='<p class="privacy-note">Reviewed values saved. The timeline, charts, and costs now use the same record. Check Home for shared sync status.</p>';
+    }catch(error){state=before;renderAll();toast(error.message||'Import not saved.',true);}
+  });
+}
+
+function invoiceCostMatch(draft){
+  const byInvoice=state.costs.find(c=>String(c.source||'').includes(`invoice #${draft.invoiceNumber}`)||c.id===`cost-ksu-invoice-${draft.invoiceNumber}`);
+  if(byInvoice)return byInvoice;
+  const sameDay=state.costs.filter(c=>c.date===draft.date&&/K-State/i.test(c.provider||''));
+  if(sameDay.length>1)throw Error('More than one K-State cost is recorded on this date. Resolve the existing costs before importing this invoice.');
+  return sameDay[0]||null;
+}
+
+function renderImportReview(){
+  const d=importDraft;if(!d)return;
+  let match;
+  try{match=d.kind==='summary'?state.treatments.find(x=>x.number===d.number):d.kind==='lab'?state.labs.find(x=>x.date===d.date&&x.metric==='Neutrophils'):invoiceCostMatch(d);}
+  catch(error){q('#importReview').innerHTML=`<p class="alert">${esc(error.message)}</p>`;return;}
+  const current=match?(d.kind==='summary'?`Existing: ${fmtDate(match.date)} · ${match.doseMg} mg · ${match.doseMgM2} mg/m²`:d.kind==='lab'?`Existing neutrophils: ${match.value} K/µL on ${fmtDate(match.date)}`:`Existing: ${fmtDate(match.date)} · ${money(match.amountPaid)}`):'No matching record yet';
+  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):Number(match.amountPaid)===d.amountPaid);
+  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>Total paid</span><input name="amountPaid" type="number" step="0.01" min="0" value="${d.amountPaid.toFixed(2)}" required></label><p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`;
+  q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · paid cost`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already match; saving only records the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
+}
+
+async function readImportPdf(file,kind,panel){
+  const pdfjs=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.mjs';
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+  if(pdf.numPages>12)throw Error('This PDF is longer than the supported care record format. No changes were made.');
+  const pages=[];
+  for(let n=1;n<=pdf.numPages;n++){
+    const page=await pdf.getPage(n),content=await page.getTextContent();
+    pages.push(content.items.map(x=>(x.str||'')+(x.hasEOL?'\n':' ')).join(''));
+  }
+  const text=pages.join('\n');
+  if(text.includes('Treatments Performed')||kind==='invoice'&&/Invoice\s*#/.test(text)||kind==='lab'&&/DATE OF RESULT/i.test(text))return text;
+  if(kind!=='invoice')throw Error('This summary has no readable text. No changes were made.');
+  panel.textContent='This invoice is a scan. Reading its first page on this device…';
+  await new Promise((resolve,reject)=>{
+    if(globalThis.Tesseract)return resolve();
+    const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';script.onload=resolve;script.onerror=()=>reject(Error('The scan reader could not load. No changes were made.'));document.head.append(script);
+  });
+  const page=await pdf.getPage(1),viewport=page.getViewport({scale:2.5}),canvas=document.createElement('canvas');
+  canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  const worker=await Tesseract.createWorker('eng');
+  try{return (await worker.recognize(canvas)).data.text;}finally{await worker.terminate();}
 }
 async function openDocument(id){
   const d=documents.find(x=>x.id===id); if(!d)return; const url=URL.createObjectURL(d.file); window.open(url,'_blank','noopener'); setTimeout(()=>URL.revokeObjectURL(url),60000);
