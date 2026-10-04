@@ -291,7 +291,7 @@ async function publishCloud(firstUpload){
       .eq('id','roger').eq('revision',cloudRevision)
       .select('revision,updated_at').maybeSingle();
     if(error){
-      syncMessage='Not uploaded. The shared record could not be reached. Your change is on this device.';
+      syncMessage='Could not confirm the shared save. Your change is on this device; the app will check online before retrying.';
       toast(syncMessage,true);return false;
     }
     if(!data){
@@ -342,6 +342,16 @@ function mergeIndependentChanges(local,online){
         }
         else {existing.set(id,rows.length);rows.push(structuredClone(row));}
       }
+      if(key==='qualityOfLife'){
+        const byDate=new Map();
+        for(const row of rows){
+          const prior=byDate.get(row.date);
+          if(!prior){byDate.set(row.date,row);continue;}
+          if(Number(prior.score)!==Number(row.score)||prior.notes&&row.notes&&prior.notes!==row.notes)return null;
+          if(!prior.notes&&row.notes)byDate.set(row.date,row);
+        }
+        merged[key]=[...byDate.values()];continue;
+      }
       merged[key]=rows;continue;
     }
     if(!sameCloudValue(local[key],online[key]))return null;
@@ -352,6 +362,7 @@ function mergeIndependentChanges(local,online){
 async function reconcileCloud(){
   if(!cloud||!ownerCanEdit||cloudBusy)return false;
   cloudBusy=true;
+  let savedRecord=null,savedRevision=null,savedAt=null;
   try{
     const {data:latest,error:readError}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
     if(readError||!latest?.record)throw new Error('read');
@@ -360,17 +371,30 @@ async function reconcileCloud(){
       syncMessage='Not uploaded. An online record differs from this device. Your change is still saved here; review both copies before publishing.';
       toast(syncMessage,true);return false;
     }
-    const {data,error}=await cloud.from('roger_shared_record').update({record:merged,revision:Number(latest.revision)+1})
-      .eq('id','roger').eq('revision',latest.revision).select('revision,updated_at').maybeSingle();
-    if(error||!data)throw new Error('write');
+    const equivalent=(_record)=>sameCloudValue({..._record,_savedAt:null},{...latest.record,_savedAt:null});
+    if(equivalent(merged)){
+      savedRecord=latest.record;savedRevision=Number(latest.revision);savedAt=latest.updated_at;
+    }else{
+      const {data,error}=await cloud.from('roger_shared_record').update({record:merged,revision:Number(latest.revision)+1})
+        .eq('id','roger').eq('revision',latest.revision).select('revision,updated_at').maybeSingle();
+      if(error||!data)throw new Error('write');
+      savedRecord=merged;savedRevision=Number(data.revision);savedAt=data.updated_at;
+    }
     const photo=state.profile?.photoDataUrl;
-    state=migrateState(merged);if(photo)state.profile.photoDataUrl=photo;
-    cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;cloudAvailable=true;
+    state=migrateState(savedRecord);if(photo)state.profile.photoDataUrl=photo;
+    cloudRevision=savedRevision;cloudUpdatedAt=savedAt;cloudAvailable=true;
     unpublishedLocal=false;manualPublishRequired=false;syncMessage='Saved to shared record.';
     await persist(false);try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-    renderAll();toast('Your change is now shared.');return true;
+    try{renderAll();}catch(error){console.error('Shared record saved; display refresh failed',error);}
+    toast('Your change is now shared.');return true;
   }catch(_){
-    syncMessage='Not uploaded. Your change is saved on this device. Tap Retry safe sync when connected.';
+    if(savedRecord){
+      cloudRevision=savedRevision;cloudUpdatedAt=savedAt;unpublishedLocal=false;manualPublishRequired=false;
+      syncMessage='Shared record updated. Refresh to update this screen.';
+      try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
+      return true;
+    }
+    syncMessage='Could not confirm the shared save. Your change is on this device. Tap Retry safe sync when connected.';
     toast(syncMessage,true);return false;
   }finally{cloudBusy=false;renderSharedStatus();}
 }
