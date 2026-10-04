@@ -18,12 +18,18 @@ Deno.serve(async (req: Request) => {
 
   const url = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !serviceKey) return reply(503, { error: 'Sign-in transfer unavailable' });
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!url || !serviceKey || !anonKey) return reply(503, { error: 'Sign-in transfer unavailable' });
   const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data: { user }, error: userError } = await admin.auth.getUser(bearer[1]);
   if (userError || !user?.email) return reply(401, { error: 'Owner sign-in expired' });
-  const { data: record, error: recordError } = await admin.from('roger_shared_record').select('owner_uid').eq('id', 'roger').single();
-  if (recordError || !record || record.owner_uid !== user.id) return reply(403, { error: 'Owner access required' });
+  const ownerClient = createClient(url, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: req.headers.get('Authorization')! } },
+  });
+  const { data: canEdit, error: accessError } = await ownerClient.rpc('roger_can_edit');
+  if (accessError) return reply(503, { error: 'Could not check owner access' });
+  if (canEdit !== true) return reply(403, { error: 'Owner access required' });
 
   const { data, error } = await admin.auth.admin.generateLink({ type: 'magiclink', email: user.email });
   const token_hash = data?.properties?.hashed_token;
