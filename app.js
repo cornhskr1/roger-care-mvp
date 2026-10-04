@@ -237,6 +237,14 @@ function cloudRecord(){
   if(copy.profile)delete copy.profile.photoDataUrl;
   return copy;
 }
+function parseOwnerSignInLink(input){
+  const url=new URL(String(input||'').trim());
+  if(url.protocol!=='https:'||url.hostname!==new URL(SUPABASE_URL).hostname||url.pathname!=='/auth/v1/verify')throw new Error('Unexpected sign-in link');
+  const token=url.searchParams.get('token_hash')||url.searchParams.get('token');
+  const type=url.searchParams.get('type');
+  if(!token||!/^[a-zA-Z0-9_-]{32,256}$/.test(token)||!['email','magiclink'].includes(type))throw new Error('Invalid sign-in link');
+  return {token_hash:token,type};
+}
 async function readCloud(initial=false){
   if(!cloud||cloudBusy||unpublishedLocal&&!initial)return;
   const {data,error}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
@@ -286,11 +294,24 @@ function renderSharedStatus(){
   const readyToPublish=backed&&(cloudRevision!==0||appEntries.length>0);
   controls.innerHTML=ownerCanEdit
     ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'No app journal entry found here. Open the browser holding your entries or import its complete backup.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
-    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. Anyone with the link can view published entries. Open the email link in the same browser that holds your journal. Check that your latest entry is visible before publishing.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. In the Home Screen app, request a new email link below, then press and hold “Sign in” in the email and choose Copy Link. Paste that unused link here without opening it. Your journal stays in this app.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in here</button></form><p class="field-help">The link is used once and is never saved in Roger’s journal. Do not send it in chat.</p>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
-    toast(error?'Sign-in email could not be sent. Try again.':'Check your email. Open the link in the same browser that has Roger’s journal.',Boolean(error));
+    toast(error?'Sign-in email could not be sent. Try again.':'In the email, press and hold Sign in, then Copy Link. Paste it here without opening it.',Boolean(error));
+  });
+  q('#ownerLinkPaste')?.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const input=event.currentTarget.elements.link;
+    let credentials;
+    try{credentials=parseOwnerSignInLink(input.value);}
+    catch(_){return toast('That is not an unused Roger Care sign-in link. Request a new link and copy it from the email.',true);}
+    input.value='';
+    const {error}=await cloud.auth.verifyOtp(credentials);
+    if(error)return toast('That link could not be used. Request a fresh one, then copy it without opening it.',true);
+    const {data:{session}}=await cloud.auth.getSession();
+    ownerSession=session;await checkOwner();renderAll();
+    toast(ownerCanEdit?'Signed in here. Your journal is still on this device.':'Signed in, but owner access is pending.');
   });
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
   q('#publishLocal')?.addEventListener('click',async()=>{
@@ -440,7 +461,7 @@ function recordCorrection(collection,id,after){
 
 function bindForms(){
   document.addEventListener('submit',event=>{
-    if(event.target.id==='ownerLogin'||ownerCanEdit)return;
+    if(['ownerLogin','ownerLinkPaste'].includes(event.target.id)||ownerCanEdit)return;
     event.preventDefault();event.stopImmediatePropagation();
     toast('Only Roger’s owner can change this record. Sign in first.',true);
   },true);

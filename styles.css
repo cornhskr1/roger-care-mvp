@@ -289,7 +289,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .shared-status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;margin:10px 0;border:1px solid #d9cdea;border-radius:13px;background:#f8f3fc;color:var(--ink);font-size:13px;line-height:1.4}
 .shared-status strong{color:var(--ksu)}.shared-status span{flex:1;min-width:180px}.shared-status small{color:var(--muted)}
 .shared-controls{padding:13px;margin:12px 0;border:1px solid var(--line);border-radius:13px;background:#faf9fc;font-size:14px;line-height:1.5}
-.shared-controls p{margin:5px 0 10px;color:var(--muted)}.shared-controls form{display:grid;gap:10px}.shared-controls .field{max-width:420px}
+.shared-controls p{margin:5px 0 10px;color:var(--muted)}.shared-controls form{display:grid;gap:10px;margin:10px 0 14px}.shared-controls .field{max-width:420px}
 .shared-controls button:disabled,[data-edit-observation]:disabled,[data-edit-medication]:disabled,[data-edit-cost]:disabled{opacity:.5;cursor:not-allowed}
 .backup-status{padding:12px 14px;margin:12px 0;border-radius:13px;background:#fff9e9;border:1px solid #e3d6aa;font-size:14px;line-height:1.5}
 .backup-status p{margin:5px 0 0;color:var(--muted)}
