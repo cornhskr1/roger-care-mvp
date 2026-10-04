@@ -221,7 +221,7 @@ async function connectCloud(){
   cloud.auth.onAuthStateChange((_event,next)=>{ownerSession=next;setTimeout(async()=>{await checkOwner();renderSharedStatus();},0);});
   await readCloud(true);
   await checkOwner();
-  window.addEventListener('focus',()=>{if(!unpublishedLocal)readCloud(false).then(()=>renderAll());});
+  window.addEventListener('focus',async()=>{await checkOwner();if(!unpublishedLocal){await readCloud(false);renderAll();}});
   setInterval(()=>{if(!document.hidden&&!unpublishedLocal)readCloud(false).then(()=>renderAll());},60000);
 }
 async function checkOwner(){
@@ -282,17 +282,20 @@ function renderSharedStatus(){
   const label=!cloudAvailable?'On this device':unpublishedLocal?'Not yet shared':cloudRevision>0?'Shared and current':'Ready for first upload';
   status.innerHTML=`<strong>${esc(label)}</strong><span>${esc(syncMessage||'Checking shared record…')}</span>${cloudUpdatedAt&&cloudRevision>0&&!unpublishedLocal?`<small>Online update: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
   const backed=readBackupMeta().confirmedStateAt===state._savedAt;
+  const appEntries=state.observations.filter(row=>row.source==='owner_observation'&&!row.rawEntry);
+  const readyToPublish=backed&&(cloudRevision!==0||appEntries.length>0);
   controls.innerHTML=ownerCanEdit
-    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<button id="publishLocal" class="primary-button" type="button" ${!backed?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${backed?'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.':'Download and confirm a fresh complete backup above before publishing.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
-    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. Anyone with the link can view published entries.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'No app journal entry found here. Open the browser holding your entries or import its complete backup.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
+    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. Anyone with the link can view published entries. Open the email link in the same browser that holds your journal. Check that your latest entry is visible before publishing.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
-    toast(error?'Sign-in email could not be sent. Try again.':'Check your email for the Roger Care sign-in link.',Boolean(error));
+    toast(error?'Sign-in email could not be sent. Try again.':'Check your email. Open the link in the same browser that has Roger’s journal.',Boolean(error));
   });
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
   q('#publishLocal')?.addEventListener('click',async()=>{
     if(readBackupMeta().confirmedStateAt!==state._savedAt)return toast('Confirm a fresh backup first.',true);
+    if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
     if(cloudRevision>0&&!window.confirm('Publish this device’s local record over the currently shared version? Keep your backup for comparison.'))return;
     const ok=await publishCloud(true);if(ok)renderAll();
   });
@@ -1549,7 +1552,7 @@ function bindExports(){
     if(!backupPreparedAt||backupPreparedStateAt!==state._savedAt)return toast('The record changed. Download a fresh backup first.',true);
     try{localStorage.setItem(BACKUP_META_KEY,JSON.stringify({confirmedAt:new Date().toISOString(),confirmedStateAt:backupPreparedStateAt}));}
     catch(_){return toast('Could not record backup status. Keep your downloaded file safe.',true);}
-    backupPreparedAt=null;backupPreparedStateAt=null;renderBackupStatus();toast('Off-device backup marked saved');
+    backupPreparedAt=null;backupPreparedStateAt=null;renderBackupStatus();renderSharedStatus();toast('Off-device backup marked saved');
   });
   q('#importBackup').addEventListener('change',async event=>{
     const f=event.target.files[0];if(!f)return;

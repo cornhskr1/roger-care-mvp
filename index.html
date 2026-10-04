@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=25">
+  <link rel="manifest" href="manifest.webmanifest?v=26">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=25">
+  <link rel="stylesheet" href="styles.css?v=26">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -242,7 +242,7 @@
           </div>
         </div>
 
-        <div class="privacy-note"><strong>Sharing:</strong> The historical journal through 10/3, medical record, and patient IDs in this published site are public. New app entries, photo, uploaded files, and corrections stay on this device unless you export them. The care-team handoff is a local download or printout; this version has no private share link.</div>
+        <div class="privacy-note"><strong>Sharing:</strong> The historical record and patient IDs are visible to anyone with this link. Once the owner publishes the phone copy, new journal entries, medications, costs, care-plan changes, and corrections appear here too. Photo and uploaded document files stay on the device. Check the status on Home to see whether a change is shared.</div>
 
         <section class="card">
           <div class="card-head">
@@ -273,7 +273,7 @@
             <label class="field"><span>Note</span><textarea id="documentNote" name="note" rows="3" placeholder="Optional context"></textarea></label>
             <button type="submit" class="primary-button">Save document on this device</button>
           </form>
-          <div class="privacy-note">Automatic extraction is intentionally not faked in this first build. The upload is real; AI-assisted document ingestion comes when we add a secure backend.</div>
+          <div class="privacy-note">Document files are stored on this device and included in a complete backup. They are not part of the shared record yet.</div>
           <div id="documentList" class="stack compact-stack"></div>
         </section>
 
@@ -443,6 +443,6 @@
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
-  <script src="app.js?v=25" defer></script>
+  <script src="app.js?v=26" defer></script>
 </body>
 </html>
