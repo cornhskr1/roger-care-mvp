@@ -326,7 +326,15 @@ function mergeIndependentChanges(local,online){
       const existing=new Map(rows.map((row,i)=>[row?.id||JSON.stringify(row),i]));
       for(const row of local[key]){
         const id=row?.id||JSON.stringify(row);
-        if(existing.has(id)){if(!sameCloudValue(row,rows[existing.get(id)]))return null;}
+        if(existing.has(id)){
+          const onlineRow=rows[existing.get(id)];
+          if(!sameCloudValue(row,onlineRow)){
+            const correction=(local.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
+              sameCloudValue(change.before,onlineRow)&&sameCloudValue({...onlineRow,...change.after},row));
+            if(!correction)return null;
+            rows[existing.get(id)]=structuredClone(row);
+          }
+        }
         else {existing.set(id,rows.length);rows.push(structuredClone(row));}
       }
       merged[key]=rows;continue;
