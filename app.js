@@ -1431,44 +1431,34 @@ function buildCareSummaryPdf(){
   wrap('Amoxicillin: owner reports seven days after the Aug 20 count of 250/uL; dose and frequency unrecorded.');
   const plan=state.carePlan||{visits:[]};
   heading('Upcoming care');
-  for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'} (${v.source||'source unrecorded'})`,9,false,8);
+  for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
   wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`);
   heading('Recent owner notes');
-  const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-5).reverse();
-  for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries)wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${o.notes||'No note'}`,9,false,8);}
-  line('Owner observations are reported separately from clinical records.',9,false,0,15);
-  page();line('Treatment periods | same days after chemotherapy',16,true,0,25);
-  const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),byDate=new Map(comparisonRows().map(row=>[row.date,row]));
+  const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-3).reverse();
+  for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries){const note=String(o.notes||'No note');wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${note.length>150?note.slice(0,147)+'...':note}`,9,false,8);}}
+  line('Owner observations are labeled separately from clinical records.',9,false,0,15);
+  page();line('Treatment history | concise review',16,true,0,25);
+  const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),rows=comparisonRows();
   for(const t of treatments){
-    heading(`Chemo #${t.number} | ${fmtDate(t.date)} | ${t.doseMg} mg (${t.doseMgM2} mg/m2)`);
-    wrap(`Dose context: ${t.doseReason||'not recorded'}`,9);
     const window=cycleWindowFor(t,treatments);
-    for(let offset=0;offset<=13;offset++){
-      const date=addDays(t.date,offset);if(date>=window.endExclusive)break;
-      const day=byDate.get(date);if(!day)continue;
-      const v=day.values,hasData=day.observations.length||day.labs.length||day.medications.length||day.qualityOfLife.length;
-      if(!hasData)continue;
-      const parts=[];
-      if(v.energy!==null)parts.push(`energy ${comparisonValue('energy',v.energy)}`);
-      if(v.nausea!==null)parts.push(`nausea ${comparisonValue('nausea',v.nausea)}`);
-      if(v.stoolCount!==null)parts.push(`${v.stoolCount} bowel movements${v.stoolScore!==null?`, highest score ${v.stoolScore}`:''}`);
-      if(day.labs.length)parts.push(day.labs.map(l=>`${l.metric} ${l.displayValue||l.value} ${l.unit}`).join(', '));
-      if(day.medications.length)parts.push(day.medications.map(m=>`${medicationName(m.medicationId)} ${m.dose||''} ${m.status}`).join(', '));
-      const context=comparisonEventsForDate(date,day).filter(s=>/food/i.test(s));if(context.length)parts.push(context.join(', '));
-      wrap(`Day ${offset} (${fmtDate(date)}): ${parts.join('; ')||'owner note only'}`,9,false,8);
-    }
+    const inWindow=rows.filter(r=>r.date>=window.start&&r.date<window.endExclusive);
+    const counts=inWindow.flatMap(r=>r.labs).filter(l=>Number.isFinite(Number(l.value)));
+    const lowest=counts.length?counts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
+    const nauseaDays=inWindow.filter(r=>r.values.nausea>0).length,looseDays=inWindow.filter(r=>r.values.looseStool===1).length;
+    heading(`Chemo #${t.number} | ${fmtDate(t.date)} | ${t.doseMg} mg (${t.doseMgM2} mg/m2)`);
+    wrap(`Lowest recorded neutrophils: ${lowest?`${lowest.displayValue||lowest.value} ${lowest.unit} (${fmtDate(lowest.date)}, day +${daysBetween(t.date,lowest.date)})`:'no result in this period'}; nausea noted ${nauseaDays} day(s); loose stool/diarrhea noted ${looseDays} day(s).`,9,false,8);
+    if(t.doseReason)wrap(`Dose note: ${t.doseReason}`,9,false,8);
   }
-  heading('Medication courses and administrations');
+  heading('Medication courses');
   for(const c of state.medicationCourses||[])wrap(`${medicationName(c.medicationId)}: ${fmtDate(c.startDate)} to ${fmtDate(courseRecordedEnd(c))}; ${c.dose||'dose unrecorded'}; ${c.frequency||'frequency unrecorded'}; ${c.status}`,9,false,8);
-  for(const a of state.medicationAdministrations||[])wrap(`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${medicationName(a.medicationId)} ${a.dose||'dose unrecorded'} ${a.status}${a.reason?' - '+a.reason:''}`,9,false,8);
-  heading('Source-backed laboratory results');
-  for(const l of state.labs.filter(l=>['Neutrophils','Hematocrit','Platelets','ALT','ALP'].includes(l.metric)).sort((a,b)=>a.date.localeCompare(b.date)))wrap(`${fmtDate(l.date)}: ${l.metric} ${l.displayValue||l.value} ${l.unit}; ${l.source||'source unrecorded'}`,9,false,8);
-  page();line('Owner daily journal | exact wording kept in the app backup',15,true,0,24);
-  const grouped=new Map();for(const o of [...state.observations].sort((a,b)=>a.date.localeCompare(b.date))){if(!grouped.has(o.date))grouped.set(o.date,[]);grouped.get(o.date).push(o);}
-  for(const [date,entries] of grouped){heading(fmtDate(date));for(const o of entries){line(o.rawEntry?'Original owner journal':'App entry',9,true,8,13);wrap(o.rawEntry||o.notes||'No further note',9,false,8);}}
-  heading('Document index and open record checks');
-  for(const d of documents)wrap(`${d.name} | ${fmtDate(d.date)} | ${d.provider||d.type}`,9,false,8);
-  wrap('Source documents are indexed here but are not attached to this PDF. The complete JSON backup holds uploaded files.');
+  heading('Recent supportive medication');
+  const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>='2026-09-18');
+  for(const id of [...new Set(supportive.map(a=>a.medicationId))]){
+    const events=supportive.filter(a=>a.medicationId===id).sort((a,b)=>a.date.localeCompare(b.date));
+    wrap(`${medicationName(id)}: ${events.map(a=>`${fmtDate(a.date).replace(', 2026','')} ${a.status}${a.dose?' '+a.dose:''}`).join('; ')}`,9,false,8);
+  }
+  heading('Source and record checks');
+  wrap('CBC values come from the loaded clinical record. Symptoms and medication use are owner reported. The complete dated journal, correction history, and uploaded documents are available in the app and complete backup.',9);
   wrap('Record checks: verify the Oct 2 vinblastine invoice lines; reconcile the July 14 Optimum invoice; confirm amoxicillin dose and frequency.');
   const clean=value=>pdfPlain(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
   const objects=['','<< /Type /Catalog /Pages 2 0 R >>','','<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>','<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>'];
