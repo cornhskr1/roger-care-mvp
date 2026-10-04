@@ -299,10 +299,11 @@ async function readCloud(initial=false){
   const {data,error}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
   if(error){cloudAvailable=false;syncMessage='Shared record could not be reached. Local copy is safe on this device.';renderSharedStatus();return;}
   cloudAvailable=true;cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
-  if(!(initial&&unpublishedLocal&&cloudBaseRecord&&
-       (localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record?._savedAt||''))))rememberCloudBase(data.record);
+  const localPending=initial&&unpublishedLocal&&
+    (localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record?._savedAt||''));
+  if(!localPending)rememberCloudBase(data.record);
   if(data.revision>0&&data.record?.profile){
-    if(initial&&unpublishedLocal&&(localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record._savedAt||''))){
+    if(localPending){
       syncMessage='This device has changes waiting to sync.';
     }else{
       const photo=state.profile?.photoDataUrl;
