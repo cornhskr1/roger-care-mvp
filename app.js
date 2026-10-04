@@ -294,7 +294,17 @@ function renderSharedStatus(){
   const readyToPublish=backed&&(cloudRevision!==0||appEntries.length>0);
   controls.innerHTML=ownerCanEdit
     ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'No app journal entry found here. Open the browser holding your entries or import its complete backup.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
-    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. In the Home Screen app, request a new email link below, then press and hold “Sign in” in the email and choose Copy Link. Paste that unused link here without opening it. Your journal stays in this app.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in here</button></form><p class="field-help">The link is used once and is never saved in Roger’s journal. Do not send it in chat.</p>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Sign in on the Home Screen app that holds Roger’s journal. Your phone can fill in the password it saved; Roger Care does not keep that password in the journal.'}</p>${!ownerSession?'<form id="ownerPasswordLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="username" autocapitalize="none" required></label><label class="field"><span>Saved password</span><input type="password" name="password" autocomplete="current-password" required></label><button class="secondary-button" type="submit">Sign in with saved password</button></form><details><summary>Use an email link instead</summary><p class="field-help">A link works only once. Opening or previewing it in Mail or Safari can use it before this app does.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form><p class="field-help">Do not send your password or sign-in link in chat.</p></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+  q('#ownerPasswordLogin')?.addEventListener('submit',async event=>{
+    event.preventDefault();
+    const form=event.currentTarget,email=form.elements.email.value.trim(),password=form.elements.password.value;
+    const {error}=await cloud.auth.signInWithPassword({email,password});
+    form.elements.password.value='';
+    if(error)return toast('Could not sign in. Check the saved email and password, then try once more.',true);
+    const {data:{session}}=await cloud.auth.getSession();
+    ownerSession=session;await checkOwner();renderAll();
+    toast(ownerCanEdit?'Signed in here. Roger’s journal is still on this device.':'Signed in, but owner access is pending.');
+  });
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
@@ -462,7 +472,7 @@ function recordCorrection(collection,id,after){
 
 function bindForms(){
   document.addEventListener('submit',event=>{
-    if(['ownerLogin','ownerLinkPaste'].includes(event.target.id)||ownerCanEdit)return;
+    if(['ownerLogin','ownerLinkPaste','ownerPasswordLogin'].includes(event.target.id)||ownerCanEdit)return;
     event.preventDefault();event.stopImmediatePropagation();
     toast('Only Roger’s owner can change this record. Sign in first.',true);
   },true);
