@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=19">
+  <link rel="manifest" href="manifest.webmanifest?v=20">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=19">
+  <link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -101,6 +101,13 @@
           <div class="overlay-method-note">Treatment association window: from the chemo date through the day before the next chemo. This keeps nadir/recovery labs and home observations attached to the cycle that preceded them.</div>
         </section>
 
+        <section class="card clinical-review-card">
+          <div class="card-head"><div><div class="section-kicker">FOR THE NEXT ONCOLOGY VISIT</div><h2>What followed each treatment?</h2></div></div>
+          <p class="body-copy">Dose and weight, measured counts, what you noticed at home, supportive medication, and the next recorded dose decision. Tap a treatment to review it.</p>
+          <div id="cycleClinicalReview"></div>
+          <p class="field-help">These are dated records, not a recommendation to give, delay, or change treatment. “Lowest measured” depends on when blood was drawn.</p>
+        </section>
+
         <section class="card owner-only">
           <div class="card-head">
             <div>
@@ -136,8 +143,8 @@
         <section class="card journal-trend-card">
           <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Compare Roger’s trends</h2></div></div>
           <div class="compare-metrics">
-            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
-            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
           </div>
           <div class="compare-view" role="group" aria-label="Compare by"><button class="compare-view-button active" type="button" data-compare-view="calendar" aria-pressed="true">Calendar dates</button><button class="compare-view-button" type="button" data-compare-view="aligned" aria-pressed="false">Days after chemo</button></div>
           <div class="compare-range" role="group" aria-label="Date range">
@@ -149,7 +156,7 @@
           <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
           <div id="journalTrend"></div>
           <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
-          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. These patterns show timing, not cause.</p>
+          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. An ALP result reported as &gt;2,000 is plotted at 2,000 as a lower bound. These patterns show timing, not cause.</p>
         </section>
 
         <section class="card">
@@ -427,6 +434,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=19" defer></script>
+  <script src="app.js?v=20" defer></script>
 </body>
 </html>

@@ -64,7 +64,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','upcomingCare','clinicalCourse','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','upcomingCare','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -551,7 +551,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
+  renderProfile(); renderHome(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
 }
 function renderWellbeing(){
   const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
@@ -630,6 +630,30 @@ function renderHome(){
   open.push('Verify the duplicate vinblastine billing lines on the 10/2 K-State invoice.');
   open.push('Reconcile the 7/14 Optimum surgery/dental invoice when received.');
   els.openItems.innerHTML = open.map(x=>`<div class="open-item"><span class="open-dot"></span><div class="item-copy" style="margin:0">${esc(x)}</div></div>`).join('');
+}
+
+function renderClinicalReview(){
+  if(!els.cycleClinicalReview)return;
+  const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),rows=comparisonRows();
+  els.cycleClinicalReview.innerHTML=treatments.slice().reverse().map((t,index)=>{
+    const window=cycleWindowFor(t,treatments),next=treatments.find(x=>x.number===t.number+1);
+    const days=rows.filter(r=>r.date>=window.start&&r.date<window.endExclusive&&r.observations.length);
+    const postCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date>t.date&&l.date<window.endExclusive);
+    const lowest=postCounts.length?postCounts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
+    const preCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date<=t.date&&daysBetween(l.date,t.date)<=2).sort((a,b)=>b.date.localeCompare(a.date));
+    const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,loose=days.filter(r=>r.values.looseStool===1).length;
+    const blood=days.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
+    const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given'&&!['med-prednisone','med-trazodone'].includes(a.medicationId));
+    const medSummary=[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} day(s)`).join('; ');
+    const lowestText=lowest?`${lowest.displayValue||lowest.value} ${lowest.unit} on day +${daysBetween(t.date,lowest.date)} (${fmtDate(lowest.date)})`:'No post-dose count stored';
+    return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
+      <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
+      <div><strong>After dose</strong><span>Lowest measured neutrophils: ${esc(lowestText)}</span></div>
+      <div><strong>Home observations</strong><span>${days.length} day(s) logged · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
+      <div><strong>Supportive medication</strong><span>${esc(medSummary||'No supportive dose logged in this period')}</span></div>
+      <div class="review-wide"><strong>Next recorded decision</strong><span>${next?`${fmtDate(next.date)} · ${esc(next.doseReason||'Reason not recorded')}`:'Next dose is scheduled; no decision recorded yet.'}</span></div>
+    </div></details>`;
+  }).join('');
 }
 
 function compactObservation(o){
@@ -912,7 +936,7 @@ function renderJournal(){
     const sources=entries.map(o=>{
       const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
       const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
-      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
+      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
     }).join('');
     const severity=entries.reduce((a,b)=>symptomSeverity(a)>symptomSeverity(b)?a:b);
     return `<article class="observation-card"><div class="row-between"><div class="item-title">${fmtDate(date)}${entries.length>1?` <small class="journal-source-count">· ${entries.length} notes</small>`:''}</div>${severityChip(severity)}</div>${sources}</article>`;
@@ -934,6 +958,10 @@ const COMPARE_METRICS={
   qol:{label:'Weekly wellbeing',min:0,max:10,ticks:[0,5,10],unit:'/10',kind:'owner'},
   cerenia:{label:'Cerenia doses logged',min:0,ticks:[0,1,2],unit:'',kind:'medication'},
   neutrophils:{label:'Neutrophils',min:0,ticks:[0,5,10,15],unit:' K/µL',kind:'lab'},
+  hematocrit:{label:'Hematocrit',min:0,ticks:[0,15,30,45],unit:'%',kind:'lab'},
+  platelets:{label:'Platelets',min:0,ticks:[0,150,300,450],unit:' K/µL',kind:'lab'},
+  alt:{label:'ALT',min:0,ticks:[0,100,200,400],unit:' U/L',kind:'lab'},
+  alp:{label:'ALP',min:0,ticks:[0,500,1000,2000],unit:' U/L',kind:'lab'},
   weight:{label:'Weight',ticks:[],unit:' lb',kind:'weight'}
 };
 const dateNumber=date=>Date.parse(`${date}T12:00:00Z`)/86400000;
@@ -953,7 +981,7 @@ function comparisonRows(){
   const row=date=>{if(!byDate.has(date))byDate.set(date,{date,observations:[],labs:[],medications:[],treatments:[],qualityOfLife:[]});return byDate.get(date);};
   (state.observations||[]).forEach(o=>row(o.date).observations.push(o));
   (state.qualityOfLife||[]).forEach(o=>row(o.date).qualityOfLife.push(o));
-  (state.labs||[]).filter(l=>l.metric==='Neutrophils').forEach(l=>row(l.date).labs.push(l));
+  (state.labs||[]).forEach(l=>row(l.date).labs.push(l));
   (state.medicationAdministrations||[]).forEach(a=>row(a.date).medications.push(a));
   (state.treatments||[]).forEach(t=>row(t.date).treatments.push(t));
   return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(d=>{
@@ -970,7 +998,8 @@ function comparisonRows(){
     const energy=entries.map(o=>energyLevel(o.energy)).filter(v=>v!==null);
     const rogerThings=entries.map(o=>rogerThingsLevel(o.rogerThings)).filter(v=>v!==null);
     const nausea=entries.map(o=>o.nausea).filter(v=>v!==null&&v!==undefined&&v!=='').map(Number);
-    const lab=d.labs.at(-1),ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
+    const labFor=metric=>{const lab=d.labs.filter(l=>l.metric===metric).at(-1);return lab?Number(lab.value):null;};
+    const ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     const treatmentWeight=d.treatments.map(t=>Number(t.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     return {...d,values:{
       energy:energy.length?Math.min(...energy):null,
@@ -981,7 +1010,8 @@ function comparisonRows(){
       stoolScore:scores.length?Math.max(...scores):null,
       looseStool:/diarrhea/i.test(entries.map(o=>`${o.gi||''} ${o.notes||''}`).join(' '))||scores.some(s=>s>=6)?1:scores.length?0:null,
       cerenia:d.medications.filter(a=>a.medicationId==='med-cerenia'&&a.status==='given').length,
-      neutrophils:lab?Number(lab.value):null,
+      neutrophils:labFor('Neutrophils'),
+      hematocrit:labFor('Hematocrit'),platelets:labFor('Platelets'),alt:labFor('ALT'),alp:labFor('ALP'),
       weight:ownerWeight??treatmentWeight??null
     }};
   });
@@ -1007,12 +1037,14 @@ function comparisonScale(key,rows){
   const m=COMPARE_METRICS[key],values=rows.map(r=>r.values[key]).filter(v=>v!==null&&Number.isFinite(v));
   if(key==='weight'){const min=values.length?Math.floor(Math.min(...values)-1):0,max=values.length?Math.ceil(Math.max(...values)+1):10;return {...m,min,max,ticks:[min,Math.round((min+max)/2),max]};}
   if(m.max!==undefined)return m;
-  const max=Math.max(key==='stoolCount'?6:key==='neutrophils'?15:2,...values);
-  return {...m,max,ticks:key==='stoolCount'?[0,Math.ceil(max/2),max]:key==='neutrophils'?[0,Math.round(max/2),max]:[0,1,max]};
+  const baseline=m.ticks?.at(-1)||2,max=Math.max(baseline,...values);
+  return {...m,max,ticks:max===baseline?m.ticks:[0,Math.round(max/2),max]};
 }
-function comparisonValue(key,value){
+function comparisonValue(key,value,row=null){
   if(value===null||value===undefined||!Number.isFinite(value))return 'Not recorded';
   const metric=COMPARE_METRICS[key];
+  const labName={neutrophils:'Neutrophils',hematocrit:'Hematocrit',platelets:'Platelets',alt:'ALT',alp:'ALP'}[key];
+  if(labName&&row){const lab=row.labs?.filter(l=>l.metric===labName).at(-1);if(lab?.displayValue)return `${lab.displayValue} ${lab.unit} (plotted at ${value})`;}
   return metric.names?.[value]||`${value}${metric.unit}`;
 }
 function comparisonEventsForDate(date,day){
@@ -1028,10 +1060,10 @@ function renderComparisonDetail(){
   const target=q('#compareDayDetail'),date=comparison.selectedDate,day=comparisonRows().find(row=>row.date===date);
   if(!day){target.innerHTML='<p class="empty-state">Tap a date on either track to inspect the recorded values.</p>';return;}
   const a=comparison.primary,b=comparison.secondary;
-  const notes=day.observations.map(o=>`<div class="compare-note"><strong>${o.rawEntry?'Original owner journal':'App entry'}:</strong> ${esc(o.notes||'No further note')}</div>`).join('');
-  const lab=day.labs.at(-1);
+  const notes=day.observations.map(o=>`<div class="compare-note"><strong>${o.rawEntry?'Original owner journal':'App entry'}:</strong> ${esc(o.notes||'No further note')}${o.recordClarification?`<br><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}`:''}</div>`).join('');
+  const labs=day.labs.map(l=>`<div class="compare-note">${esc(l.metric)}: ${esc(l.displayValue||l.value)} ${esc(l.unit)} · ${esc(l.source)}</div>`).join('');
   const events=comparisonEventsForDate(date,day);
-  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a]))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b]))}</strong></span>`:''}</div>${notes}${day.qualityOfLife.map(x=>`<div class="compare-note">Weekly wellbeing: ${x.score}/10${x.notes?' · '+esc(x.notes):''} · owner check-in</div>`).join('')}${lab?`<div class="compare-note">CBC: ${esc(lab.displayValue||lab.value)} ${esc(lab.unit)} · ${esc(lab.source)}</div>`:''}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}${events.length?`<div class="compare-note"><strong>Other events:</strong> ${esc(events.join(' · '))}</div>`:''}`;
+  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a],day))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b],day))}</strong></span>`:''}</div>${notes}${day.qualityOfLife.map(x=>`<div class="compare-note">Weekly wellbeing: ${x.score}/10${x.notes?' · '+esc(x.notes):''} · owner check-in</div>`).join('')}${labs}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}${events.length?`<div class="compare-note"><strong>Other events:</strong> ${esc(events.join(' · '))}</div>`:''}`;
 }
 function renderJournalTrend(){
   if(!els.journalTrend)return;
@@ -1065,12 +1097,12 @@ function renderJournalTrend(){
     let previous=null;
     for(const row of visible){const value=row.values[key];if(value===null||!Number.isFinite(value)){flush();previous=null;continue;}if(previous&&dateNumber(row.date)-dateNumber(previous)>1)flush();segment.push(`${x(row.date)},${y(value)}`);previous=row.date;}
     flush();
-    for(const row of visible){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;svg+=`<circle cx="${x(row.date)}" cy="${y(value)}" r="4.5" fill="${color}" stroke="#fff" stroke-width="1.5"><title>${esc(fmtDate(row.date))} · ${esc(metric.label)}: ${esc(comparisonValue(key,value))}</title></circle>`;}
+    for(const row of visible){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;svg+=`<circle cx="${x(row.date)}" cy="${y(value)}" r="4.5" fill="${color}" stroke="#fff" stroke-width="1.5"><title>${esc(fmtDate(row.date))} · ${esc(metric.label)}: ${esc(comparisonValue(key,value,row))}</title></circle>`;}
   });
   const tickStep=Math.max(1,Math.ceil(span/8));
   for(let offset=0;offset<=span;offset+=tickStep){const date=addDays(range.from,offset);svg+=`<text x="${x(date)}" y="${H-12}" text-anchor="middle" font-size="11" fill="#707181">${date.slice(5).replace('-','/')}</text>`;}
   if(span%tickStep)svg+=`<text x="${x(range.to)}" y="${H-12}" text-anchor="end" font-size="11" fill="#707181">${range.to.slice(5).replace('-','/')}</text>`;
-  for(const row of visible){const values=keys.map(key=>`${COMPARE_METRICS[key].label}: ${comparisonValue(key,row.values[key])}`).join(' · ');svg+=`<rect x="${x(row.date)-7}" y="40" width="14" height="${H-73}" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(fmtDate(row.date))}: ${esc(values)}"><title>${esc(fmtDate(row.date))} · ${esc(values)}. Tap for source notes.</title></rect>`;}
+  for(const row of visible){const values=keys.map(key=>`${COMPARE_METRICS[key].label}: ${comparisonValue(key,row.values[key],row)}`).join(' · ');svg+=`<rect x="${x(row.date)-7}" y="40" width="14" height="${H-73}" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(fmtDate(row.date))}: ${esc(values)}"><title>${esc(fmtDate(row.date))} · ${esc(values)}. Tap for source notes.</title></rect>`;}
   const label=keys.map(key=>COMPARE_METRICS[key].label).join(' and ');
   els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span></div>`;
   if(!visible.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=visible.at(-1).date;
@@ -1096,7 +1128,7 @@ function renderAlignedComparison(treatments){
   }
   plotted.forEach(({t,days},i)=>days.forEach(({offset,row})=>{
     const cx=x(offset),color=colors[i%colors.length];
-    if(row.labs.length)svg+=`<circle cx="${cx}" cy="28" r="4" fill="#b44f5c"><title>Cycle #${t.number}, day ${offset}: CBC on ${esc(fmtDate(row.date))}</title></circle>`;
+    if(row.labs.some(l=>l.metric==='Neutrophils'))svg+=`<circle cx="${cx}" cy="28" r="4" fill="#b44f5c"><title>Cycle #${t.number}, day ${offset}: CBC on ${esc(fmtDate(row.date))}</title></circle>`;
     const events=comparisonEventsForDate(row.date,row);
     if(events.length)svg+=`<rect x="${cx-3}" y="42" width="6" height="6" fill="${color}"><title>Cycle #${t.number}, day ${offset}: ${esc(events.join('; '))}</title></rect>`;
   }));
@@ -1110,7 +1142,7 @@ function renderAlignedComparison(treatments){
       const flush=()=>{if(segment.length>1)svg+=`<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`;segment=[];};
       for(const {offset,row} of days){const value=row.values[key];if(value===null||!Number.isFinite(value)){flush();last=null;continue;}if(last!==null&&offset-last>1)flush();segment.push(`${x(offset)},${y(value)}`);last=offset;}
       flush();
-      for(const {offset,row} of days){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;const title=`Cycle #${t.number} · day ${offset} · ${fmtDate(row.date)} · ${metric.label}: ${comparisonValue(key,value)}`;svg+=`<circle cx="${x(offset)}" cy="${y(value)}" r="5" fill="${color}" stroke="white" stroke-width="1.5"><title>${esc(title)}</title></circle><circle cx="${x(offset)}" cy="${y(value)}" r="12" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(title)}"><title>${esc(title)}. Tap for source notes.</title></circle>`;}
+      for(const {offset,row} of days){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;const title=`Cycle #${t.number} · day ${offset} · ${fmtDate(row.date)} · ${metric.label}: ${comparisonValue(key,value,row)}`;svg+=`<circle cx="${x(offset)}" cy="${y(value)}" r="5" fill="${color}" stroke="white" stroke-width="1.5"><title>${esc(title)}</title></circle><circle cx="${x(offset)}" cy="${y(value)}" r="12" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(title)}"><title>${esc(title)}. Tap for source notes.</title></circle>`;}
     });
   });
   const legend=chosen.map((t,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>Chemo #${t.number} · ${fmtDate(t.date).replace(', 2026','')}</span>`).join('');
@@ -1442,7 +1474,7 @@ function buildCareSummaryPdf(){
   for(const t of treatments){
     const window=cycleWindowFor(t,treatments);
     const inWindow=rows.filter(r=>r.date>=window.start&&r.date<window.endExclusive);
-    const counts=inWindow.flatMap(r=>r.labs).filter(l=>Number.isFinite(Number(l.value)));
+    const counts=inWindow.flatMap(r=>r.labs).filter(l=>l.metric==='Neutrophils'&&Number.isFinite(Number(l.value)));
     const lowest=counts.length?counts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
     const nauseaDays=inWindow.filter(r=>r.values.nausea>0).length,looseDays=inWindow.filter(r=>r.values.looseStool===1).length;
     heading(`Chemo #${t.number} | ${fmtDate(t.date)} | ${t.doseMg} mg (${t.doseMgM2} mg/m2)`);

@@ -56,6 +56,8 @@ The journal comparison chart shows any one or two measures on separate labeled s
 
 The journal now groups notes from the same date into one day card, with every source note and its own correction control retained. Matching scored bowel movements from an imported journal entry and an app entry count once in the comparison; distinct movements remain separate. The comparison can align selected treatment cycles by day after chemotherapy, with CBC and medication/food markers, and now includes Roger things and optional weekly wellbeing scores. Gaps mean no value was recorded. The vet handoff downloads as a short PDF for phone sharing, with a visit snapshot and compact treatment history. The complete JSON backup remains the authoritative copy of original wording, corrections, and uploaded documents.
 
+The Home clinical review puts the recorded dose and weight, nearby pre-dose neutrophils, lowest measured post-dose count, owner symptom mentions, supportive medication days, and the next documented dose reason in one treatment-period card. It describes timing and provenance, not a dosing recommendation or causal inference. Journal comparisons also offer hematocrit, platelets, ALT, and ALP from the stored lab series. The 10/1 ALP value is reported as >2,000 U/L and plotted at 2,000 only as a lower bound. The owner confirmed that the 8/27 neutrophil result is 14.43 K/µL; the imported original journal text with 14,310 remains verbatim and displays a clarification beside it.
+
 ## Next technical milestones
 
 1. Secure authentication and encrypted cloud sync

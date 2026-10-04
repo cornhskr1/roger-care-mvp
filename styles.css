@@ -146,6 +146,20 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .treatment-window-button small{display:block;font-size:8px;font-weight:750;opacity:.75;margin-top:1px}
 .treatment-window-details{display:grid;gap:8px;margin-top:9px}
 .cycle-summary{border:1px solid var(--line);border-radius:14px;padding:11px;background:#fff}
+.clinical-review-cycle{border:1px solid var(--line);border-radius:13px;background:#fff;margin:9px 0;overflow:hidden}
+.clinical-review-cycle summary{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;cursor:pointer;list-style:none}
+.clinical-review-cycle summary::-webkit-details-marker{display:none}
+.clinical-review-cycle summary strong,.clinical-review-cycle summary small{display:block}
+.clinical-review-cycle summary small{color:var(--muted);margin-top:3px}
+.review-cue{color:var(--owner);font-size:12px;font-weight:800}
+.clinical-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;border-top:1px solid var(--line);padding:13px}
+.clinical-review-grid>div{border-radius:10px;background:#f5f7fa;padding:10px;min-width:0}
+.clinical-review-grid strong,.clinical-review-grid span{display:block}
+.clinical-review-grid strong{font-size:12px;margin-bottom:4px;color:var(--owner)}
+.clinical-review-grid span{font-size:13px;line-height:1.4}
+.clinical-review-grid .review-wide{grid-column:1/-1}
+.record-clarification{margin:8px 0;padding:9px 11px;border-radius:9px;background:#f0f6f8;color:#34546b;font-size:13px;line-height:1.4}
+@media(max-width:520px){.clinical-review-grid{grid-template-columns:1fr}.clinical-review-grid .review-wide{grid-column:auto}}
 .cycle-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}
 .cycle-kpi{background:var(--green-soft);border-radius:10px;padding:8px;min-width:0}
 .cycle-kpi-label{font-size:8px;font-weight:850;letter-spacing:.06em;color:var(--muted)}
