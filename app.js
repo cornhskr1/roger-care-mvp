@@ -10,6 +10,7 @@ const SUPABASE_KEY = 'sb_publishable_r-j23v_ip3FsemJ8JNtoog_79reT8ur';
 const SITE_URL = 'https://cornhskr1.github.io/roger-care-mvp/';
 let cloud = null, cloudRevision = null, cloudUpdatedAt = null, cloudAvailable = false;
 let ownerSession = null, ownerCanEdit = false, unpublishedLocal = false, cloudBusy = false;
+let ownerPairCode = null;
 let manualPublishRequired = false;
 let syncMessage = '';
 const DEFAULT_VISITS = [
@@ -293,8 +294,31 @@ function renderSharedStatus(){
   const appEntries=state.observations.filter(row=>row.source==='owner_observation'&&!row.rawEntry);
   const readyToPublish=backed&&(cloudRevision!==0||appEntries.length>0);
   controls.innerHTML=ownerCanEdit
-    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'Import the complete backup from the Home Screen app here, then back up this copy before publishing.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
-    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Roger’s entries are still in this Home Screen app. To share them now, download a complete backup here. In the browser window that says “Signed in as owner,” import that backup, make a fresh backup there, and publish. Continue new entries in that browser afterward.'}</p>${!ownerSession?'<details><summary>Use an email link to sign in here</summary><p class="field-help">An email link works only once. Opening or previewing it in Mail or Safari can use it before this app does.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form><p class="field-help">Do not send sign-in information in chat.</p></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'Your app journal entry is in the Home Screen app. Connect that app below and publish from there.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="createOwnerPair" class="secondary-button" type="button">Connect Home Screen app</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for Home Screen app</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Now open the Home Screen app, paste under Owner sign-in, and tap Connect. Do not send this sign-in in chat.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
+    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Connect this Home Screen app once using the browser window that already says “Signed in as owner.” After that, save journal entries here and they will update the shared record.'}</p>${!ownerSession?'<form id="ownerPairPaste"><label class="field"><span>Paste sign-in copied from the browser</span><input type="password" name="code" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Connect this app</button></form><details><summary>Use an email link instead</summary><p class="field-help">An email link works only once. Opening or previewing it in Mail or Safari can use it before this app does.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form><p class="field-help">Do not send sign-in information in chat.</p></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+  if(ownerPairCode&&q('#ownerPairCode'))q('#ownerPairCode').value=ownerPairCode;
+  q('#createOwnerPair')?.addEventListener('click',async event=>{
+    const button=event.currentTarget;button.disabled=true;
+    const {data,error}=await cloud.functions.invoke('roger-pair',{body:{}});
+    button.disabled=false;
+    if(error||data?.kind!=='roger-owner-pair-v1'||!data.token_hash)return toast('Could not create a sign-in. Check the owner session in this browser.',true);
+    ownerPairCode=JSON.stringify(data);renderSharedStatus();toast('One-time sign-in ready. Tap Copy sign-in.');
+  });
+  q('#copyOwnerPair')?.addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText(ownerPairCode);toast('Copied. Paste it in the Home Screen app.');}
+    catch(_){toast('Could not copy. Press and hold the sign-in field and choose Copy.',true);}
+  });
+  q('#ownerPairPaste')?.addEventListener('submit',async event=>{
+    event.preventDefault();const input=event.currentTarget.elements.code;
+    let payload;try{payload=JSON.parse(input.value);}catch(_){}
+    input.value='';
+    if(payload?.kind!=='roger-owner-pair-v1'||!payload.token_hash||payload.type!=='magiclink')return toast('Paste the one-time sign-in copied from Roger Care in the browser.',true);
+    const {error}=await cloud.auth.verifyOtp({token_hash:payload.token_hash,type:payload.type});
+    if(error)return toast('That sign-in has already been used or expired. Create a new one in the signed-in browser.',true);
+    const {data:{session}}=await cloud.auth.getSession();ownerSession=session;await checkOwner();renderAll();
+    try{await navigator.clipboard.writeText('');}catch(_){}
+    toast(ownerCanEdit?'Connected. Your journal is still here. Back up, then publish it once.':'Signed in, but owner access is pending.');
+  });
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
@@ -462,7 +486,7 @@ function recordCorrection(collection,id,after){
 
 function bindForms(){
   document.addEventListener('submit',event=>{
-    if(['ownerLogin','ownerLinkPaste'].includes(event.target.id)||ownerCanEdit)return;
+    if(['ownerLogin','ownerLinkPaste','ownerPairPaste'].includes(event.target.id)||ownerCanEdit)return;
     event.preventDefault();event.stopImmediatePropagation();
     toast('Only Roger’s owner can change this record. Sign in first.',true);
   },true);
