@@ -286,6 +286,11 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .backup-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0;padding:12px 14px;border:1px solid #e3d6aa;border-radius:14px;background:#fff9e9;font-size:13px;line-height:1.35}
 .backup-banner strong{color:#654d16}.backup-banner span{flex:1;min-width:180px;color:var(--muted)}
 .backup-banner button{border:1px solid #b89c59;background:#fff;border-radius:10px;padding:9px 12px;min-height:40px;color:#654d16;font-weight:800;cursor:pointer}
+.shared-status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;margin:10px 0;border:1px solid #d9cdea;border-radius:13px;background:#f8f3fc;color:var(--ink);font-size:13px;line-height:1.4}
+.shared-status strong{color:var(--ksu)}.shared-status span{flex:1;min-width:180px}.shared-status small{color:var(--muted)}
+.shared-controls{padding:13px;margin:12px 0;border:1px solid var(--line);border-radius:13px;background:#faf9fc;font-size:14px;line-height:1.5}
+.shared-controls p{margin:5px 0 10px;color:var(--muted)}.shared-controls form{display:grid;gap:10px}.shared-controls .field{max-width:420px}
+.shared-controls button:disabled,[data-edit-observation]:disabled,[data-edit-medication]:disabled,[data-edit-cost]:disabled{opacity:.5;cursor:not-allowed}
 .backup-status{padding:12px 14px;margin:12px 0;border-radius:13px;background:#fff9e9;border:1px solid #e3d6aa;font-size:14px;line-height:1.5}
 .backup-status p{margin:5px 0 0;color:var(--muted)}
 .journal-trend-scroll{overflow-x:auto;max-width:100%;margin-top:12px;scrollbar-color:var(--line) transparent}

@@ -5,6 +5,13 @@ const DOC_DB = 'rogerCareDocuments_v1';
 const DOC_STORE = 'documents';
 const RECOVERY_STORE = 'recoverySnapshots';
 const BACKUP_META_KEY = 'rogerCareBackupStatus_v1';
+const SUPABASE_URL = 'https://gkotvodoqwdhmdeigrra.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_r-j23v_ip3FsemJ8JNtoog_79reT8ur';
+const SITE_URL = 'https://cornhskr1.github.io/roger-care-mvp/';
+let cloud = null, cloudRevision = null, cloudUpdatedAt = null, cloudAvailable = false;
+let ownerSession = null, ownerCanEdit = false, unpublishedLocal = false, cloudBusy = false;
+let manualPublishRequired = false;
+let syncMessage = '';
 const DEFAULT_VISITS = [
   {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
@@ -55,6 +62,7 @@ async function boot(){
   bindOverlayControls();
   bindRefreshControl();
   await loadState();
+  await connectCloud();
   await loadDocuments();
   renderAll();
   if(recoveredFromSnapshot)toast('Recovered Roger’s entries from a local recovery copy. Download a complete backup now.');
@@ -85,6 +93,8 @@ async function loadState(){
 
   state = saved ? mergeCanonicalSeed(canonical, saved) : canonical;
   state = migrateState(state);
+  unpublishedLocal=Boolean(saved?._savedAt);
+  manualPublishRequired=unpublishedLocal;
   await persist(false);
 }
 
@@ -187,8 +197,109 @@ async function persist(changed=true){
   return {local,snapshot};
 }
 async function saveChanges(){
-  try{await persist();return true;}
+  try{
+    if(!ownerCanEdit){toast('Sign in as the owner before editing the shared record.',true);return false;}
+    await persist();
+    unpublishedLocal=true;
+    if(manualPublishRequired||cloudRevision===0||readBackupMeta().confirmedStateAt!==state._savedAt&&cloudRevision===null){
+      syncMessage='Saved on this device. Back up and publish to share it.';
+      renderSharedStatus();return true;
+    }
+    const ok=await publishCloud(false);
+    if(!ok)toast('Saved on this device. The shared copy is still waiting.',true);
+    renderSharedStatus();
+    return true;
+  }
   catch(_){toast('Could not save on this device. Keep this screen open and export a backup.',true);return false;}
+}
+
+async function connectCloud(){
+  if(!globalThis.supabase?.createClient){syncMessage='Shared record unavailable. This device still has its local copy.';return;}
+  cloud=globalThis.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
+  const {data:{session}}=await cloud.auth.getSession();
+  ownerSession=session;
+  cloud.auth.onAuthStateChange((_event,next)=>{ownerSession=next;setTimeout(async()=>{await checkOwner();renderSharedStatus();},0);});
+  await readCloud(true);
+  await checkOwner();
+  window.addEventListener('focus',()=>{if(!unpublishedLocal)readCloud(false).then(()=>renderAll());});
+  setInterval(()=>{if(!document.hidden&&!unpublishedLocal)readCloud(false).then(()=>renderAll());},60000);
+}
+async function checkOwner(){
+  ownerCanEdit=false;
+  if(cloud&&ownerSession){
+    const {data,error}=await cloud.rpc('roger_can_edit');
+    ownerCanEdit=!error&&data===true;
+  }
+  renderSharedStatus();
+}
+function cloudRecord(){
+  const copy=structuredClone(state);
+  if(copy.profile)delete copy.profile.photoDataUrl;
+  return copy;
+}
+async function readCloud(initial=false){
+  if(!cloud||cloudBusy||unpublishedLocal&&!initial)return;
+  const {data,error}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
+  if(error){cloudAvailable=false;syncMessage='Shared record could not be reached. Local copy is safe on this device.';renderSharedStatus();return;}
+  cloudAvailable=true;cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
+  if(data.revision>0&&data.record?.profile){
+    if(initial&&unpublishedLocal&&String(state._savedAt||'')>String(data.record._savedAt||'')){
+      syncMessage='This device has newer local changes. Back up and review before publishing.';
+    }else{
+      const photo=state.profile?.photoDataUrl;
+      state=migrateState(data.record);
+      if(photo)state.profile.photoDataUrl=photo;
+      unpublishedLocal=false;
+      manualPublishRequired=false;
+      await persist(false);
+      syncMessage='Shared record current.';
+    }
+  }else syncMessage=unpublishedLocal?'This device has entries waiting for their first upload.':'Shared record has not been published yet.';
+  renderSharedStatus();
+}
+async function publishCloud(firstUpload){
+  if(!cloud||!ownerCanEdit||cloudRevision===null){syncMessage='Not uploaded. Check the connection and sign-in.';renderSharedStatus();return false;}
+  if(cloudBusy)return false;
+  cloudBusy=true;
+  try{
+    const {data,error}=await cloud.from('roger_shared_record')
+      .update({record:cloudRecord(),revision:cloudRevision+1})
+      .eq('id','roger').eq('revision',cloudRevision)
+      .select('revision,updated_at').maybeSingle();
+    if(error||!data){
+      syncMessage='Not uploaded. Another version may be online. Keep this device open and download a backup before resolving it.';
+      toast(syncMessage,true);return false;
+    }
+    cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
+    unpublishedLocal=false;syncMessage='Saved to shared record.';
+    manualPublishRequired=false;
+    if(firstUpload)toast('Roger’s record is now shared. Your device copy remains.');
+    return true;
+  }finally{cloudBusy=false;renderSharedStatus();}
+}
+function renderSharedStatus(){
+  const status=q('#sharedStatus'),controls=q('#sharedControls');if(!status||!controls||!state)return;
+  const label=!cloudAvailable?'On this device':unpublishedLocal?'Not yet shared':cloudRevision>0?'Shared and current':'Ready for first upload';
+  status.innerHTML=`<strong>${esc(label)}</strong><span>${esc(syncMessage||'Checking shared record…')}</span>${cloudUpdatedAt&&cloudRevision>0&&!unpublishedLocal?`<small>Online update: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
+  const backed=readBackupMeta().confirmedStateAt===state._savedAt;
+  controls.innerHTML=ownerCanEdit
+    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<button id="publishLocal" class="primary-button" type="button" ${!backed?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${backed?'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.':'Download and confirm a fresh complete backup above before publishing.'}</p>`:''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
+    : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Only the owner can change the shared record. Anyone with the link can view published entries.'}</p>${!ownerSession?'<form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+  q('#ownerLogin')?.addEventListener('submit',async event=>{
+    event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
+    const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
+    toast(error?'Sign-in email could not be sent. Try again.':'Check your email for the Roger Care sign-in link.',Boolean(error));
+  });
+  q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
+  q('#publishLocal')?.addEventListener('click',async()=>{
+    if(readBackupMeta().confirmedStateAt!==state._savedAt)return toast('Confirm a fresh backup first.',true);
+    if(cloudRevision>0&&!window.confirm('Publish this device’s local record over the currently shared version? Keep your backup for comparison.'))return;
+    const ok=await publishCloud(true);if(ok)renderAll();
+  });
+  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#wellbeingForm button[type=submit]']){
+    const node=q(selector);if(node)node.disabled=!ownerCanEdit;
+  }
+  qa('[data-edit-observation],[data-edit-medication],[data-edit-cost]').forEach(node=>node.disabled=!ownerCanEdit);
 }
 
 function bindNav(){
@@ -325,6 +436,11 @@ function recordCorrection(collection,id,after){
 }
 
 function bindForms(){
+  document.addEventListener('submit',event=>{
+    if(event.target.id==='ownerLogin'||ownerCanEdit)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    toast('Only Roger’s owner can change this record. Sign in first.',true);
+  },true);
   q('#wellbeingForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget),date=String(fd.get('date')||''),score=Number(fd.get('score'));
     if(!date||!Number.isInteger(score)||score<0||score>10)return toast('Choose a date and a score from 0 to 10',true);
@@ -564,7 +680,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
+  renderProfile(); renderHome(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
 }
 function renderWellbeing(){
   const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
@@ -1455,7 +1571,7 @@ function bindExports(){
       }):null;
       if(!window.confirm(`Restore this backup? It will replace the app's current entries${hasDocuments?' and uploaded documents':''} on this device.`))return;
       if(restored)await replaceDocuments(restored);
-      state=migrateState(incoming);await persist();await loadDocuments();renderAll();
+      state=migrateState(incoming);await persist();unpublishedLocal=true;manualPublishRequired=true;syncMessage='Backup restored on this device. Confirm a fresh backup before publishing.';await loadDocuments();renderAll();
       toast(hasDocuments?'Complete backup restored':'Older backup restored; existing device documents kept');
     }catch(_){toast('That backup could not be imported',true);}
     finally{event.target.value='';}

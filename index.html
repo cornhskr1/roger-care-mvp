@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=24">
+  <link rel="manifest" href="manifest.webmanifest?v=25">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=24">
+  <link rel="stylesheet" href="styles.css?v=25">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -38,6 +38,7 @@
       <section id="view-home" class="view active" data-view="home">
         <div id="statusHero" class="status-hero"></div>
         <div id="metricStrip" class="metric-strip"></div>
+        <section id="sharedStatus" class="shared-status" aria-live="polite"></section>
         <section id="homeBackupStatus" class="backup-banner" aria-live="polite"></section>
 
         <section class="card quick-log-card">
@@ -308,6 +309,7 @@
             </div>
           </div>
           <div id="backupStatus" class="backup-status" aria-live="polite"></div>
+          <section id="sharedControls" class="shared-controls" aria-live="polite"></section>
           <div class="button-stack">
             <button id="exportBackup" class="primary-button" type="button">Download complete backup</button>
             <button id="confirmBackupSaved" class="secondary-button" type="button" hidden>I saved a copy outside this device</button>
@@ -440,6 +442,7 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=24" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
+  <script src="app.js?v=25" defer></script>
 </body>
 </html>
