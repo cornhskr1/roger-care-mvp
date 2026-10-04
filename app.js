@@ -3,6 +3,8 @@
 const STORAGE_KEY = 'rogerCareState_v1';
 const DOC_DB = 'rogerCareDocuments_v1';
 const DOC_STORE = 'documents';
+const RECOVERY_STORE = 'recoverySnapshots';
+const BACKUP_META_KEY = 'rogerCareBackupStatus_v1';
 const DEFAULT_VISITS = [
   {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
@@ -21,6 +23,9 @@ let selectedTreatmentWindow = 'all';
 const comparison={primary:'energy',secondary:'nausea',range:'all',cycles:new Set(),from:'2026-08-14',to:'2026-10-03',selectedDate:null};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
+let recoveredFromSnapshot = false;
+let backupPreparedAt = null;
+let backupPreparedStateAt = null;
 
 const q = sel => document.querySelector(sel);
 const qa = sel => [...document.querySelectorAll(sel)];
@@ -52,6 +57,7 @@ async function boot(){
   await loadState();
   await loadDocuments();
   renderAll();
+  if(recoveredFromSnapshot)toast('Recovered Roger’s entries from a local recovery copy. Download a complete backup now.');
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js', {updateViaCache:'none'}).catch(() => {});
   }
@@ -66,14 +72,20 @@ async function loadState(){
   const canonical = await response.json();
 
   let saved = null;
-  const raw = localStorage.getItem(STORAGE_KEY);
+  let raw = null;
+  try{raw=localStorage.getItem(STORAGE_KEY);}catch(_){}
   if (raw) {
     try { saved = JSON.parse(raw); } catch (_) {}
+  }
+  const snapshot=await latestRecoverySnapshot();
+  if(snapshot?.state?.profile&&(!saved?.profile||snapshot.savedAt>String(saved._savedAt||''))){
+    saved=snapshot.state;
+    recoveredFromSnapshot=true;
   }
 
   state = saved ? mergeCanonicalSeed(canonical, saved) : canonical;
   state = migrateState(state);
-  persist();
+  await persist(false);
 }
 
 function mergeCanonicalSeed(canonical, saved){
@@ -111,6 +123,7 @@ function mergeCanonicalSeed(canonical, saved){
     })
   };
   merged.recordCorrections = migratedSaved.recordCorrections||[];
+  merged._savedAt = migratedSaved._savedAt||null;
   for (const correction of merged.recordCorrections){
     const rows=merged[correction.collection];
     if(!['observations','medicationAdministrations','costs'].includes(correction.collection)||!Array.isArray(rows))continue;
@@ -161,8 +174,19 @@ function migrateState(input){
   return next;
 }
 
-function persist(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+async function persist(changed=true){
+  if(changed)state._savedAt=new Date().toISOString();
+  if(changed){backupPreparedAt=null;backupPreparedStateAt=null;}
+  let local=false,snapshot=false;
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));local=true;}catch(_){}
+  if(changed)try{await saveRecoverySnapshot(state);snapshot=true;}catch(_){}
+  if(changed&&!local&&!snapshot)throw new Error('No local storage available');
+  if(changed)renderBackupStatus();
+  return {local,snapshot};
+}
+async function saveChanges(){
+  try{await persist();return true;}
+  catch(_){toast('Could not save on this device. Keep this screen open and export a backup.',true);return false;}
 }
 
 function bindNav(){
@@ -287,7 +311,7 @@ function recordCorrection(collection,id,after){
 }
 
 function bindForms(){
-  q('#journalForm').addEventListener('submit', event => {
+  q('#journalForm').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const stoolEvents=collectStoolRows();
@@ -305,10 +329,10 @@ function bindForms(){
     else state.observations.push(obs);
     state.observations.sort((a,b)=>a.date.localeCompare(b.date));
     if(!state.journalCoverageThrough||obs.date>state.journalCoverageThrough)state.journalCoverageThrough=obs.date;
-    persist(); renderAll(); els.journalDialog.close(); toast(editId?'Observation corrected':'Observation saved');
+    if(!await saveChanges())return; renderAll(); els.journalDialog.close(); toast(editId?'Observation corrected':'Observation saved');
   });
 
-  q('#costForm').addEventListener('submit', event => {
+  q('#costForm').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const isMedication=fd.get('category')==='medication';
@@ -333,10 +357,10 @@ function bindForms(){
       source:String(fd.get('provider'))+' · '+String(fd.get('label'))
     });
     state.costs.sort((a,b)=>a.date.localeCompare(b.date));
-    persist(); renderAll(); els.costDialog.close(); event.currentTarget.reset(); toast('Cost saved');
+    if(!await saveChanges())return; renderAll(); els.costDialog.close(); event.currentTarget.reset(); toast('Cost saved');
   });
 
-  q('#medicationForm').addEventListener('submit', event => {
+  q('#medicationForm').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const editId=String(fd.get('editId')||'');
@@ -358,26 +382,26 @@ function bindForms(){
       const course=state.medicationCourses.find(c=>c.medicationId==='med-prednisone'&&!c.endDate);
       if(course?.confirmedThrough&&administration.date===addDays(course.confirmedThrough,1))course.confirmedThrough=administration.date;
     }
-    persist(); renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast(editId?'Medication record corrected':'Medication administration saved');
+    if(!await saveChanges())return; renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast(editId?'Medication record corrected':'Medication administration saved');
   });
 
-  q('#carePlanForm').addEventListener('submit',event=>{
+  q('#carePlanForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const instructions=String(fd.get('vetCallInstructions')||'').trim(),source=String(fd.get('vetCallSource')||'').trim();
     if(instructions&&!source)return toast('Add the vet instruction source or date',true);
     state.carePlan.visits.forEach(v=>{const date=String(fd.get(v.id)||'')||null;if(date!==v.date){v.date=date;v.source=date?'Owner-entered appointment update':'Owner marked date TBD';}});
     state.carePlan.vetCallInstructions=instructions;
     state.carePlan.vetCallSource=source;
-    persist();renderUpcomingCare();toast('Care plan saved');
+    if(!await saveChanges())return;renderUpcomingCare();toast('Care plan saved');
   });
 
-  q('#costCorrectionForm').addEventListener('submit',event=>{
+  q('#costCorrectionForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget),id=String(fd.get('editId')||'');
     const amount=Number(fd.get('amountPaid'));
     const allocated=state.medicationPurchases.filter(p=>p.costId===id).reduce((n,p)=>n+Number(p.amountPaid||0),0);
     if(!Number.isFinite(amount)||amount<allocated-.005)return toast(`Amount cannot be below allocated medication purchases (${money(allocated)})`,true);
     if(!recordCorrection('costs',id,{date:fd.get('date'),amountPaid:amount,provider:String(fd.get('provider')||'').trim(),label:String(fd.get('label')||'').trim()}))return toast('Cost no longer found',true);
-    persist();renderAll();q('#costCorrectionDialog').close();toast('Cost corrected');
+    if(!await saveChanges())return;renderAll();q('#costCorrectionDialog').close();toast('Cost corrected');
   });
 
   q('#documentForm').addEventListener('submit', async event => {
@@ -391,7 +415,9 @@ function bindForms(){
         mime:file.type || 'application/octet-stream', size:file.size, createdAt:new Date().toISOString()
       });
       event.currentTarget.reset(); q('#documentDate').value = todayIso();
-      await loadDocuments(); renderDocuments(); toast('Document saved on this device');
+      await loadDocuments(); renderDocuments();
+      try{await persist();toast('Document saved on this device');}
+      catch(_){toast('Document saved, but backup status could not update. Export a complete backup now.',true);}
     } catch (err) { toast('Could not save document on this device', true); }
   });
 }
@@ -466,7 +492,7 @@ function bindProfilePhoto(){
     const file = event.target.files[0]; if (!file) return;
     try {
       const dataUrl = await compressImage(file, 720, 0.82);
-      state.profile.photoDataUrl = dataUrl; persist(); renderProfile(); toast('Profile photo updated');
+      state.profile.photoDataUrl = dataUrl; if(!await saveChanges())return; renderProfile(); toast('Profile photo updated');
     } catch (_) { toast('Could not use that photo', true); }
   });
 }
@@ -515,7 +541,19 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments();
+  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
+}
+
+function readBackupMeta(){try{return JSON.parse(localStorage.getItem(BACKUP_META_KEY)||'{}')}catch(_){return {}}}
+function renderBackupStatus(){
+  if(!state)return;
+  const meta=readBackupMeta(),current=Boolean(meta.confirmedStateAt&&meta.confirmedStateAt===state._savedAt);
+  const last=meta.confirmedAt?new Date(meta.confirmedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'No off-device copy confirmed';
+  const message=current?`Backup confirmed ${last}. Keep the dated file outside this device.`:`${last}. Changes on this device need a new backup.`;
+  const home=q('#homeBackupStatus'),more=q('#backupStatus');
+  if(home)home.innerHTML=`<strong>${current?'Backup up to date':'Backup needed'}</strong><span>${esc(message)}</span><button type="button" data-open-backup>${current?'View backup':'Back up now'}</button>`;
+  if(more)more.innerHTML=`<strong>${current?'Backup up to date':'Backup needed'}</strong><p>${esc(message)}</p>${recoveredFromSnapshot?'<p>Local recovery copy was used at startup. Export a complete file now.</p>':''}`;
+  q('#confirmBackupSaved').hidden=!backupPreparedAt;
 }
 
 function renderUpcomingCare(){
@@ -1168,9 +1206,28 @@ function renderProfileDetails(){
 let documents=[];
 function openDocDb(){
   return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DOC_DB,1);
-    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(DOC_STORE))db.createObjectStore(DOC_STORE,{keyPath:'id'});};
+    const req=indexedDB.open(DOC_DB,2);
+    req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(DOC_STORE))db.createObjectStore(DOC_STORE,{keyPath:'id'});if(!db.objectStoreNames.contains(RECOVERY_STORE))db.createObjectStore(RECOVERY_STORE,{keyPath:'id'});};
     req.onsuccess=()=>resolve(req.result); req.onerror=()=>reject(req.error);
+  });
+}
+async function latestRecoverySnapshot(){
+  try{
+    const db=await openDocDb();
+    return await new Promise((resolve,reject)=>{
+      const tx=db.transaction(RECOVERY_STORE,'readonly'),req=tx.objectStore(RECOVERY_STORE).openCursor(null,'prev');
+      req.onsuccess=()=>resolve(req.result?.value||null);req.onerror=()=>reject(req.error);
+    });
+  }catch(_){return null;}
+}
+async function saveRecoverySnapshot(value){
+  const db=await openDocDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(RECOVERY_STORE,'readwrite'),store=tx.objectStore(RECOVERY_STORE);
+    store.put({id:`${new Date().toISOString()}-${Math.random().toString(16).slice(2)}`,savedAt:value._savedAt||'',state:structuredClone(value)});
+    const keys=store.getAllKeys();
+    keys.onsuccess=()=>{for(const old of keys.result.slice(0,-5))store.delete(old);};
+    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
   });
 }
 async function saveDocument(record){
@@ -1195,15 +1252,30 @@ async function openDocument(id){
 }
 
 function bindExports(){
+  document.addEventListener('click',event=>{if(!event.target.closest('[data-open-backup]'))return;navigate('more');q('#backupStatus').scrollIntoView({block:'center',behavior:'smooth'});});
   q('#downloadCareSummary').addEventListener('click',()=>downloadText('roger-care-team-summary.html',buildCareSummaryHtml(),'text/html'));
   q('#printCareSummary').addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return toast('Pop-up blocked. Use Download instead.',true);w.document.write(buildCareSummaryHtml());w.document.close();w.focus();setTimeout(()=>w.print(),300);});
   q('#exportBackup').addEventListener('click',async()=>{
     try{await loadDocuments();const packed=await Promise.all(documents.map(async d=>{
       const {file,...metadata}=d;return {...metadata,dataUrl:await blobToDataUrl(file)};
     }));
-      downloadText('roger-care-complete-backup.json',JSON.stringify({format:'roger-care-backup',version:2,state,documents:packed},null,2),'application/json');
-      toast(`Backup downloaded with ${packed.length} document${packed.length===1?'':'s'}`);
+      const backedState=structuredClone(state),createdAt=new Date().toISOString();
+      const contents=JSON.stringify({state:backedState,documents:packed});
+      const digest=await backupDigest(contents);
+      const backup={format:'roger-care-backup',version:digest?3:2,createdAt,state:backedState,documents:packed,integrity:digest?{algorithm:'SHA-256',digest}:null};
+      const clock=new Date(),stamp=`${todayIso()}-${String(clock.getHours()).padStart(2,'0')}${String(clock.getMinutes()).padStart(2,'0')}${String(clock.getSeconds()).padStart(2,'0')}`;
+      downloadText(`roger-care-backup-${stamp}.json`,JSON.stringify(backup,null,2),'application/json');
+      backupPreparedAt=createdAt;backupPreparedStateAt=state._savedAt;
+      renderBackupStatus();
+      q('#backupStatus').insertAdjacentHTML('beforeend','<p>Download started. Save the file outside this browser, then use the confirmation button below.</p>');
+      toast(`Backup prepared with ${packed.length} document${packed.length===1?'':'s'}`);
     }catch(_){toast('Could not export complete backup',true);}
+  });
+  q('#confirmBackupSaved').addEventListener('click',()=>{
+    if(!backupPreparedAt||backupPreparedStateAt!==state._savedAt)return toast('The record changed. Download a fresh backup first.',true);
+    try{localStorage.setItem(BACKUP_META_KEY,JSON.stringify({confirmedAt:new Date().toISOString(),confirmedStateAt:backupPreparedStateAt}));}
+    catch(_){return toast('Could not record backup status. Keep your downloaded file safe.',true);}
+    backupPreparedAt=null;backupPreparedStateAt=null;renderBackupStatus();toast('Off-device backup marked saved');
   });
   q('#importBackup').addEventListener('change',async event=>{
     const f=event.target.files[0];if(!f)return;
@@ -1213,6 +1285,11 @@ function bindExports(){
       if(!incoming?.profile||!Array.isArray(incoming.treatments)||!Array.isArray(incoming.costs))throw new Error('shape');
       const hasDocuments=parsed.format==='roger-care-backup';
       if(hasDocuments&&!Array.isArray(parsed.documents))throw new Error('documents');
+      if(parsed.version>=3){
+        if(parsed.integrity?.algorithm!=='SHA-256'||!parsed.integrity.digest)throw new Error('integrity missing');
+        const actual=await backupDigest(JSON.stringify({state:incoming,documents:parsed.documents}));
+        if(!actual||actual!==parsed.integrity.digest)throw new Error('integrity mismatch');
+      }
       const restored=hasDocuments?parsed.documents.map(d=>{
         if(!d.id||!d.name||!d.dataUrl?.startsWith('data:'))throw new Error('document');
         const {dataUrl,...metadata}=d;
@@ -1220,15 +1297,20 @@ function bindExports(){
       }):null;
       if(!window.confirm(`Restore this backup? It will replace the app's current entries${hasDocuments?' and uploaded documents':''} on this device.`))return;
       if(restored)await replaceDocuments(restored);
-      state=migrateState(incoming);persist();await loadDocuments();renderAll();
+      state=migrateState(incoming);await persist();await loadDocuments();renderAll();
       toast(hasDocuments?'Complete backup restored':'Older backup restored; existing device documents kept');
     }catch(_){toast('That backup could not be imported',true);}
     finally{event.target.value='';}
   });
 }
+async function backupDigest(value){
+  if(!globalThis.crypto?.subtle)return null;
+  const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
 function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
 function dataUrlToBlob(url){const [header,payload]=url.split(',',2);if(!header?.includes(';base64')||!payload)throw new Error('data');const binary=atob(payload),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:header.slice(5).split(';')[0]||'application/octet-stream'});}
-function downloadText(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+function downloadText(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 function buildCareSummaryHtml(){
   const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]};
   const rows=state.treatments.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>#${x.number}</td><td>${x.doseMg} mg</td><td>${x.doseMgM2}</td><td>${x.weightLb} lb</td><td>${esc(x.doseReason)}</td></tr>`).join('');
