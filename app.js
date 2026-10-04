@@ -6,10 +6,12 @@ const DOC_STORE = 'documents';
 const RECOVERY_STORE = 'recoverySnapshots';
 const BACKUP_META_KEY = 'rogerCareBackupStatus_v1';
 const PENDING_CLOUD_KEY = 'rogerCarePendingCloud_v1';
+const CLOUD_BASE_KEY = 'rogerCareCloudBase_v1';
 const SUPABASE_URL = 'https://gkotvodoqwdhmdeigrra.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_r-j23v_ip3FsemJ8JNtoog_79reT8ur';
 const SITE_URL = 'https://cornhskr1.github.io/roger-care-mvp/';
 let cloud = null, cloudRevision = null, cloudUpdatedAt = null, cloudAvailable = false;
+let cloudBaseRecord = null;
 let ownerSession = null, ownerCanEdit = false, unpublishedLocal = false, cloudBusy = false;
 let ownerPairCode = null;
 let manualPublishRequired = false;
@@ -98,7 +100,8 @@ async function loadState(){
   state = saved ? mergeCanonicalSeed(canonical, saved) : canonical;
   state = migrateState(state);
   unpublishedLocal=Boolean(saved?._savedAt);
-  manualPublishRequired=unpublishedLocal;
+  try{cloudBaseRecord=JSON.parse(localStorage.getItem(CLOUD_BASE_KEY)||'null');}catch(_){}
+  manualPublishRequired=unpublishedLocal&&!cloudBaseRecord;
   await persist(false);
 }
 
@@ -235,7 +238,10 @@ async function connectCloud(){
   cloud.auth.onAuthStateChange((_event,next)=>{ownerSession=next;setTimeout(async()=>{await checkOwner();renderSharedStatus();},0);});
   await readCloud(true);
   await checkOwner();
-  if(unpublishedLocal&&ownerCanEdit&&cloudRevision>0)await reconcileCloud();
+  if(unpublishedLocal&&ownerCanEdit&&cloudRevision>0){
+    if(cloudBaseRecord)await publishCloud(false);
+    else await reconcileCloud();
+  }
   window.addEventListener('focus',async()=>{await checkOwner();if(!unpublishedLocal){await readCloud(false);renderAll();}});
   setInterval(()=>{if(!document.hidden&&!unpublishedLocal)readCloud(false).then(()=>renderAll());},60000);
 }
@@ -252,6 +258,34 @@ function cloudRecord(){
   if(copy.profile)delete copy.profile.photoDataUrl;
   return copy;
 }
+function rememberCloudBase(record){
+  cloudBaseRecord=structuredClone(record);
+  try{localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(record));}catch(_){}
+}
+function patchRowId(key,row){
+  if(key==='labs')return row.id||`${row.date}|${row.metric}`;
+  if(key==='importHistory')return row.key;
+  if(key==='recordCorrections')return row.changeId||`${row.collection}|${row.id}|${row.at}`;
+  return row.id;
+}
+function recordPatches(before,after){
+  const patches=[];
+  for(const key of new Set([...Object.keys(before),...Object.keys(after)])){
+    if(key==='_savedAt')continue;
+    const oldValue=before[key]??null,newValue=after[key]??null;
+    if(sameCloudValue(oldValue,newValue))continue;
+    if(Array.isArray(oldValue)&&Array.isArray(newValue)){
+      const oldRows=new Map(oldValue.map(row=>[patchRowId(key,row),row]));
+      const newRows=new Map(newValue.map(row=>[patchRowId(key,row),row]));
+      if(oldRows.has(undefined)||newRows.has(undefined)||oldRows.size!==oldValue.length||newRows.size!==newValue.length)throw new Error('Unidentified or duplicate entries');
+      for(const id of new Set([...oldRows.keys(),...newRows.keys()])){
+        const prior=oldRows.get(id)??null,next=newRows.get(id)??null;
+        if(!sameCloudValue(prior,next))patches.push({key,id,before:prior,after:next});
+      }
+    }else patches.push({key,before:oldValue,after:newValue});
+  }
+  return patches;
+}
 function parseOwnerSignInLink(input){
   const url=new URL(String(input||'').trim());
   if(url.protocol!=='https:'||url.hostname!==new URL(SUPABASE_URL).hostname||url.pathname!=='/auth/v1/verify')throw new Error('Unexpected sign-in link');
@@ -265,6 +299,8 @@ async function readCloud(initial=false){
   const {data,error}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
   if(error){cloudAvailable=false;syncMessage='Shared record could not be reached. Local copy is safe on this device.';renderSharedStatus();return;}
   cloudAvailable=true;cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
+  if(!(initial&&unpublishedLocal&&cloudBaseRecord&&
+       (localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record?._savedAt||''))))rememberCloudBase(data.record);
   if(data.revision>0&&data.record?.profile){
     if(initial&&unpublishedLocal&&(localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record._savedAt||''))){
       syncMessage='This device has changes waiting to sync.';
@@ -286,6 +322,34 @@ async function publishCloud(firstUpload){
   if(cloudBusy)return false;
   cloudBusy=true;
   try{
+    if(!firstUpload&&cloudRevision>0){
+      if(!cloudBaseRecord){syncMessage='Checking the shared record before saving.';return false;}
+      const submitted=cloudRecord();
+      let changes;
+      try{changes=recordPatches(cloudBaseRecord,submitted);}
+      catch(_){syncMessage='Could not safely identify changed entries. Your copy is saved on this device.';return false;}
+      if(changes.length>100){syncMessage='Too many changes for one save. Your copy is saved on this device.';return false;}
+      const {data,error}=await cloud.rpc('roger_apply_patches',{p_changes:changes});
+      if(error||!data?.record){
+        syncMessage=error?.code==='40001'?'This same entry changed online. Your version is saved on this device for review.':'Could not confirm the shared save. Your change is on this device; tap Retry safe sync when connected.';
+        toast(syncMessage,true);return false;
+      }
+      rememberCloudBase(data.record);
+      cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
+      cloudAvailable=true;manualPublishRequired=false;
+      if(state._savedAt!==submitted._savedAt){
+        unpublishedLocal=true;syncMessage='Saved one change online; another change is waiting to sync.';
+        setTimeout(()=>publishCloud(false),0);
+      }else{
+        const photo=state.profile?.photoDataUrl;
+        state=migrateState(data.record);if(photo)state.profile.photoDataUrl=photo;
+        unpublishedLocal=false;syncMessage='Saved to shared record.';
+        await persist(false);
+        try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
+        renderAll();
+      }
+      return true;
+    }
     const {data,error}=await cloud.from('roger_shared_record')
       .update({record:cloudRecord(),revision:cloudRevision+1})
       .eq('id','roger').eq('revision',cloudRevision)
@@ -299,6 +363,7 @@ async function publishCloud(firstUpload){
       return await reconcileCloud();
     }
     cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
+    rememberCloudBase(cloudRecord());
     unpublishedLocal=false;syncMessage='Saved to shared record.';
     manualPublishRequired=false;
     try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
@@ -383,6 +448,7 @@ async function reconcileCloud(){
     const photo=state.profile?.photoDataUrl;
     state=migrateState(savedRecord);if(photo)state.profile.photoDataUrl=photo;
     cloudRevision=savedRevision;cloudUpdatedAt=savedAt;cloudAvailable=true;
+    rememberCloudBase(savedRecord);
     unpublishedLocal=false;manualPublishRequired=false;syncMessage='Saved to shared record.';
     await persist(false);try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
     try{renderAll();}catch(error){console.error('Shared record saved; display refresh failed',error);}
@@ -452,7 +518,7 @@ function renderSharedStatus(){
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
   q('#publishLocal')?.addEventListener('click',async()=>{
     if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
-    const ok=cloudRevision>0?await reconcileCloud():await publishCloud(true);if(ok)renderAll();
+    const ok=cloudRevision>0?(cloudBaseRecord?await publishCloud(false):await reconcileCloud()):await publishCloud(true);if(ok)renderAll();
   });
   for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
