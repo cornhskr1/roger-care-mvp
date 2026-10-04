@@ -275,7 +275,11 @@ function openJournalDialog(id=''){
   }
   if(row)form.elements.namedItem('medications').value=(row.medications||[]).join(', ');
   q('#stoolRows').replaceChildren();
-  const events=row?.stoolEvents?.length?row.stoolEvents:row?.stool?[{period:'Unspecified',score:parseFloat(row.stool)||null,status:'observed',notes:row.stool}]:[];
+  const legacyStool=String(row?.stool||'');
+  const legacyPeriod=/\b(Before bed|Overnight|AM|PM)\b/i.exec(legacyStool)?.[1];
+  const legacyScore=/\b([1-8])\b/.exec(legacyStool)?.[1];
+  const simpleLegacy=/^(?:AM|PM|Before bed|Overnight)?\s*[-:]?\s*[1-8](?:\s*(?:AM|PM|Before bed|Overnight))?$/i.test(legacyStool.trim());
+  const events=row?.stoolEvents?.length?row.stoolEvents:legacyStool?[{period:legacyPeriod?({am:'AM',pm:'PM','before bed':'Before bed',overnight:'Overnight'}[legacyPeriod.toLowerCase()]):'Other',score:legacyScore?Number(legacyScore):null,status:'observed',notes:simpleLegacy?'':legacyStool}]:[];
   if(events.length)events.forEach(addStoolRow);else addStoolRow();
   q('#journalDate').value=row?.date||todayIso();
   q('#journalDialogTitle').textContent=row?(row.rawEntry?'Correct original note':'Edit daily entry'):'New daily entry';

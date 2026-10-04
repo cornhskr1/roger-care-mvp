@@ -1,5 +1,5 @@
-const CACHE = 'roger-care-v23';
-const CORE = ['./','./index.html','./styles.css?v=23','./app.js?v=23','./manifest.webmanifest?v=23','./data/seed.json','./icons/icon.svg'];
+const CACHE = 'roger-care-v24';
+const CORE = ['./','./index.html','./styles.css?v=24','./app.js?v=24','./manifest.webmanifest?v=24','./data/seed.json','./icons/icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(
