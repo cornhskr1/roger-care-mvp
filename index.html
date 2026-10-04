@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=13">
+  <link rel="manifest" href="manifest.webmanifest?v=14">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -132,13 +132,20 @@
           <button id="journalAddButton" class="primary-button compact" type="button">+ Entry</button>
         </div>
         <div id="journalSummary" class="summary-grid"></div>
+        <section class="card journal-trend-card">
+          <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Journal trends</h2></div>
+            <label class="trend-select"><span>Show</span><select id="journalMetric"><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="nausea">Nausea signs</option><option value="energy">Reduced energy</option></select></label>
+          </div>
+          <div id="journalTrend"></div>
+          <p class="medication-note">Owner observations by date. Treatment and CBC markers show timing, not cause. Unobserved stools are excluded from counts.</p>
+        </section>
 
         <section class="card">
           <div class="card-head">
             <div>
               <div class="section-kicker">MEDICATION TRACKING</div>
               <h2>Prescribed vs actually given</h2>
-              <p class="body-copy">PRN medication use is counted from the owner journal, not from the prescription alone.</p>
+              <p class="body-copy">Daily courses are summarized; recorded doses and as-needed use remain available by medication.</p>
             </div>
             <button id="medicationAddButton" class="primary-button compact" type="button">+ Medication</button>
           </div>
@@ -202,7 +209,7 @@
           </div>
         </div>
 
-        <div class="privacy-note"><strong>Sharing:</strong> The starter medical record and patient IDs in this published site are public. New journal entries, photo, uploaded files, and corrections stay on this device unless you export them. The care-team handoff is a local download or printout; this version has no private share link.</div>
+        <div class="privacy-note"><strong>Sharing:</strong> The historical journal through 10/3, medical record, and patient IDs in this published site are public. New app entries, photo, uploaded files, and corrections stay on this device unless you export them. The care-team handoff is a local download or printout; this version has no private share link.</div>
 
         <section class="card">
           <div class="card-head">
@@ -302,22 +309,24 @@
       <label class="field"><span>Date</span><input id="journalDate" name="date" type="date" required></label>
       <div class="form-grid two">
         <label class="field"><span>Appetite</span><select name="appetite"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>refused food</option></select></label>
-        <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>high</option><option>low</option><option>very low</option></select></label>
+        <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>slightly reduced</option><option>low</option><option>very low</option></select></label>
       </div>
       <div class="form-grid two">
-        <label class="field"><span>Nausea signs</span><select name="nausea"><option value="0">None</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
-        <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" value="0"></label>
+        <label class="field"><span>Nausea signs</span><select name="nausea"><option value="">Not logged</option><option value="0">None observed</option><option value="1">Signs observed</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
+        <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" placeholder="Not logged"></label>
       </div>
-      <div class="form-grid two">
-        <label class="field"><span>Stool score</span><input name="stool" type="text" inputmode="decimal" placeholder="e.g. 4 or 7"></label>
-        <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
-      </div>
+      <fieldset class="stool-fieldset"><legend>Bowel movements</legend><p class="field-help">Add one row for each stool, including extra trips. Leave a score blank if you could not assess it.</p><div id="stoolRows" class="stool-rows"></div><button id="addStoolRow" class="secondary-button" type="button">+ Another bowel movement</button></fieldset>
+      <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="">Not logged</option><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
       <div class="form-grid two">
         <label class="field"><span>Hydration / thirst</span><select name="hydration"><option value="">Not logged</option><option>normal</option><option>increased thirst</option><option>decreased drinking</option><option>good self-hydration</option></select></label>
         <label class="field"><span>Urination</span><select name="urination"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>accident / unusual</option></select></label>
       </div>
-      <label class="field"><span>Medication given</span><input name="medications" type="text" placeholder="Cerenia, metronidazole…"></label>
-      <label class="field"><span>What did you notice?</span><textarea name="notes" rows="5" placeholder="Write naturally. The original wording is preserved." required></textarea></label>
+      <div class="form-grid two"><label class="field"><span>Mood / behavior</span><input name="mood" placeholder="Normal Roger, quieter…"></label><label class="field"><span>Play / engagement</span><input name="play" placeholder="Normal, reduced…"></label></div>
+      <div class="form-grid two"><label class="field"><span>Sleep</span><input name="sleep" placeholder="Normal, restless…"></label><label class="field"><span>Roger things</span><input name="rogerThings" placeholder="Yes, reduced…"></label></div>
+      <label class="field"><span>GI observations</span><input name="gi" placeholder="Gurgling, drooling, no vomiting…"></label>
+      <label class="field"><span>Medication mentioned in notes</span><input name="medications" type="text" placeholder="Prednisone, Cerenia…"></label>
+      <p class="field-help">For a dose, use + Medication so it appears in the dose history and charts.</p>
+      <label class="field"><span>What did you notice?</span><textarea name="notes" rows="5" placeholder="Roger things, symptoms, anything unusual…" required></textarea></label>
       <div class="sheet-actions">
         <button class="secondary-button" type="button" data-close-dialog="journalDialog">Cancel</button>
         <button class="primary-button" type="submit">Save observation</button>
@@ -395,6 +404,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=13" defer></script>
+  <script src="app.js?v=14" defer></script>
 </body>
 </html>

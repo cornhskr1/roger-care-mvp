@@ -5,7 +5,7 @@ A mobile-first Progressive Web App for a longitudinal canine oncology record.
 ## What this first build does
 
 - Roger profile with owner-uploaded photo (compressed and stored locally)
-- Daily owner observation journal
+- Daily owner observation journal with repeatable bowel movement rows and a dated trend chart
 - Treatment timeline with source labels
 - Seeded vinblastine treatment history through treatment #5
 - Seeded CBC/chemistry trend data
@@ -44,11 +44,13 @@ Financial records deliberately do **not** store bank names, account numbers, car
 
 Document upload is real and persists locally, but automated medical-document extraction is **not** implemented yet. That needs a secure backend / ingestion service and should not be simulated in the client.
 
-The published starter record (including patient IDs) is public in the GitHub Pages site and repository. Owner-entered entries, corrections, photo, and document files remain on this device. There is no authenticated private sharing yet. Use the local vet handoff download/print to share deliberately.
+The published historical journal through 10/3/2026, medical record, and patient IDs are public in the GitHub Pages site and repository. New owner-entered app entries, corrections, photo, and document files remain on the device where they were entered. There is no authenticated private sharing or cross-device sync yet. Use the local vet handoff download/print to share deliberately.
 
 The complete JSON backup includes document file data, profile personalization, owner edits, and a correction history. Importing a complete backup replaces current on-device entries and documents after a confirmation; older state-only backups preserve existing device documents.
 
 Owner-reported CBC dates (10/15, 10/29, 11/12) and vinblastine dates (10/16, 10/30, 11/13) are shown as scheduled events. Final restaging remains TBD. Vet call instructions are blank until entered with a source. The handoff includes a first-page snapshot and a longer sourced record; it does not attach the source documents themselves.
+
+The owner's original daily journal spans all 51 dates from 8/14 through 10/3. `data/journal-original.txt` preserves the supplied wording; `scripts/import-journal.cjs` creates structured entries in `data/seed.json`, each retaining its original dated block in `rawEntry`. The journal view shows the full source on demand. Stool entries can have multiple movements per day, with unobserved and unscored values distinct from scored movements. On 9/29 the original note reports six movements but enumerates only five scores; the sixth is counted without a score. The source-reported 8/27 CBC value remains in the journal wording; clinical lab values retain their separate record source. New app entries feed the trend chart and persist locally, with complete JSON backup/import available in More.
 
 ## Next technical milestones
 

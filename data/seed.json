@@ -1,14 +1,49 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "carePlan": {
     "visits": [
-      {"id":"cbc-6","label":"CBC before chemo #6","date":"2026-10-15","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"chemo-6","label":"Vinblastine #6","date":"2026-10-16","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"cbc-7","label":"CBC before chemo #7","date":"2026-10-29","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"chemo-7","label":"Vinblastine #7","date":"2026-10-30","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"cbc-8","label":"CBC before chemo #8","date":"2026-11-12","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"chemo-8","label":"Vinblastine #8","date":"2026-11-13","source":"Owner-reported appointment schedule, 10/3/2026"},
-      {"id":"restaging","label":"Final restaging","date":null,"source":"Owner reported TBD, 10/3/2026"}
+      {
+        "id": "cbc-6",
+        "label": "CBC before chemo #6",
+        "date": "2026-10-15",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "chemo-6",
+        "label": "Vinblastine #6",
+        "date": "2026-10-16",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "cbc-7",
+        "label": "CBC before chemo #7",
+        "date": "2026-10-29",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "chemo-7",
+        "label": "Vinblastine #7",
+        "date": "2026-10-30",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "cbc-8",
+        "label": "CBC before chemo #8",
+        "date": "2026-11-12",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "chemo-8",
+        "label": "Vinblastine #8",
+        "date": "2026-11-13",
+        "source": "Owner-reported appointment schedule, 10/3/2026"
+      },
+      {
+        "id": "restaging",
+        "label": "Final restaging",
+        "date": null,
+        "source": "Owner reported TBD, 10/3/2026"
+      }
     ],
     "vetCallInstructions": "",
     "vetCallSource": ""
@@ -336,250 +371,2049 @@
   ],
   "observations": [
     {
+      "id": "obs-0814",
+      "date": "2026-08-14",
+      "appetite": "Normal",
+      "hydration": "Increased",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "PM - 4",
+      "stoolEvents": [
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Trazadone",
+        "Vinblastine",
+        "Prednisone"
+      ],
+      "weightLb": 56,
+      "notes": "First chemo treatment. Given Trazadone at 8:30a. Appt 10:30a. Prednsidone 5:30p.",
+      "rawEntry": "8/14\tChemo #1  |  56lbs        Appetite: Normal\nWater: Increased\nEnergy: Slightly reduced\nMood/Behavior: Quieter\nGI: No vomiting \nStool: PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Trazadone, Vinblastine, & Prednisone\nNotes: First chemo treatment. Given Trazadone at 8:30a. Appt 10:30a. Prednsidone 5:30p. \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0815",
+      "date": "2026-08-15",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting. Audible/increased abdominal gurgling noted while brushing approx. 8:00p",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - First log was normal (4) followed by soft stool (5)",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "First log was normal (4)"
+        },
+        {
+          "period": "PM",
+          "score": 5,
+          "status": "observed",
+          "notes": "followed by soft stool (5)"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "Octopus thrashing ✅ supervising workout ✅ shopping bag inspector ✅ Frankenstein ducky destruction ✅",
+      "rawEntry": "8/15\tAppetite: Normal\nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting. Audible/increased abdominal gurgling noted while brushing approx. 8:00p\nStool: AM - 4 | PM - First log was normal (4) followed by soft stool (5)\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone\nNotes: Octopus thrashing ✅ supervising workout ✅ shopping bag inspector ✅ Frankenstein ducky destruction ✅ \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0816",
+      "date": "2026-08-16",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ paper towel roll parade ✅ Frankenstein ducky destroyer ✅ nap snuggler",
+      "rawEntry": "8/16\tAppetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger\nGI: No vomiting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal\nSleep: Normal \nMedications: Prednisone\nNotes: ✅ paper towel roll parade ✅ Frankenstein ducky destroyer ✅ nap snuggler\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
       "id": "obs-0817",
       "date": "2026-08-17",
-      "appetite": "normal",
-      "energy": "normal",
-      "nausea": 0,
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
       "vomiting": 0,
-      "stool": "4",
-      "hydration": "good",
-      "urination": "normal",
-      "pain": 0,
-      "medications": [],
-      "notes": "Four well-formed #4 stools. Appetite good. Self-hydrating well; urine light yellow.",
-      "source": "owner_observation"
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ workout supervision with nap ✅ snack snuggler ✅ butt wiggler",
+      "rawEntry": "8/17\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger\nGI: No vomiting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal\nSleep: Normal\nMedications: Prednisone\nNotes: ✅ workout supervision with nap ✅ snack snuggler ✅ butt wiggler \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0818",
+      "date": "2026-08-18",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Ducky destruction ✅ Workout Buddy ✅ Snack Supervisor ✅ Aggressive Bed Fluffing",
+      "rawEntry": "8/18\tAppetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal\nSleep: Normal \nMedications: Prednisone\nNotes: ✅ Ducky destruction ✅ Workout Buddy ✅ Snack Supervisor ✅ Aggressive Bed Fluffing\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0819",
       "date": "2026-08-19",
-      "appetite": "normal",
-      "energy": "low",
-      "nausea": 2,
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly Reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting but signs of licking and panting",
+      "nausea": null,
       "vomiting": 0,
-      "stool": "",
-      "hydration": "",
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
-      "medications": [],
-      "notes": "Licking, panting and stomach gurgling; decreased energy documented around this period.",
-      "source": "owner_observation"
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ following room to room ✅ workout supervisor ✅ playful butt wiggler ⭕️ Panting ⭕️ Paw licking ⭕️ gurgling stomach",
+      "rawEntry": "8/19\tAppetite: Normal \nWater: Normal\nEnergy: Slightly Reduced \nMood/Behavior: Quieter \nGI: No vomiting but signs of licking and panting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone\nNotes: ✅ following room to room ✅ workout supervisor ✅ playful butt wiggler ⭕️ Panting ⭕️ Paw licking ⭕️ gurgling stomach\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0820",
+      "date": "2026-08-20",
+      "appetite": "Normal",
+      "hydration": "Increased",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - did not observe",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM - did not observe"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin",
+        "Maropitant"
+      ],
+      "weightLb": 52,
+      "notes": "✅ Workout supervision with nap ✅Ducky destruction (limited) ⭕️ excessive panting",
+      "rawEntry": "8/20\tBlood draw at Optimum Vet Clinic (CBC)  |  52lbs |    Low Levels (250)    Appetite: Normal\nWater: Increased \nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: No vomiting \nStool: AM - 4 | PM - did not observe\nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone, Amoxicillin, Maropitant\nNotes: ✅ Workout supervision with nap ✅Ducky destruction (limited) ⭕️ excessive panting\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0821",
+      "date": "2026-08-21",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Low, improved into PM",
+      "mood": "Quieter, improved into PM",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 3 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 3,
+          "status": "observed",
+          "notes": "AM - 3"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "None, brought home a stuffed chicken and he played with it after dinner",
+      "sleep": "More than usual",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin",
+        "Maropitant"
+      ],
+      "weightLb": null,
+      "notes": "✅ obsessively followed me room to room ✅ workout supervision ✅ Norman thrashing",
+      "rawEntry": "8/21\tAppetite: Normal \nWater: Normal \nEnergy: Low, improved into PM\nMood/Behavior: Quieter, improved into PM\nGI: No vomiting\nStool: AM - 3 | PM - 4\nPlay/Engagement: None, brought home a stuffed chicken and he played with it after dinner\nSleep: More than usual\nMedications: Prednisone, Amoxicillin, Maropitant\nNotes: ✅ obsessively followed me room to room ✅ workout supervision ✅ Norman thrashing\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0822",
+      "date": "2026-08-22",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced overall",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced as the day went on",
+      "sleep": "Normal",
+      "rogerThings": "Reduced into PM",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin"
+      ],
+      "weightLb": null,
+      "notes": "✅ AM Chicken thrasher ✅ workout supervisor ⭕️ excessive panting",
+      "rawEntry": "8/22\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced overall\nMood/Behavior: Quieter\nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced as the day went on\nSleep: Normal\nMedications: Prednisone, Amoxicillin \nNotes: ✅ AM Chicken thrasher ✅ workout supervisor ⭕️ excessive panting \nRoger Things: Reduced into PM",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0823",
+      "date": "2026-08-23",
+      "appetite": "Normal - increased food to 1C 2x daily due to continuing weight loss",
+      "hydration": "Normal",
+      "energy": "Low",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "No AM stool | PM - 4 - increased volume",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": null,
+          "status": "none",
+          "notes": "No AM stool"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4 - increased volume"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "More than usual",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ excessive panting ✅ paper towel roll destroyer ✅ workout supervisor ✅ Velcro dog",
+      "rawEntry": "8/23\tAppetite: Normal - increased food to 1C 2x daily due to continuing weight loss\nWater: Normal \nEnergy: Low\nMood/Behavior: Quieter \nGI: No vomiting \nStool: No AM stool | PM - 4 - increased volume\nPlay/Engagement: Reduced\nSleep: More than usual \nMedications: Prednisone, Amoxicillin \nNotes: ⭕️ excessive panting ✅ paper towel roll destroyer ✅ workout supervisor ✅ Velcro dog\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0824",
+      "date": "2026-08-24",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin"
+      ],
+      "weightLb": null,
+      "notes": "✅ workout supervisor with nap ✅ snack monitor ⭕️ excessive panting",
+      "rawEntry": "8/24\tAppetite: Normal\nWater: Normal\nEnergy: Slightly reduced\nMood/Behavior: Quieter \nGI: No vomiting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone, Amoxicillin \nNotes: ✅ workout supervisor with nap ✅ snack monitor ⭕️ excessive panting\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0825",
+      "date": "2026-08-25",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - did not observe",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM - did not observe"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin"
+      ],
+      "weightLb": null,
+      "notes": "✅ workout supervisor with nap ⭕️ excessive panting ✅ Velcro dog ⭕️ minimal interest in toys ✅ snack stealer",
+      "rawEntry": "8/25\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: No vomiting \nStool: AM - 4 | PM - did not observe \nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone, Amoxicillin \nNotes: ✅ workout supervisor with nap ⭕️ excessive panting ✅ Velcro dog ⭕️ minimal interest in toys ✅ snack stealer\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0826",
+      "date": "2026-08-26",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Amoxicillin"
+      ],
+      "weightLb": null,
+      "notes": "✅ workout supervisor with nap ✅ Velcro dog ✅ perky ears ✅ snack stalker",
+      "rawEntry": "8/26\tAppetite: Normal \nWater: Normal\nEnergy: Slightly reduced \nMood/Behavior: Normal Roger  \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal\nMedications: Prednisone, Amoxicillin \nNotes: ✅ workout supervisor with nap ✅ Velcro dog ✅ perky ears ✅ snack stalker\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0827",
+      "date": "2026-08-27",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 (x2) | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4 (x2)"
+        },
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4 (x2)"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": 51.5,
+      "notes": "✅ light stuffed chicken maiming ✅ workout supervisor with nap ✅ Velcro dog ✅",
+      "rawEntry": "8/27\tBlood draw at Optimum Vet Clinic | 51.5lbs |   14,310!Appetite: Normal \nWater: Normal\nEnergy: Slightly reduced \nMood/Behavior: Normal Roger\nGI: No vomiting \nStool: AM - 4 (x2) | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone\nNotes: ✅ light stuffed chicken maiming ✅ workout supervisor with nap ✅ Velcro dog ✅ \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0828",
+      "date": "2026-08-28",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4 | Before bed - 6",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        },
+        {
+          "period": "Before bed",
+          "score": 6,
+          "status": "observed",
+          "notes": "Before bed - 6"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "More than usual",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Trazadone",
+        "Vinblastine",
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog ✅ workout supervisor",
+      "rawEntry": "8/28\tChemo #2              Appetite: Normal\nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Quieter\nGI: No vomiting \nStool: AM - 4 | PM - 4 | Before bed - 6\nPlay/Engagement: Reduced\nSleep: More than usual\nMedications: Trazadone & Vinblastine, Prednisone \nNotes: ✅ Velcro dog ✅ workout supervisor \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0829",
+      "date": "2026-08-29",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal /",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ paper towel roll destruction ✅ aggressive bed fluffer ✅ workout supervisor with octopus thrashing",
+      "rawEntry": "8/29\tAppetite: Normal \nWater: Normal\nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal /\nSleep: Normal \nMedications: Prednisone \nNotes: ✅ paper towel roll destruction ✅ aggressive bed fluffer ✅ workout supervisor with octopus thrashing\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0830",
+      "date": "2026-08-30",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger > restless into the evening",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal > Restless",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ snuggler ✅ light stuffed chicken maiming ✅ snack monitor",
+      "rawEntry": "8/30\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger > restless into the evening\nGI: No vomiting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal > Restless\nMedications: Prednisone \nNotes: ✅ snuggler ✅ light stuffed chicken maiming ✅ snack monitor\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0831",
       "date": "2026-08-31",
-      "appetite": "normal",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "",
-      "hydration": "",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Restless",
+      "gi": "Nausea signs",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - did not observe",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM - did not observe"
+        }
+      ],
+      "play": "Reduced > improved into PM",
+      "sleep": "Restless > improved into PM",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
+      "pain": null,
       "medications": [
+        "Prednisone",
         "Cerenia"
       ],
-      "notes": "Nausea/restlessness. Cerenia used.",
-      "source": "owner_observation"
+      "weightLb": null,
+      "notes": "Overnight (8/30) he was very restless",
+      "rawEntry": "8/31\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Restless\nGI: Nausea signs\nStool: AM - 4 | PM - did not observe\nPlay/Engagement: Reduced > improved into PM\nSleep: Restless > improved into PM\nMedications: Prednisone, Cerenia\nNotes: Overnight (8/30) he was very restless\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0901",
       "date": "2026-09-01",
-      "appetite": "",
-      "energy": "",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "Nausea signs",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - did not observe",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM - did not observe"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "Slightly restless and showing signs of nausea then improved into the evening.",
+      "rawEntry": "9/1\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: Nausea signs\nStool: AM - 4 | PM - did not observe \nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone, Cerenia\nNotes: Slightly restless and showing signs of nausea then improved into the evening. \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0902",
+      "date": "2026-09-02",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - did not observe",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM - did not observe"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "did not want to supervise workout",
+      "rawEntry": "9/2\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - did not observe \nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone\nNotes: did not want to supervise workout\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0903",
+      "date": "2026-09-03",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 (x2) | PM -",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4 (x2)"
+        },
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4 (x2)"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM -"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": 52.5,
+      "notes": "✅ light stuffed chicken destruction",
+      "rawEntry": "9/3\tBlood draw at Optimum Vet Clinic | 52.5lbs |   1,790 Appetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 (x2) | PM -\nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone \nNotes: ✅ light stuffed chicken destruction\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0904",
+      "date": "2026-09-04",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ light play with toys as long as I engaged ✅ Velcro dog",
+      "rawEntry": "9/4\tAppetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger\nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ light play with toys as long as I engaged ✅ Velcro dog\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0905",
+      "date": "2026-09-05",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog ✅ light stuffed chicken maiming",
+      "rawEntry": "9/5\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal\nSleep: Normal \nMedications: Prednisone \nNotes: ✅ Velcro dog ✅ light stuffed chicken maiming\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0906",
+      "date": "2026-09-06",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ light stuffed chicken maiming ✅ Velcro dog ✅ aggressive bed fluffing ✅ kicking legs in the air",
+      "rawEntry": "9/6\tAppetite: Normal\nWater: Normal\nEnergy: Normal\nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ light stuffed chicken maiming ✅ Velcro dog ✅ aggressive bed fluffing ✅ kicking legs in the air\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0907",
+      "date": "2026-09-07",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ workout supervisor ✅ light stuffed chicken maiming",
+      "rawEntry": "9/7\tAppetite: Normal \nWater: Normal\nEnergy: Normal\nMood/Behavior: Normal Roger\nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ workout supervisor ✅ light stuffed chicken maiming \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0908",
+      "date": "2026-09-08",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog ✅ workout supervisor",
+      "rawEntry": "9/8\tAppetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger\nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ Velcro dog ✅ workout supervisor\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0909",
+      "date": "2026-09-09",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ initiating play with other dogs",
+      "rawEntry": "9/9\tAppetite: Normal\nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ initiating play with other dogs\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0910",
+      "date": "2026-09-10",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": 51.5,
+      "notes": "✅",
+      "rawEntry": "9/10\tBlood draw at Optimum Vet Clinic | 51.5lbs |   7,440 Appetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal \nSleep: Normal\nMedications: Prednisone \nNotes: ✅ \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0911",
+      "date": "2026-09-11",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Trazodone",
+        "Vinblastine",
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ 3rd chemotherapy appt. and slightly reduced in energy and mood due to Trazodone and car ride. ⭕️ excessive pacing and panting would not settle for several hours",
+      "rawEntry": "9/11\tChemo #3    Appetite: Normal\nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: No vomiting\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Trazodone & Vinblastine, Prednisone \nNotes: ✅ 3rd chemotherapy appt. and slightly reduced in energy and mood due to Trazodone and car ride. ⭕️ excessive pacing and panting would not settle for several hours \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0912",
+      "date": "2026-09-12",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Normal Roger",
+      "gi": "No vomiting / Nausea signs",
       "nausea": 1,
       "vomiting": 0,
-      "stool": "",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg"
+      "stool": "AM - 3 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 3,
+          "status": "observed",
+          "notes": "AM - 3"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
       ],
-      "notes": "Nausea continued; Cerenia administered.",
-      "source": "owner_observation"
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅cat herder ✅ stuffed sushi destruction",
+      "rawEntry": "9/12\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Normal Roger\nGI: No vomiting / Nausea signs\nStool: AM - 3 | PM - 4\nPlay/Engagement: Normal\nSleep: Normal \nMedications: Prednisone \nNotes: ✅cat herder ✅ stuffed sushi destruction\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0913",
       "date": "2026-09-13",
-      "appetite": "normal",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "",
-      "hydration": "",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Restless",
+      "gi": "Nausea signs",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
-      "medications": [],
-      "notes": "Borborygmi, lip licking, repeated swallowing and drooling.",
-      "source": "owner_observation"
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ borborygmi ⭕️ lip licking ⭕️ drooling ✅ cat herder",
+      "rawEntry": "9/13\tAppetite: Normal\nWater: Normal\nEnergy: Slightly reduced \nMood/Behavior: Restless\nGI: Nausea signs\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone, Cerenia\nNotes: ⭕️ borborygmi ⭕️ lip licking ⭕️ drooling ✅ cat herder\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0914",
       "date": "2026-09-14",
-      "appetite": "normal",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg"
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Quieter",
+      "gi": "Lip licking / Repeated swallowing / Drooling / Nausea signs",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
       ],
-      "notes": "Ongoing nausea signs after chemo #3; Cerenia administered.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "✅ cat herder ✅ workout supervisor ⭕️ drooling ⭕️ lip licking",
+      "rawEntry": "9/14\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Quieter \nGI: Lip licking / Repeated swallowing / Drooling / Nausea signs \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone / Cerenia \nNotes: ✅ cat herder ✅ workout supervisor ⭕️ drooling ⭕️ lip licking\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0915",
+      "date": "2026-09-15",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Restless",
+      "gi": "None observed",
+      "nausea": null,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ cat herder ✅ snack stealer",
+      "rawEntry": "9/15\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Restless\nGI: None observed \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone \nNotes: ✅ cat herder ✅ snack stealer\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0916",
+      "date": "2026-09-16",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "None observed",
+      "nausea": null,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog",
+      "rawEntry": "9/16\tAppetite: Normal\nWater: Normal\nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: None observed \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone  \nNotes: ✅ Velcro dog\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0917",
+      "date": "2026-09-17",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "None observed",
+      "nausea": null,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": 52.7,
+      "notes": "✅ Velcro dog",
+      "rawEntry": "9/17\tBlood draw at Optimum Vet Clinic | 52.7lbs |   2,500 Appetite: Normal\nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: None observed\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone \nNotes: ✅ Velcro dog\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0918",
+      "date": "2026-09-18",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "None observed",
+      "nausea": null,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Trazodone",
+        "Vinblastine"
+      ],
+      "weightLb": null,
+      "notes": "Noticeably quieter due to trazodone and car ride",
+      "rawEntry": "9/18\tChemo #4      Appetite: Normal\nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Quieter \nGI: None observed\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone, Trazodone, Vinblastine \nNotes: Noticeably quieter due to trazodone and car ride\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0919",
+      "date": "2026-09-19",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Normal Roger",
+      "gi": "None observed",
+      "nausea": null,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal / Restless",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ paper towel roll destruction ✅ light chicken maiming",
+      "rawEntry": "9/19\tAppetite: Normal\nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Normal Roger \nGI: None observed \nStool: AM - 4 | PM - 4 \nPlay/Engagement: Reduced  \nSleep: Normal / Restless\nMedications: Prednisone\nNotes: ✅ paper towel roll destruction ✅ light chicken maiming\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0920",
+      "date": "2026-09-20",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal / Restless",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog",
+      "rawEntry": "9/20\tAppetite: Normal\nWater: Normal\nEnergy: Slightly reduced \nMood/Behavior: Quieter\nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal / Restless\nMedications: Prednisone  \nNotes: ✅ Velcro dog\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0921",
       "date": "2026-09-21",
-      "appetite": "",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "5–6",
-      "hydration": "",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "Nausea signs / Drooling",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
-      "medications": [],
-      "notes": "Nausea, drooling and lip licking. Subsequent bright-red blood noted with stool.",
-      "source": "owner_observation"
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "✅ Velcro dog",
+      "rawEntry": "9/21\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Quieter\nGI: Nausea signs / Drooling \nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone / Cerenia\nNotes: ✅ Velcro dog\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0922",
       "date": "2026-09-22",
-      "appetite": "",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg"
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "Nausea signs / Drooling",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
       ],
-      "notes": "Nausea symptoms continued; Cerenia administered.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Normal / Restless",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ laying by himself",
+      "rawEntry": "9/22\tAppetite: Normal\nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Quieter\nGI: Nausea signs / Drooling\nStool: AM - 4 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal / Restless\nMedications: Prednisone / Cerenia \nNotes: ⭕️ laying by himself\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0923",
       "date": "2026-09-23",
-      "appetite": "",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "5–6",
-      "hydration": "",
-      "urination": "house urination",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg"
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter / Restless",
+      "gi": "Nausea signs / Lip licking / Drooling",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4 | Before bed - 5-6 with bright red blood",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        },
+        {
+          "period": "Before bed",
+          "score": 6,
+          "status": "observed",
+          "notes": "Before bed - 5-6 with bright red blood"
+        }
       ],
-      "notes": "Nausea with lip licking and drooling. Stool 5–6 with bright-red blood; urinated in the house. Cerenia administered.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Normal / Restless",
+      "rogerThings": "Reduced",
+      "urination": "peed in house",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ peed in the house ✅ Velcro dog ⭕️ blood in stool called k state on all line",
+      "rawEntry": "9/23\tAppetite: Normal\nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Quieter / Restless \nGI: Nausea signs / Lip licking / Drooling \nStool: AM - 4 | PM - 4 | Before bed - 5-6 with bright red blood \nPlay/Engagement: Reduced \nSleep: Normal / Restless\nMedications: Prednisone / Cerenia\nNotes: ⭕️ peed in the house ✅ Velcro dog ⭕️ blood in stool called k state on all line\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0924",
       "date": "2026-09-24",
-      "appetite": "",
-      "energy": "",
-      "nausea": 0,
+      "appetite": "Normal",
+      "hydration": "Increased",
+      "energy": "Reduced",
+      "mood": "Restless",
+      "gi": "No vomiting / Diarrhea",
+      "nausea": null,
       "vomiting": 0,
-      "stool": "8",
-      "hydration": "",
+      "stool": "AM - 8 darker, possible blood | PM - 6 | Before Bed - 5",
+      "stoolEvents": [
+        {
+          "period": "Overnight",
+          "score": 7,
+          "status": "observed",
+          "notes": "Diarrhea with blood at 1am, from Notes field"
+        },
+        {
+          "period": "AM",
+          "score": 8,
+          "status": "observed",
+          "notes": "AM - 8 darker, possible blood"
+        },
+        {
+          "period": "PM",
+          "score": 6,
+          "status": "observed",
+          "notes": "PM - 6"
+        },
+        {
+          "period": "Before Bed",
+          "score": 5,
+          "status": "observed",
+          "notes": "Before Bed - 5"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "More than usual / Restless",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
+      "pain": null,
       "medications": [
+        "Prednisone",
         "Metronidazole"
       ],
-      "notes": "Bloody diarrhea; Metronidazole given.",
-      "source": "owner observation; clarified 10/3"
+      "weightLb": null,
+      "notes": "⭕️ diarrhea overnight (7) with blood 1am.",
+      "rawEntry": "9/24\tAppetite: Normal\nWater: Increased \nEnergy: Reduced \nMood/Behavior: Restless\nGI: No vomiting / Diarrhea\nStool: AM - 8 darker, possible blood | PM - 6 | Before Bed - 5\nPlay/Engagement: Reduced\nSleep: More than usual / Restless\nMedications: Prednisone / Metronidazole\nNotes: ⭕️ diarrhea overnight (7) with blood 1am. \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0925",
       "date": "2026-09-25",
-      "appetite": "",
-      "energy": "",
-      "nausea": 0,
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
       "vomiting": 0,
-      "stool": "",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Metronidazole 250 mg AM"
+      "stool": "AM - 3 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 3,
+          "status": "observed",
+          "notes": "AM - 3"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
       ],
-      "notes": "GI/stool observations improving; morning metronidazole administered.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Metronidazole (AM)"
+      ],
+      "weightLb": null,
+      "notes": "✅ paper towel roll destruction ✅ squirrel chaser ✅ cat herder",
+      "rawEntry": "9/25\tAppetite: Normal\nWater: Normal \nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: No vomiting\nStool: AM - 3 | PM - 4\nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone / Metronidazole (AM)\nNotes: ✅ paper towel roll destruction ✅ squirrel chaser ✅ cat herder\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0926",
+      "date": "2026-09-26",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal > Slightly reduced",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal > Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ stuffed chicken maiming ✅ showing off his toys",
+      "rawEntry": "9/26\tAppetite: Normal\nWater: Normal \nEnergy: Normal > Slightly reduced\nMood/Behavior: Normal Roger\nGI: No vomiting \nStool: AM - 4 | PM - 4 \nPlay/Engagement: Normal > Reduced\nSleep: Normal \nMedications: Prednisone \nNotes: ✅ stuffed chicken maiming ✅ showing off his toys\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-0927",
+      "date": "2026-09-27",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
+      ],
+      "play": "Normal > Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "✅ self initiated play with his squeaky corn ✅ sassy ✅",
+      "rawEntry": "9/27\tAppetite: Normal \nWater: Normal \nEnergy: Normal \nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 4 | PM - 4\nPlay/Engagement: Normal > Reduced \nSleep: Normal \nMedications: Prednisone \nNotes: ✅ self initiated play with his squeaky corn ✅ sassy ✅ \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0928",
       "date": "2026-09-28",
-      "appetite": "",
-      "energy": "",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia (9/29)"
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter / Restless /",
+      "gi": "Nausea signs / Borborygmi",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4 | PM - 4  | Before bed - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        },
+        {
+          "period": "Before bed",
+          "score": 4,
+          "status": "observed",
+          "notes": "Before bed - 4"
+        }
       ],
-      "notes": "Recurrent borborygmi, nausea, lip licking and repeated swallowing. Cerenia given the next day.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Restless",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ very restless later into the evening and low energy. Held off on giving Cerenia as his stomach quieted down and no other signs of nausea.",
+      "rawEntry": "9/28\tAppetite: Normal \nWater: Normal \nEnergy: Slightly reduced\nMood/Behavior: Quieter / Restless /\nGI: Nausea signs / Borborygmi \nStool: AM - 4 | PM - 4  | Before bed - 4  \nPlay/Engagement: Reduced\nSleep: Restless\nMedications: Prednisone \nNotes: ⭕️ very restless later into the evening and low energy. Held off on giving Cerenia as his stomach quieted down and no other signs of nausea. \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0929",
       "date": "2026-09-29",
-      "appetite": "",
-      "energy": "low",
-      "nausea": 2,
-      "vomiting": 0,
-      "stool": "frequent",
-      "hydration": "",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg at 10 PM"
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Low",
+      "mood": "Quieter & Restless",
+      "gi": "Nausea signs / Borborygmi / Lip licking / Repeated swallowing",
+      "nausea": 1,
+      "vomiting": null,
+      "stool": "AM - 4, then 3 | PM - 4, then another 4 | Before Bed - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "AM",
+          "score": 3,
+          "status": "observed",
+          "notes": "then 3"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "then another 4"
+        },
+        {
+          "period": "Before Bed",
+          "score": 4,
+          "status": "observed",
+          "notes": "Before Bed - 4"
+        },
+        {
+          "period": "Time unrecorded",
+          "score": null,
+          "status": "observed",
+          "notes": "Six stools total in Notes field; five scores itemized above"
+        }
       ],
-      "notes": "Recurrent nausea/gurgling/restlessness with low energy and frequent stools. Cerenia administered at 10 PM.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Restless",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Cerenia (10p)"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ wondering if water intake is adequate. He goes to the bowl frequently but not sure he is actually drinking enough based on the consistency of his stools. He had a huge increase in the number of times (6) and volume of stools all 4s with an AM 3. Water intake increased in the evening.",
+      "rawEntry": "9/29\tAppetite: Normal\nWater: Normal \nEnergy: Low\nMood/Behavior: Quieter & Restless \nGI: Nausea signs / Borborygmi / Lip licking / Repeated swallowing   \nStool: AM - 4, then 3 | PM - 4, then another 4 | Before Bed - 4\nPlay/Engagement: Reduced \nSleep: Restless\nMedications: Prednisone & Cerenia (10p) \nNotes: ⭕️ wondering if water intake is adequate. He goes to the bowl frequently but not sure he is actually drinking enough based on the consistency of his stools. He had a huge increase in the number of times (6) and volume of stools all 4s with an AM 3. Water intake increased in the evening. \nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
       "id": "obs-0930",
       "date": "2026-09-30",
-      "appetite": "normal",
-      "energy": "low",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Low",
+      "mood": "Quieter",
+      "gi": "No Nausea",
       "nausea": 0,
-      "vomiting": 0,
-      "stool": "normal",
-      "hydration": "normal",
+      "vomiting": null,
+      "stool": "AM - 3 | PM - 4 | Before Bed - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 3,
+          "status": "observed",
+          "notes": "AM - 3"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        },
+        {
+          "period": "Before Bed",
+          "score": 4,
+          "status": "observed",
+          "notes": "Before Bed - 4"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
       "urination": "",
-      "pain": 0,
-      "medications": [],
-      "notes": "Normal appetite, water and stools. No nausea; lower energy and quieter than usual.",
-      "source": "owner_observation"
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ stealing cat food",
+      "rawEntry": "9/30\tAppetite: Normal\nWater: Normal \nEnergy: Low\nMood/Behavior: Quieter\nGI: No Nausea\nStool: AM - 3 | PM - 4 | Before Bed - 4\nPlay/Engagement: Reduced \nSleep: Normal \nMedications: Prednisone \nNotes: ⭕️ stealing cat food\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
     },
     {
-      "id": "obs-1001-med",
+      "id": "obs-1001",
       "date": "2026-10-01",
-      "appetite": "normal",
-      "energy": "slightly reduced",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting / Drooling",
       "nausea": 1,
       "vomiting": 0,
-      "stool": "4 AM",
-      "hydration": "normal",
-      "urination": "",
-      "pain": 0,
-      "medications": [
-        "Cerenia 60 mg",
-        "Prednisone 20 mg"
+      "stool": "AM - 4 | PM - 4",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 4,
+          "status": "observed",
+          "notes": "PM - 4"
+        }
       ],
-      "notes": "Pre-chemo blood draw day. Cerenia administered; journal remains current through 10/2.",
-      "source": "owner_observation"
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Reduced",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": 52.8,
+      "notes": "⭕️ being a loner and laying in other rooms by himself",
+      "rawEntry": "10/1\tBlood draw at Optimum Vet Clinic | 52.8lbs |   13,890 Appetite: Normal \nWater: Normal\nEnergy: Slightly reduced \nMood/Behavior: Quieter \nGI: No vomiting / Drooling \nStool: AM - 4 | PM - 4 \nPlay/Engagement: Reduced\nSleep: Normal\nMedications: Prednisone  \nNotes: ⭕️ being a loner and laying in other rooms by himself\nRoger Things: Reduced",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-1002",
+      "date": "2026-10-02",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Slightly reduced",
+      "mood": "Quieter",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 4 | PM - 5",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 4,
+          "status": "observed",
+          "notes": "AM - 4"
+        },
+        {
+          "period": "PM",
+          "score": 5,
+          "status": "observed",
+          "notes": "PM - 5"
+        }
+      ],
+      "play": "Reduced",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone",
+        "Trazodone",
+        "Vinblastine"
+      ],
+      "weightLb": null,
+      "notes": "✅ paper towel roll stealer done ✅ cat herder",
+      "rawEntry": "10/2\tChemo #5     Appetite: Normal\nWater: Normal\nEnergy: Slightly reduced\nMood/Behavior: Quieter\nGI: No vomiting \nStool: AM - 4 | PM - 5 \nPlay/Engagement: Reduced\nSleep: Normal \nMedications: Prednisone / Trazodone / Vinblastine\nNotes: ✅ paper towel roll stealer done ✅ cat herder\nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
+    },
+    {
+      "id": "obs-1003",
+      "date": "2026-10-03",
+      "appetite": "Normal",
+      "hydration": "Normal",
+      "energy": "Normal",
+      "mood": "Normal Roger",
+      "gi": "No vomiting",
+      "nausea": null,
+      "vomiting": 0,
+      "stool": "AM - 5 | PM - | Before Bed -",
+      "stoolEvents": [
+        {
+          "period": "AM",
+          "score": 5,
+          "status": "observed",
+          "notes": "AM - 5"
+        },
+        {
+          "period": "PM",
+          "score": null,
+          "status": "not observed",
+          "notes": "PM -"
+        },
+        {
+          "period": "Before Bed",
+          "score": null,
+          "status": "not observed",
+          "notes": "Before Bed -"
+        }
+      ],
+      "play": "Normal",
+      "sleep": "Normal",
+      "rogerThings": "Yes",
+      "urination": "",
+      "pain": null,
+      "medications": [
+        "Prednisone"
+      ],
+      "weightLb": null,
+      "notes": "⭕️ criminal cat food stealer ✅ paper towel roll destruction",
+      "rawEntry": "10/3\tAppetite: Normal \nWater: Normal \nEnergy: Normal\nMood/Behavior: Normal Roger \nGI: No vomiting \nStool: AM - 5 | PM - | Before Bed -\nPlay/Engagement: Normal \nSleep: Normal \nMedications: Prednisone \nNotes: ⭕️ criminal cat food stealer ✅ paper towel roll destruction \nRoger Things: Yes",
+      "source": "owner journal supplied 10/3/2026"
     }
   ],
   "costs": [
@@ -839,7 +2673,7 @@
       "source": "K-State clinical note"
     }
   ],
-  "journalCoverageThrough": "2026-10-02",
+  "journalCoverageThrough": "2026-10-03",
   "medications": [
     {
       "id": "med-prednisone",

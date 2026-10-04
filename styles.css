@@ -243,3 +243,32 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .legend-square.med{background:#667085}
 .legend-line.course{border-color:var(--ksu);border-top-width:5px;opacity:.55}
 @media(min-width:680px){.medication-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* Journal detail stays compact until a date or medication is opened. */
+.journal-trend-card .card-head{align-items:end}
+.trend-select{display:grid;gap:4px;min-width:140px;color:var(--muted);font-size:13px;font-weight:700}
+.trend-select select{min-height:42px;font-size:14px}
+.journal-trend-scroll{overflow-x:auto;max-width:100%;margin-top:12px;scrollbar-color:var(--line) transparent}
+.journal-trend-scroll svg{display:block}
+.trend-legend{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:6px}
+.trend-legend span{display:inline-flex;gap:5px;align-items:center}
+.trend-legend i{width:9px;height:9px;display:inline-block;border-radius:3px}
+.trend-owner{background:var(--owner)}.trend-chemo{background:var(--ksu)}.trend-cbc{background:var(--blood)}
+.journal-stool-line{font-size:13px;line-height:1.5;margin-top:9px;color:var(--ink)}
+.journal-med-line{margin-top:8px}
+.original-entry{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}
+.original-entry summary{cursor:pointer;color:var(--owner);font-size:13px;font-weight:800;min-height:28px}
+.original-entry pre{white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.55 inherit;margin:7px 0 0;color:var(--ink)}
+.stool-fieldset{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0;min-width:0}
+.stool-fieldset legend{font-size:15px;font-weight:850;padding:0 5px;color:var(--owner)}
+.field-help{font-size:13px;line-height:1.45;color:var(--muted);margin:0 0 8px}
+.stool-rows{display:grid;gap:9px;margin-bottom:9px}
+.stool-input-row{border:1px solid var(--line);border-radius:12px;padding:9px}
+.stool-input-main{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.stool-input-detail{display:flex;gap:7px;align-items:end;margin-top:7px}.stool-input-detail .field{flex:1;min-width:0}
+.stool-input-detail .text-button{min-height:46px}
+.medication-group{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.medication-group summary{display:flex;justify-content:space-between;gap:10px;cursor:pointer;font-size:14px;line-height:1.5}
+.medication-group summary span{font-size:13px;color:var(--muted);text-align:right}
+.medication-group-body{padding-top:5px}.medication-history-row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;border-top:1px dashed var(--line);padding:9px 0;font-size:13px;line-height:1.5}
+@media(max-width:420px){.stool-input-main{grid-template-columns:1fr 1fr}.stool-input-main .field:last-child{grid-column:1/-1}.journal-trend-card .card-head{display:block}.trend-select{margin-top:10px}}
