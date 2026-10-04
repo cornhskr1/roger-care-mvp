@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=15">
+  <link rel="manifest" href="manifest.webmanifest?v=16">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -133,11 +133,21 @@
         </div>
         <div id="journalSummary" class="summary-grid"></div>
         <section class="card journal-trend-card">
-          <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Journal trends</h2></div>
-            <label class="trend-select"><span>Show</span><select id="journalMetric"><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="nausea">Nausea signs</option><option value="energy">Reduced energy</option></select></label>
+          <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Compare Roger’s trends</h2></div></div>
+          <div class="compare-metrics">
+            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
           </div>
+          <div class="compare-range" role="group" aria-label="Date range">
+            <button class="compare-range-button active" type="button" data-compare-range="all" aria-pressed="true">All dates</button>
+            <button class="compare-range-button" type="button" data-compare-range="cycles" aria-pressed="false">Treatment periods</button>
+            <button class="compare-range-button" type="button" data-compare-range="custom" aria-pressed="false">Custom dates</button>
+          </div>
+          <div id="compareCyclePicker" class="compare-cycle-picker" hidden></div>
+          <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
           <div id="journalTrend"></div>
-          <p class="medication-note">Owner observations by date. Treatment and CBC markers show timing, not cause. Unobserved stools are excluded from counts.</p>
+          <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
+          <p class="medication-note">Both tracks share dates but use their own labeled scales. Purple marks treatment; red marks CBC. A loose stool flag means a score of 6 or higher or a note of diarrhea. Mixed energy descriptions use the lower reported level. Blank values mean no observation was recorded. Patterns show timing, not cause.</p>
         </section>
 
         <section class="card">
@@ -405,6 +415,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=15" defer></script>
+  <script src="app.js?v=16" defer></script>
 </body>
 </html>

@@ -18,7 +18,8 @@ let state = null;
 let timelineFilter = 'all';
 let careTeamMode = false;
 let selectedTreatmentWindow = 'all';
-let journalMetric = 'stoolCount';
+const comparison={primary:'energy',secondary:'nausea',range:'all',cycles:new Set(),from:'2026-08-14',to:'2026-10-03',selectedDate:null};
+let comparisonCyclesReady=false;
 let journalShowAll = false;
 
 const q = sel => document.querySelector(sel);
@@ -179,7 +180,13 @@ function bindDialogs(){
   q('#medicationAddButton').addEventListener('click', () => openMedicationDialog());
   q('#addStoolRow').addEventListener('click',()=>addStoolRow());
   q('#stoolRows').addEventListener('click',event=>{if(event.target.closest('[data-remove-stool]'))event.target.closest('.stool-input-row').remove();});
-  q('#journalMetric').addEventListener('change',event=>{journalMetric=event.target.value;renderJournalTrend();});
+  q('#comparePrimary').addEventListener('change',event=>{comparison.primary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';q('#compareSecondary').value='none';}renderJournalTrend();});
+  q('#compareSecondary').addEventListener('change',event=>{comparison.secondary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';event.target.value='none';}renderJournalTrend();});
+  qa('[data-compare-range]').forEach(btn=>btn.addEventListener('click',()=>{comparison.range=btn.dataset.compareRange;comparison.selectedDate=null;renderJournalTrend();}));
+  q('#compareCyclePicker').addEventListener('click',event=>{const button=event.target.closest('[data-compare-cycle]');if(!button)return;const n=Number(button.dataset.compareCycle);if(comparison.cycles.has(n))comparison.cycles.delete(n);else comparison.cycles.add(n);comparison.selectedDate=null;renderJournalTrend();});
+  for(const [id,key] of [['compareFrom','from'],['compareTo','to']])q(`#${id}`).addEventListener('change',event=>{comparison[key]=event.target.value;comparison.selectedDate=null;renderJournalTrend();});
+  q('#journalTrend').addEventListener('click',event=>{const hit=event.target.closest('[data-compare-date]');if(hit){comparison.selectedDate=hit.dataset.compareDate;renderComparisonDetail();}});
+  q('#journalTrend').addEventListener('keydown',event=>{if((event.key==='Enter'||event.key===' ')&&event.target.closest('[data-compare-date]')){event.preventDefault();comparison.selectedDate=event.target.closest('[data-compare-date]').dataset.compareDate;renderComparisonDetail();}});
   q('#journalHistoryToggle').addEventListener('click',()=>{journalShowAll=!journalShowAll;renderJournal();});
   q('#costAddButton').addEventListener('click', () => {
     q('#costForm').reset();
@@ -857,41 +864,130 @@ function observationChips(o){
   return chips.map(x=>`<span class="chip">${esc(x)}</span>`).join('');
 }
 
+const COMPARE_METRICS={
+  energy:{label:'Energy level',min:0,max:4,ticks:[0,1,2,3,4],names:['Very low','Low','Slightly reduced','Normal','High'],unit:'',kind:'owner'},
+  nausea:{label:'Nausea signs',min:0,max:3,ticks:[0,1,2,3],names:['None','Signs','Moderate','Severe'],unit:'',kind:'owner'},
+  stoolCount:{label:'Bowel movements',min:0,ticks:[0,2,4,6],unit:'',kind:'owner'},
+  stoolScore:{label:'Highest stool score',min:1,max:8,ticks:[1,4,6,8],unit:'',kind:'owner'},
+  looseStool:{label:'Loose stool / diarrhea',min:0,max:1,ticks:[0,1],names:['No score ≥6','Score ≥6 / noted'],unit:'',kind:'owner'},
+  cerenia:{label:'Cerenia doses logged',min:0,ticks:[0,1,2],unit:'',kind:'medication'},
+  neutrophils:{label:'Neutrophils',min:0,ticks:[0,5,10,15],unit:' K/µL',kind:'lab'},
+  weight:{label:'Weight',ticks:[],unit:' lb',kind:'weight'}
+};
+const dateNumber=date=>Date.parse(`${date}T12:00:00Z`)/86400000;
+function energyLevel(text){
+  const v=String(text||'').toLowerCase();
+  if(!v)return null;
+  if(v.includes('very low'))return 0;
+  if(v.includes('low'))return 1;
+  if(v.includes('reduced'))return 2;
+  if(v.includes('normal'))return 3;
+  if(v.includes('high'))return 4;
+  return null;
+}
+function comparisonRows(){
+  const byDate=new Map();
+  const row=date=>{if(!byDate.has(date))byDate.set(date,{date,observations:[],labs:[],medications:[],treatments:[]});return byDate.get(date);};
+  (state.observations||[]).forEach(o=>row(o.date).observations.push(o));
+  (state.labs||[]).filter(l=>l.metric==='Neutrophils').forEach(l=>row(l.date).labs.push(l));
+  (state.medicationAdministrations||[]).filter(a=>a.medicationId==='med-cerenia').forEach(a=>row(a.date).medications.push(a));
+  (state.treatments||[]).forEach(t=>row(t.date).treatments.push(t));
+  return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(d=>{
+    const entries=d.observations,stools=entries.flatMap(o=>o.stoolEvents||[]).filter(s=>s.status==='observed');
+    const legacy=entries.filter(o=>!o.stoolEvents?.length&&o.stool).map(o=>Number.parseFloat(o.stool)).filter(Number.isFinite);
+    const scores=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy];
+    const energy=entries.map(o=>energyLevel(o.energy)).filter(v=>v!==null);
+    const nausea=entries.map(o=>o.nausea).filter(v=>v!==null&&v!==undefined&&v!=='').map(Number);
+    const lab=d.labs.at(-1),ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
+    const treatmentWeight=d.treatments.map(t=>Number(t.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
+    return {...d,values:{
+      energy:energy.length?Math.min(...energy):null,
+      nausea:nausea.length?Math.max(...nausea):null,
+      stoolCount:stools.length+legacy.length||((entries.some(o=>o.stoolEvents?.some(s=>s.status==='none')))?0:null),
+      stoolScore:scores.length?Math.max(...scores):null,
+      looseStool:/diarrhea/i.test(entries.map(o=>`${o.gi||''} ${o.notes||''}`).join(' '))||scores.some(s=>s>=6)?1:scores.length?0:null,
+      cerenia:d.medications.filter(a=>a.status==='given').length,
+      neutrophils:lab?Number(lab.value):null,
+      weight:ownerWeight??treatmentWeight??null
+    }};
+  });
+}
+function comparisonRange(rows){
+  if(!rows.length)return null;
+  const firstOwner=rows.find(r=>r.observations.length)?.date||rows[0].date;
+  const latest=rows.at(-1).date;
+  if(comparison.range==='custom'){
+    if(!comparison.from||!comparison.to||comparison.from>comparison.to)return {error:'Choose a valid start and end date.'};
+    return {from:comparison.from,to:comparison.to,contains:date=>date>=comparison.from&&date<=comparison.to};
+  }
+  if(comparison.range==='cycles'){
+    const treatments=[...(state.treatments||[])].sort((a,b)=>a.number-b.number);
+    const windows=treatments.filter(t=>comparison.cycles.has(t.number)).map(t=>cycleWindowFor(t,treatments));
+    if(!windows.length)return {error:'Select at least one treatment period.'};
+    const from=windows[0].start,to=windows.at(-1).displayEnd<latest?windows.at(-1).displayEnd:latest;
+    return {from,to,contains:date=>windows.some(w=>date>=w.start&&date<w.endExclusive)};
+  }
+  return {from:firstOwner,to:latest,contains:date=>date>=firstOwner&&date<=latest};
+}
+function comparisonScale(key,rows){
+  const m=COMPARE_METRICS[key],values=rows.map(r=>r.values[key]).filter(v=>v!==null&&Number.isFinite(v));
+  if(key==='weight'){const min=values.length?Math.floor(Math.min(...values)-1):0,max=values.length?Math.ceil(Math.max(...values)+1):10;return {...m,min,max,ticks:[min,Math.round((min+max)/2),max]};}
+  if(m.max!==undefined)return m;
+  const max=Math.max(key==='stoolCount'?6:key==='neutrophils'?15:2,...values);
+  return {...m,max,ticks:key==='stoolCount'?[0,Math.ceil(max/2),max]:key==='neutrophils'?[0,Math.round(max/2),max]:[0,1,max]};
+}
+function comparisonValue(key,value){
+  if(value===null||value===undefined||!Number.isFinite(value))return 'Not recorded';
+  const metric=COMPARE_METRICS[key];
+  return metric.names?.[value]||`${value}${metric.unit}`;
+}
+function renderComparisonDetail(){
+  const target=q('#compareDayDetail'),date=comparison.selectedDate,day=comparisonRows().find(row=>row.date===date);
+  if(!day){target.innerHTML='<p class="empty-state">Tap a date on either track to inspect the recorded values.</p>';return;}
+  const a=comparison.primary,b=comparison.secondary;
+  const notes=day.observations.map(o=>`<div class="compare-note">${esc(o.notes||'Owner entry')}${o.rawEntry?' · original journal':' · app entry'}</div>`).join('');
+  const lab=day.labs.at(-1);
+  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a]))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b]))}</strong></span>`:''}</div>${notes}${lab?`<div class="compare-note">CBC: ${esc(lab.displayValue||lab.value)} ${esc(lab.unit)} · ${esc(lab.source)}</div>`:''}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}`;
+}
 function renderJournalTrend(){
   if(!els.journalTrend)return;
-  const byDate=new Map();
-  for(const o of state.observations||[]){
-    if(!byDate.has(o.date))byDate.set(o.date,[]);
-    byDate.get(o.date).push(o);
-  }
-  const dates=[...byDate.keys()].sort();
-  if(!dates.length){els.journalTrend.innerHTML='<p class="empty-state">Add a journal entry to start tracking patterns.</p>';return;}
-  const labels={stoolCount:'Bowel movements',stoolScore:'Highest stool score',nausea:'Nausea signs',energy:'Reduced energy'};
-  const metrics=dates.map(date=>{
-    const entries=byDate.get(date),stools=entries.flatMap(o=>o.stoolEvents||[]).filter(s=>s.status==='observed');
-    const legacy=entries.filter(o=>!o.stoolEvents?.length&&o.stool).map(o=>Number.parseFloat(o.stool)).filter(Number.isFinite);
-    const scored=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy];
-    const count=stools.length+legacy.length;
-    const nausea=entries.some(o=>Number(o.nausea)>0)?1:entries.some(o=>o.nausea===0)?0:null;
-    const energy=entries.some(o=>/low|reduced/i.test(o.energy||''))?1:entries.some(o=>/normal|high/i.test(o.energy||''))?0:null;
-    return {date,stoolCount:count||null,stoolScore:scored.length?Math.max(...scored):null,nausea,energy};
+  const treatments=[...(state.treatments||[])].sort((a,b)=>a.number-b.number);
+  if(!comparisonCyclesReady){treatments.forEach(t=>comparison.cycles.add(t.number));comparisonCyclesReady=true;}
+  qa('[data-compare-range]').forEach(btn=>{const active=btn.dataset.compareRange===comparison.range;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));});
+  q('#compareCyclePicker').hidden=comparison.range!=='cycles';
+  q('#compareCustomDates').hidden=comparison.range!=='custom';
+  q('#compareCyclePicker').innerHTML=treatments.map(t=>`<button class="compare-cycle ${comparison.cycles.has(t.number)?'active':''}" type="button" data-compare-cycle="${t.number}" aria-pressed="${comparison.cycles.has(t.number)}">#${t.number}<small>${fmtDate(t.date).replace(', 2026','')}</small></button>`).join('');
+  const rows=comparisonRows(),range=comparisonRange(rows);
+  if(!range||range.error){els.journalTrend.innerHTML=`<p class="empty-state">${range?.error||'Add a dated journal entry to start comparing.'}</p>`;q('#compareDayDetail').innerHTML='';return;}
+  const visible=rows.filter(r=>range.contains(r.date));
+  if(!visible.length){els.journalTrend.innerHTML='<p class="empty-state">No recorded values in this range.</p>';q('#compareDayDetail').innerHTML='';return;}
+  const keys=[comparison.primary,...(comparison.secondary==='none'?[]:[comparison.secondary])];
+  const span=Math.max(1,dateNumber(range.to)-dateNumber(range.from));
+  const W=Math.max(740,Math.min(1500,span*16+140)),H=keys.length===2?412:248,L=111,R=24,top=65,laneH=115,gap=64;
+  const x=date=>L+(W-L-R)*(dateNumber(date)-dateNumber(range.from))/span;
+  let svg='';
+  for(const t of treatments){if(t.date<range.from||t.date>range.to)continue;svg+=`<line x1="${x(t.date)}" x2="${x(t.date)}" y1="38" y2="${H-32}" stroke="#512888" stroke-width="1" opacity=".35"/><text x="${x(t.date)+4}" y="20" font-size="11" font-weight="800" fill="#512888">#${t.number}</text>`;}
+  const cbcDates=[...new Set((state.labs||[]).filter(l=>l.metric==='Neutrophils'&&l.date>=range.from&&l.date<=range.to).map(l=>l.date))];
+  for(const date of cbcDates)svg+=`<circle cx="${x(date)}" cy="32" r="4" fill="#b44f5c"><title>${esc(fmtDate(date))} · CBC</title></circle>`;
+  keys.forEach((key,lane)=>{
+    const metric=comparisonScale(key,visible),yTop=top+lane*(laneH+gap),bottom=yTop+laneH,color=metric.kind==='lab'?'#b44f5c':metric.kind==='medication'?'#512888':lane?'#197c91':'#5e7895';
+    const y=value=>bottom-(value-metric.min)/(metric.max-metric.min||1)*laneH;
+    svg+=`<text x="${L}" y="${yTop-14}" font-size="14" font-weight="800" fill="${color}">${esc(metric.label)}${metric.unit?` · ${esc(metric.unit.trim())}`:''}</text>`;
+    for(const tick of metric.ticks){if(tick<metric.min||tick>metric.max)continue;svg+=`<line x1="${L}" x2="${W-R}" y1="${y(tick)}" y2="${y(tick)}" stroke="#e5e7ef"/><text x="${L-8}" y="${y(tick)+4}" text-anchor="end" font-size="11" fill="#707181">${esc(metric.names?.[tick]||tick)}</text>`;}
+    let segment=[];const flush=()=>{if(segment.length>1)svg+=`<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;segment=[];};
+    let previous=null;
+    for(const row of visible){const value=row.values[key];if(value===null||!Number.isFinite(value)){flush();previous=null;continue;}if(previous&&dateNumber(row.date)-dateNumber(previous)>1)flush();segment.push(`${x(row.date)},${y(value)}`);previous=row.date;}
+    flush();
+    for(const row of visible){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;svg+=`<circle cx="${x(row.date)}" cy="${y(value)}" r="4.5" fill="${color}" stroke="#fff" stroke-width="1.5"><title>${esc(fmtDate(row.date))} · ${esc(metric.label)}: ${esc(comparisonValue(key,value))}</title></circle>`;}
   });
-  const metric=journalMetric, max=metric==='stoolScore'?8:metric==='stoolCount'?Math.max(6,...metrics.map(d=>d.stoolCount||0)):1;
-  const W=Math.max(720,metrics.length*18+60),H=220,L=36,R=16,T=36,B=38,plotH=H-T-B;
-  const x=i=>L+(W-L-R)*(i+.5)/metrics.length;
-  const y=v=>T+plotH-(v/max)*plotH;
-  const tick=max===1?[0,1]:[0,Math.ceil(max/2),max];
-  let svg=tick.map(n=>`<line x1="${L}" x2="${W-R}" y1="${y(n)}" y2="${y(n)}" stroke="#e6e7ef"/><text x="${L-8}" y="${y(n)+4}" text-anchor="end" font-size="12" fill="#707181">${n}</text>`).join('');
-  metrics.forEach((d,i)=>{
-    const lab=state.labs?.some(row=>row.date===d.date&&row.metric==='Neutrophils');
-    const treatment=state.treatments?.find(row=>row.date===d.date);
-    if(lab)svg+=`<circle cx="${x(i)}" cy="14" r="4" fill="#b44f5c"><title>${esc(fmtDate(d.date))} · CBC</title></circle>`;
-    if(treatment)svg+=`<rect x="${x(i)-4}" y="10" width="8" height="8" rx="2" fill="#512888"><title>${esc(fmtDate(d.date))} · Chemo #${treatment.number}</title></rect>`;
-    if(i%7===0||i===metrics.length-1)svg+=`<text x="${x(i)}" y="${H-14}" text-anchor="middle" font-size="11" fill="#707181">${d.date.slice(5).replace('-','/')}</text>`;
-    const v=d[metric];
-    if(v!=null)svg+=`<rect x="${x(i)-5}" y="${y(v)}" width="10" height="${Math.max(3,T+plotH-y(v))}" rx="3" fill="#5e7895"><title>${esc(fmtDate(d.date))} · ${labels[metric]}: ${v}</title></rect>`;
-  });
-  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${labels[metric]} by date, with chemo and CBC markers">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>${labels[metric]}</span><span><i class="trend-chemo"></i>Chemo</span><span><i class="trend-cbc"></i>CBC</span></div>`;
+  const tickStep=Math.max(1,Math.ceil(span/8));
+  for(let offset=0;offset<=span;offset+=tickStep){const date=addDays(range.from,offset);svg+=`<text x="${x(date)}" y="${H-12}" text-anchor="middle" font-size="11" fill="#707181">${date.slice(5).replace('-','/')}</text>`;}
+  if(span%tickStep)svg+=`<text x="${x(range.to)}" y="${H-12}" text-anchor="end" font-size="11" fill="#707181">${range.to.slice(5).replace('-','/')}</text>`;
+  for(const row of visible){const values=keys.map(key=>`${COMPARE_METRICS[key].label}: ${comparisonValue(key,row.values[key])}`).join(' · ');svg+=`<rect x="${x(row.date)-7}" y="40" width="14" height="${H-73}" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(fmtDate(row.date))}: ${esc(values)}"><title>${esc(fmtDate(row.date))} · ${esc(values)}. Tap for source notes.</title></rect>`;}
+  const label=keys.map(key=>COMPARE_METRICS[key].label).join(' and ');
+  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span></div>`;
+  if(!visible.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=visible.at(-1).date;
+  renderComparisonDetail();
 }
 
 function tabletQuantity(administration){

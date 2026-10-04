@@ -52,6 +52,8 @@ Owner-reported CBC dates (10/15, 10/29, 11/12) and vinblastine dates (10/16, 10/
 
 The owner's original daily journal spans all 51 dates from 8/14 through 10/3. `data/journal-original.txt` preserves the supplied wording; `scripts/import-journal.cjs` creates structured entries in `data/seed.json`, each retaining its original dated block in `rawEntry`. The journal view shows the latest seven dates and can reveal all older entries and the full source on demand. Stool entries can have multiple movements per day, with unobserved, unrecorded, and unscored values distinct from scored movements. On 9/29 the original note reports six movements but enumerates only five scores; the sixth is counted without a score. The source-reported 8/27 CBC value remains in the journal wording; clinical lab values retain their separate record source. New app entries feed the trend chart and persist locally, with complete JSON backup/import available in More.
 
+The journal comparison chart shows any one or two measures on separate labeled scales: energy, nausea signs, movement count, highest stool score, loose stool/diarrhea flag, logged Cerenia doses, neutrophils, and weight. It can show all journal dates, any combination of treatment periods, or a custom date range. Treatment and CBC dates are marked on the shared time axis, and selecting a date shows its recorded values and source notes. A missing nausea observation stays blank rather than becoming zero; the chart reflects recorded timing without implying causation. New local journal entries and medication administrations update it when saved.
+
 ## Next technical milestones
 
 1. Secure authentication and encrypted cloud sync
