@@ -321,3 +321,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .medication-group summary span{font-size:13px;color:var(--muted);text-align:right}
 .medication-group-body{padding-top:5px}.medication-history-row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;border-top:1px dashed var(--line);padding:9px 0;font-size:13px;line-height:1.5}
 @media(max-width:420px){.stool-input-main{grid-template-columns:1fr 1fr}.stool-input-main .field:last-child{grid-column:1/-1}.journal-trend-card .card-head{display:block}.compare-metrics{grid-template-columns:1fr}.compare-range-button{font-size:12px;padding:4px}}
+.import-review:not(:empty){margin-top:1.2rem;padding:1rem;border:1px solid #dcd8e8;border-radius:18px;background:#f8f6fc}
+.import-review h3{margin:.2rem 0;font-size:1.15rem}
+.import-check{display:flex;align-items:center;gap:.65rem;font-weight:700;color:#252534}
+.import-check input{width:1.25rem;height:1.25rem;accent-color:#512888;flex:none}
