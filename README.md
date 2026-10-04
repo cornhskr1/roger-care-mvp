@@ -42,7 +42,7 @@ Financial records deliberately do **not** store bank names, account numbers, car
 
 ## Important limitation
 
-Document upload is real and persists locally, but automated medical-document extraction is **not** implemented yet. That needs a secure backend / ingestion service and should not be simulated in the client.
+The Import & review flow reads text from K-State patient summary PDFs, IDEXX CBC PDFs, and text-based Optimum invoices on the device. Scanned K-State and Optimum invoices use on-device OCR. It proposes only the supported fields and requires owner review before saving. Optimum invoices show an amount due, so the owner must confirm payment before that amount enters owner-paid totals and choose a cost category. A review can update an existing treatment, lab, or invoice instead of adding a duplicate; the approved structured values then feed the shared record, charts, timeline, and costs. PDF files themselves remain on the device or in the owner's original storage location. Unsupported layouts and uncertain values stop without modifying the record. An invoice is never used to infer the administered vinblastine dose.
 
 The published historical journal through 10/3/2026, medical record, and patient IDs are public in the GitHub Pages site and repository. New owner-entered app entries, corrections, photo, and document files remain on the device where they were entered. There is no authenticated private sharing or cross-device sync yet. Use the local vet handoff download/print to share deliberately.
 

@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=27">
+  <link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -248,9 +248,19 @@
           <div class="card-head">
             <div>
               <div class="section-kicker">DOCUMENTS</div>
-              <h2>Upload a care record</h2>
+              <h2>Import & review a care record</h2>
             </div>
           </div>
+          <p class="body-copy">Choose a K-State summary, a K-State or Optimum invoice, or an IDEXX CBC PDF. Review the values before they update Roger’s timeline, charts, and costs. The PDF itself is not uploaded to the shared record.</p>
+          <form id="analyzeForm" class="form-stack">
+            <label class="field"><span>Care record PDF</span><input id="analyzeFile" type="file" accept="application/pdf,.pdf" required></label>
+            <label class="field"><span>Record type</span><select id="analyzeType"><option value="summary">K-State patient summary (administered dose)</option><option value="invoice">K-State invoice (amount paid)</option><option value="optimumInvoice">Optimum invoice (amount due)</option><option value="lab">IDEXX CBC (current results)</option></select></label>
+            <button class="secondary-button" type="submit">Read PDF and review</button>
+          </form>
+          <div id="importReview" class="import-review" aria-live="polite"></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div><div class="section-kicker">FILE CABINET</div><h2>Keep a copy on this device</h2></div></div>
           <form id="documentForm" class="form-stack">
             <label class="field">
               <span>File</span>
@@ -449,6 +459,7 @@
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
-  <script src="app.js?v=33" defer></script>
+  <script src="import-analysis.js?v=2" defer></script>
+  <script src="app.js?v=35" defer></script>
 </body>
 </html>
