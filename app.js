@@ -64,7 +64,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','upcomingCare','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -612,6 +612,7 @@ function renderHome(){
   const obs=latestObservation();
   const coverage=state.journalCoverageThrough;
   els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest structured owner observation · journal current through ${fmtDate(coverage||obs.date)}</div></div>${severityChip(obs)}</div><div class="item-copy">${esc(obs.notes)}</div>` : 'No observations yet.';
+  renderJournalBrief(t);
 
   els.clinicalCourse.innerHTML = state.treatments.map(tr => {
     const nextObs = state.observations.find(o=>o.date>=tr.date && daysBetween(tr.date,o.date)<=5);
@@ -630,6 +631,25 @@ function renderHome(){
   open.push('Verify the duplicate vinblastine billing lines on the 10/2 K-State invoice.');
   open.push('Reconcile the 7/14 Optimum surgery/dental invoice when received.');
   els.openItems.innerHTML = open.map(x=>`<div class="open-item"><span class="open-dot"></span><div class="item-copy" style="margin:0">${esc(x)}</div></div>`).join('');
+}
+
+function renderJournalBrief(treatment){
+  const rows=comparisonRows().filter(r=>r.date>=treatment.date&&r.observations.length);
+  if(!rows.length){els.journalBrief.innerHTML='<p class="empty-state">No journal days recorded since this treatment yet.</p>';return;}
+  const last=rows.at(-1),reduced=rows.filter(r=>r.values.energy!==null&&r.values.energy<3),energyKnown=rows.filter(r=>r.values.energy!==null);
+  const nausea=rows.filter(r=>r.values.nausea>0),loose=rows.filter(r=>r.values.looseStool===1);
+  const bloody=rows.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(v=>/\bblood\b/i.test(String(v||'')))));
+  const scores=rows.map(r=>r.values.stoolScore).filter(v=>v!==null);
+  const sentences=[`${rows.length} of ${daysBetween(treatment.date,last.date)+1} days logged since chemo #${treatment.number} (${fmtDate(treatment.date)}–${fmtDate(last.date)}).`];
+  if(energyKnown.length)sentences.push(`Energy was reduced or low on ${reduced.length} of ${energyKnown.length} days with an energy entry${last.values.energy===3&&reduced.length?' and was recorded as normal on the latest day':''}.`);
+  const symptoms=[];
+  if(nausea.length)symptoms.push(`nausea signs on ${nausea.length} day${nausea.length===1?'':'s'}`);
+  if(loose.length)symptoms.push(`loose stool or diarrhea on ${loose.length} day${loose.length===1?'':'s'}`);
+  if(bloody.length)symptoms.push(`blood mentioned on ${bloody.length} day${bloody.length===1?'':'s'}`);
+  if(symptoms.length)sentences.push(`Journaled: ${symptoms.join('; ')}.`);
+  else if(scores.length)sentences.push(`Highest recorded stool score: ${Math.max(...scores)}. Symptoms without entries are unknown.`);
+  const note=rows.slice().reverse().flatMap(r=>r.observations.filter(o=>!o.rawEntry&&String(o.notes||'').trim().length>45).map(o=>({date:o.date,text:o.notes}))).at(0);
+  els.journalBrief.innerHTML=`<p class="journal-brief-copy">${sentences.map(esc).join(' ')}</p>${note?`<div class="journal-brief-note"><strong>Your note · ${fmtDate(note.date)}</strong><span>${esc(note.text.length>200?note.text.slice(0,197)+'…':note.text)}</span></div>`:''}<p class="field-help">Drawn from dated journal entries. A day without an entry is not counted as symptom-free.</p>`;
 }
 
 function renderClinicalReview(){

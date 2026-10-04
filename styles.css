@@ -158,6 +158,12 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .clinical-review-grid strong{font-size:12px;margin-bottom:4px;color:var(--owner)}
 .clinical-review-grid span{font-size:13px;line-height:1.4}
 .clinical-review-grid .review-wide{grid-column:1/-1}
+.journal-brief-card{border-left:4px solid var(--owner)}
+.journal-brief-copy{font-size:14px;line-height:1.55;margin:13px 0 8px}
+.journal-brief-note{background:var(--blue-soft);border-radius:12px;padding:11px 12px;font-size:13px;line-height:1.45}
+.journal-brief-note strong,.journal-brief-note span{display:block}
+.journal-brief-note strong{color:var(--owner);margin-bottom:3px}
+.journal-brief-card .field-help{margin-bottom:0}
 .record-clarification{margin:8px 0;padding:9px 11px;border-radius:9px;background:#f0f6f8;color:#34546b;font-size:13px;line-height:1.4}
 @media(max-width:520px){.clinical-review-grid{grid-template-columns:1fr}.clinical-review-grid .review-wide{grid-column:auto}}
 .cycle-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}

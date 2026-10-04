@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=21">
+  <link rel="manifest" href="manifest.webmanifest?v=22">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -49,6 +49,11 @@
             <button id="openJournalComposer" type="button" class="primary-button compact">Log today</button>
           </div>
           <div id="latestObservation" class="empty-state"></div>
+        </section>
+
+        <section class="card journal-brief-card owner-only">
+          <div class="card-head"><div><div class="section-kicker">SINCE THE LAST TREATMENT</div><h2>Your journal at a glance</h2></div><button class="text-button" data-nav="journal" type="button">Open journal</button></div>
+          <div id="journalBrief" aria-live="polite"></div>
         </section>
 
         <section class="card">
@@ -434,6 +439,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=21" defer></script>
+  <script src="app.js?v=22" defer></script>
 </body>
 </html>
