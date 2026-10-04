@@ -358,9 +358,15 @@
         <label class="field"><span>Hydration / thirst</span><select name="hydration"><option value="">Not logged</option><option>normal</option><option>increased thirst</option><option>decreased drinking</option><option>good self-hydration</option></select></label>
         <label class="field"><span>Urination</span><select name="urination"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>accident / unusual</option></select></label>
       </div>
-      <div class="form-grid two"><label class="field"><span>Mood / behavior</span><input name="mood" placeholder="Normal Roger, quieter…"></label><label class="field"><span>Play / engagement</span><input name="play" placeholder="Normal, reduced…"></label></div>
-      <div class="form-grid two"><label class="field"><span>Sleep</span><input name="sleep" placeholder="Normal, restless…"></label><label class="field"><span>Roger things</span><input name="rogerThings" list="rogerThingsOptions" placeholder="Yes, reduced…"></label></div>
-      <datalist id="rogerThingsOptions"><option value="Yes"><option value="Reduced"><option value="None"></datalist>
+      <div class="form-grid two">
+        <label class="field"><span>Mood / behavior</span><select name="mood"><option value="">Not logged</option><option>Normal Roger</option><option>Quieter</option><option>Restless</option><option>Quieter / Restless</option><option>Varied during day</option></select></label>
+        <label class="field"><span>Play / engagement</span><select name="play"><option value="">Not logged</option><option>Normal</option><option>Reduced</option><option>None</option><option>Reduced as the day went on</option><option>Reduced &gt; improved into PM</option><option>Normal &gt; Reduced</option><option>Varied during day</option></select></label>
+      </div>
+      <div class="form-grid two">
+        <label class="field"><span>Sleep</span><select name="sleep"><option value="">Not logged</option><option>Normal</option><option>More than usual</option><option>Restless</option><option>Normal / Restless</option><option>Varied during day</option></select></label>
+        <label class="field"><span>Roger things</span><select name="rogerThings"><option value="">Not logged</option><option>Yes</option><option>Reduced</option><option>Reduced into PM</option><option>None</option></select></label>
+      </div>
+      <p class="field-help">If something changed during the day, describe when and what happened in the notes below.</p>
       <label class="field"><span>GI observations</span><input name="gi" placeholder="Gurgling, drooling, no vomiting…"></label>
       <label class="field"><span>Medication mentioned in notes</span><input name="medications" type="text" placeholder="Prednisone, Cerenia…"></label>
       <p class="field-help">For a dose, use + Medication so it appears in the dose history and charts.</p>
@@ -443,6 +449,6 @@
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
-  <script src="app.js?v=31" defer></script>
+  <script src="app.js?v=32" defer></script>
 </body>
 </html>
