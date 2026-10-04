@@ -794,7 +794,7 @@ function renderHome(){
     ['VINBLASTINE',`${t.doseMg} mg`,`${t.doseMgM2} mg/m²`],
     ['NEUTROPHILS',`${neut.value} ${neut.unit}`,fmtDate(neut.date)],
     ['HEMATOCRIT',`${hct.value}${hct.unit}`,fmtDate(hct.date)],
-    ['OWNER PAID',money(totalPaid()),'through '+fmtDate(state.costs[state.costs.length-1].date)]
+    ['DOCUMENTED COSTS',money(totalPaid()),'through '+fmtDate(state.costs[state.costs.length-1].date)]
   ].map(m=>`<div class="metric-card"><div class="metric-label">${m[0]}</div><div class="metric-value">${m[1]}</div><div class="metric-note">${m[2]}</div></div>`).join('');
 
   const obs=latestObservation();
@@ -812,7 +812,7 @@ function renderHome(){
     return `<div class="course-row"><div class="course-date">${fmtDate(tr.date)}</div><div class="course-title">Chemo #${tr.number}</div><div class="course-copy">${esc(pieces.join(' → '))}</div></div>`;
   }).join('');
 
-  els.homeCostSummary.innerHTML = `<div class="estimate-grid"><div class="estimate-box"><div class="section-kicker">TOTAL PAID</div><div class="estimate-value">${money(totalPaid())}</div><div class="estimate-note">All documented care since mass workup, including the mixed surgery/dental day.</div></div><div class="estimate-box"><div class="section-kicker">ORIGINAL K-STATE COURSE ESTIMATE</div><div class="estimate-value">$3,500–$4,000</div><div class="estimate-note">8/4 oncology note; primary-vet pre-treatment bloodwork was excluded from the per-injection estimate.</div></div></div>`;
+  els.homeCostSummary.innerHTML = `<div class="estimate-grid"><div class="estimate-box"><div class="section-kicker">DOCUMENTED CARE COSTS</div><div class="estimate-value">${money(totalPaid())}</div><div class="estimate-note">${money(confirmedPaid())} confirmed · ${money(provisionalPaid())} provisional/unresolved. Includes the mixed surgery/dental day.</div></div><div class="estimate-box"><div class="section-kicker">ORIGINAL K-STATE COURSE ESTIMATE</div><div class="estimate-value">$3,500–$4,000</div><div class="estimate-note">8/4 oncology note; primary-vet pre-treatment bloodwork was excluded from the per-injection estimate.</div></div></div>`;
 
   const open=[];
   open.push('CBC and treatment dates for #6–#8 are scheduled; final restaging date remains TBD.');
@@ -1447,7 +1447,7 @@ function renderTimeline(){
 function renderCosts(){
   q('#medicationCostBreakdown').innerHTML=renderMedicationLedger();
   const total=totalPaid(),confirmed=confirmedPaid(),provisional=provisionalPaid();
-  els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">TOTAL OWNER-PAID CARE</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
+  els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">DOCUMENTED CARE COSTS</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
 
   const treatmentAfterPlan=state.costs.filter(c=>c.date>'2026-08-04').reduce((s,c)=>s+Number(c.amountPaid||0),0);
   els.estimateComparison.innerHTML=`<div class="estimate-grid">
@@ -1457,9 +1457,9 @@ function renderCosts(){
       <div class="estimate-note">Complete 8-dose treatment course. K-State estimated about $250 per chemo injection; outside pre-treatment bloodwork was not included in that per-injection figure. Restaging was estimated at about $700.</div>
     </div>
     <div class="estimate-box">
-      <div class="section-kicker">PAID SINCE 8/4</div>
+      <div class="section-kicker">DOCUMENTED SINCE 8/4</div>
       <div class="estimate-value">${money(treatmentAfterPlan)}</div>
-      <div class="estimate-note">Spending after the treatment plan was established, excluding the 8/4 staging visit itself. Three chemo treatments and final restaging remain planned.</div>
+      <div class="estimate-note">Recorded costs after the treatment plan was established, excluding the 8/4 staging visit itself. This includes provisional amounts. Three chemo treatments and final restaging remain planned.</div>
     </div>
   </div>`;
 
@@ -1865,7 +1865,7 @@ function buildCareSummaryHtml(){
   <h2>Document index</h2><ul>${docs||'<li>No source files uploaded to this device.</li>'}</ul><p class="small">The document index lists on-device files; this HTML summary does not attach them. ${correctionCount} owner correction${correctionCount===1?'':'s'} recorded in the app history.</p>
   <h2>Owner corrections</h2><ul>${correctionRows||'<li>No corrections recorded.</li>'}</ul>
   <h2>Record checks</h2><ul><li>Verify the duplicate vinblastine billing lines on the 10/2 K-State invoice; clinical note states 2.0 mg total.</li><li>Reconcile the 7/14 Optimum surgery/dental invoice when received.</li><li>Amoxicillin dose and frequency remain unrecorded.</li></ul>
-  <h2>Family financial burden</h2><p><strong>${money(totalPaid())}</strong> documented owner-paid care to date. Amounts shown are care costs only; bank and payment-account details are excluded.</p>
+  <h2>Family financial burden</h2><p><strong>${money(totalPaid())}</strong> documented care costs to date (${money(confirmedPaid())} confirmed; ${money(provisionalPaid())} provisional/unresolved). Bank and payment-account details are excluded.</p>
   <p class="small">Clinical, lab, and pathology facts remain attributed to their sources. Owner observations are labeled separately. Corrections are retained in the app backup.</p></body></html>`;
 }
 
