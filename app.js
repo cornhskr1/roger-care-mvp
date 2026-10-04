@@ -203,7 +203,7 @@ async function saveChanges(){
     await persist();
     unpublishedLocal=true;
     if(manualPublishRequired||cloudRevision===0||readBackupMeta().confirmedStateAt!==state._savedAt&&cloudRevision===null){
-      syncMessage='Saved on this device. Back up and publish to share it.';
+      syncMessage='Saved on this device. Tap Publish this device’s record once to share it.';
       renderSharedStatus();return true;
     }
     const ok=await publishCloud(false);
@@ -290,11 +290,10 @@ function renderSharedStatus(){
   const status=q('#sharedStatus'),controls=q('#sharedControls');if(!status||!controls||!state)return;
   const label=!cloudAvailable?'On this device':unpublishedLocal?'Not yet shared':cloudRevision>0?'Shared and current':'Ready for first upload';
   status.innerHTML=`<strong>${esc(label)}</strong><span>${esc(syncMessage||'Checking shared record…')}</span>${cloudUpdatedAt&&cloudRevision>0&&!unpublishedLocal?`<small>Online update: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
-  const backed=readBackupMeta().confirmedStateAt===state._savedAt;
   const appEntries=state.observations.filter(row=>row.source==='owner_observation'&&!row.rawEntry);
-  const readyToPublish=backed&&(cloudRevision!==0||appEntries.length>0);
+  const readyToPublish=cloudRevision!==0||appEntries.length>0;
   controls.innerHTML=ownerCanEdit
-    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${!backed?'Download and confirm a fresh complete backup above before publishing.':cloudRevision===0&&!appEntries.length?'Your app journal entry is in the Home Screen app. Connect that app below and publish from there.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="createOwnerPair" class="secondary-button" type="button">Connect Home Screen app</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for Home Screen app</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Now open the Home Screen app, paste under Owner sign-in, and tap Connect. Do not send this sign-in in chat.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
+    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${cloudRevision===0&&!appEntries.length?'Your app journal entry is in the Home Screen app. Connect that app below and publish from there.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="createOwnerPair" class="secondary-button" type="button">Connect Home Screen app</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for Home Screen app</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Now open the Home Screen app, paste under Owner sign-in, and tap Connect. Do not send this sign-in in chat.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
     : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Connect this Home Screen app once using the browser window that already says “Signed in as owner.” After that, save journal entries here and they will update the shared record.'}</p>${!ownerSession?'<form id="ownerPairPaste"><label class="field"><span>Paste sign-in copied from the browser</span><input type="password" name="code" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Connect this app</button></form><details><summary>Use an email link instead</summary><p class="field-help">An email link works only once. Opening or previewing it in Mail or Safari can use it before this app does.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form><p class="field-help">Do not send sign-in information in chat.</p></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
   if(ownerPairCode&&q('#ownerPairCode'))q('#ownerPairCode').value=ownerPairCode;
   q('#createOwnerPair')?.addEventListener('click',async event=>{
@@ -317,7 +316,7 @@ function renderSharedStatus(){
     if(error)return toast('That sign-in has already been used or expired. Create a new one in the signed-in browser.',true);
     const {data:{session}}=await cloud.auth.getSession();ownerSession=session;await checkOwner();renderAll();
     try{await navigator.clipboard.writeText('');}catch(_){}
-    toast(ownerCanEdit?'Connected. Your journal is still here. Back up, then publish it once.':'Signed in, but owner access is pending.');
+    toast(ownerCanEdit?'Connected. Your journal is still here. Tap Publish this device’s record once.':'Signed in, but owner access is pending.');
   });
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
@@ -340,7 +339,6 @@ function renderSharedStatus(){
   });
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
   q('#publishLocal')?.addEventListener('click',async()=>{
-    if(readBackupMeta().confirmedStateAt!==state._savedAt)return toast('Confirm a fresh backup first.',true);
     if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
     if(cloudRevision>0&&!window.confirm('Publish this device’s local record over the currently shared version? Keep your backup for comparison.'))return;
     const ok=await publishCloud(true);if(ok)renderAll();
