@@ -643,14 +643,15 @@ function renderClinicalReview(){
     const preCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date<=t.date&&daysBetween(l.date,t.date)<=2).sort((a,b)=>b.date.localeCompare(a.date));
     const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,loose=days.filter(r=>r.values.looseStool===1).length;
     const blood=days.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
-    const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given'&&!['med-prednisone','med-trazodone'].includes(a.medicationId));
-    const medSummary=[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} day(s)`).join('; ');
+    const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given');
+    const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&courseRecordedEnd(c)>=window.start&&c.status?.includes('owner-confirmed'));
+    const medSummary=[...courses.map(c=>`${medicationName(c.medicationId)} course reported through ${fmtDate(courseRecordedEnd(c))}`),...[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} dated administration(s)`) ].join('; ');
     const lowestText=lowest?`${lowest.displayValue||lowest.value} ${lowest.unit} on day +${daysBetween(t.date,lowest.date)} (${fmtDate(lowest.date)})`:'No post-dose count stored';
     return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
       <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
       <div><strong>After dose</strong><span>Lowest measured neutrophils: ${esc(lowestText)}</span></div>
       <div><strong>Home observations</strong><span>${days.length} day(s) logged · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
-      <div><strong>Supportive medication</strong><span>${esc(medSummary||'No supportive dose logged in this period')}</span></div>
+      <div><strong>Medication context</strong><span>${esc(medSummary||'No medication use recorded in this period')}</span></div>
       <div class="review-wide"><strong>Next recorded decision</strong><span>${next?`${fmtDate(next.date)} · ${esc(next.doseReason||'Reason not recorded')}`:'Next dose is scheduled; no decision recorded yet.'}</span></div>
     </div></details>`;
   }).join('');
