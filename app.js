@@ -5,6 +5,7 @@ const DOC_DB = 'rogerCareDocuments_v1';
 const DOC_STORE = 'documents';
 const RECOVERY_STORE = 'recoverySnapshots';
 const BACKUP_META_KEY = 'rogerCareBackupStatus_v1';
+const PENDING_CLOUD_KEY = 'rogerCarePendingCloud_v1';
 const SUPABASE_URL = 'https://gkotvodoqwdhmdeigrra.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_r-j23v_ip3FsemJ8JNtoog_79reT8ur';
 const SITE_URL = 'https://cornhskr1.github.io/roger-care-mvp/';
@@ -213,12 +214,13 @@ async function saveChanges(){
     if(!ownerCanEdit){toast('Sign in as the owner before editing the shared record.',true);return false;}
     await persist();
     unpublishedLocal=true;
+    try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
+    if(manualPublishRequired&&cloudRevision>0){await reconcileCloud();return true;}
     if(manualPublishRequired||cloudRevision===0||readBackupMeta().confirmedStateAt!==state._savedAt&&cloudRevision===null){
       syncMessage='Saved on this device. Tap Publish this device’s record once to share it.';
       renderSharedStatus();return true;
     }
     const ok=await publishCloud(false);
-    if(!ok)toast('Saved on this device. The shared copy is still waiting.',true);
     renderSharedStatus();
     return true;
   }
@@ -233,6 +235,7 @@ async function connectCloud(){
   cloud.auth.onAuthStateChange((_event,next)=>{ownerSession=next;setTimeout(async()=>{await checkOwner();renderSharedStatus();},0);});
   await readCloud(true);
   await checkOwner();
+  if(unpublishedLocal&&ownerCanEdit&&cloudRevision>0)await reconcileCloud();
   window.addEventListener('focus',async()=>{await checkOwner();if(!unpublishedLocal){await readCloud(false);renderAll();}});
   setInterval(()=>{if(!document.hidden&&!unpublishedLocal)readCloud(false).then(()=>renderAll());},60000);
 }
@@ -263,14 +266,15 @@ async function readCloud(initial=false){
   if(error){cloudAvailable=false;syncMessage='Shared record could not be reached. Local copy is safe on this device.';renderSharedStatus();return;}
   cloudAvailable=true;cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
   if(data.revision>0&&data.record?.profile){
-    if(initial&&unpublishedLocal&&String(state._savedAt||'')>String(data.record._savedAt||'')){
-      syncMessage='This device has newer local changes. Back up and review before publishing.';
+    if(initial&&unpublishedLocal&&(localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record._savedAt||''))){
+      syncMessage='This device has changes waiting to sync.';
     }else{
       const photo=state.profile?.photoDataUrl;
       state=migrateState(data.record);
       if(photo)state.profile.photoDataUrl=photo;
       unpublishedLocal=false;
       manualPublishRequired=false;
+      try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
       await persist(false);
       syncMessage='Shared record current.';
     }
@@ -286,15 +290,75 @@ async function publishCloud(firstUpload){
       .update({record:cloudRecord(),revision:cloudRevision+1})
       .eq('id','roger').eq('revision',cloudRevision)
       .select('revision,updated_at').maybeSingle();
-    if(error||!data){
-      syncMessage='Not uploaded. Another version may be online. Keep this device open and download a backup before resolving it.';
+    if(error){
+      syncMessage='Not uploaded. The shared record could not be reached. Your change is on this device.';
       toast(syncMessage,true);return false;
+    }
+    if(!data){
+      cloudBusy=false;
+      return await reconcileCloud();
     }
     cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
     unpublishedLocal=false;syncMessage='Saved to shared record.';
     manualPublishRequired=false;
+    try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
     if(firstUpload)toast('Roger’s record is now shared. Your device copy remains.');
     return true;
+  }finally{cloudBusy=false;renderSharedStatus();}
+}
+function sameCloudValue(a,b){
+  const stable=value=>JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]])):item);
+  return stable(a)===stable(b);
+}
+function mergeIndependentChanges(local,online){
+  const merged=structuredClone(online);
+  for(const key of new Set([...Object.keys(local),...Object.keys(online)])){
+    if(key==='_savedAt')continue;
+    if(key==='schemaVersion'){merged[key]=Math.max(Number(local[key]||0),Number(online[key]||0));continue;}
+    if(key==='journalCoverageThrough'){merged[key]=[local[key],online[key]].filter(Boolean).sort().at(-1);continue;}
+    if(key==='profile'){
+      const own={...local.profile},remote={...online.profile};delete own.photoDataUrl;delete remote.photoDataUrl;
+      if(!sameCloudValue(own,remote))return null;
+      merged.profile={...remote,...(local.profile?.photoDataUrl?{photoDataUrl:local.profile.photoDataUrl}:{})};continue;
+    }
+    if(Array.isArray(local[key])&&Array.isArray(online[key])){
+      const rows=structuredClone(online[key]);
+      const existing=new Map(rows.map((row,i)=>[row?.id||JSON.stringify(row),i]));
+      for(const row of local[key]){
+        const id=row?.id||JSON.stringify(row);
+        if(existing.has(id)){if(!sameCloudValue(row,rows[existing.get(id)]))return null;}
+        else {existing.set(id,rows.length);rows.push(structuredClone(row));}
+      }
+      merged[key]=rows;continue;
+    }
+    if(!sameCloudValue(local[key],online[key]))return null;
+  }
+  merged._savedAt=new Date().toISOString();
+  return merged;
+}
+async function reconcileCloud(){
+  if(!cloud||!ownerCanEdit||cloudBusy)return false;
+  cloudBusy=true;
+  try{
+    const {data:latest,error:readError}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
+    if(readError||!latest?.record)throw new Error('read');
+    const merged=mergeIndependentChanges(cloudRecord(),latest.record);
+    if(!merged){
+      syncMessage='Not uploaded. An online record differs from this device. Your change is still saved here; review both copies before publishing.';
+      toast(syncMessage,true);return false;
+    }
+    const {data,error}=await cloud.from('roger_shared_record').update({record:merged,revision:Number(latest.revision)+1})
+      .eq('id','roger').eq('revision',latest.revision).select('revision,updated_at').maybeSingle();
+    if(error||!data)throw new Error('write');
+    const photo=state.profile?.photoDataUrl;
+    state=migrateState(merged);if(photo)state.profile.photoDataUrl=photo;
+    cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;cloudAvailable=true;
+    unpublishedLocal=false;manualPublishRequired=false;syncMessage='Saved to shared record.';
+    await persist(false);try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
+    renderAll();toast('Your change is now shared.');return true;
+  }catch(_){
+    syncMessage='Not uploaded. Your change is saved on this device. Tap Retry safe sync when connected.';
+    toast(syncMessage,true);return false;
   }finally{cloudBusy=false;renderSharedStatus();}
 }
 function renderSharedStatus(){
@@ -304,7 +368,7 @@ function renderSharedStatus(){
   const appEntries=state.observations.filter(row=>row.source==='owner_observation'&&!row.rawEntry);
   const readyToPublish=cloudRevision!==0||appEntries.length>0;
   controls.innerHTML=ownerCanEdit
-    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device. Check your latest entry before the first upload.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Publish local changes'}</button><p>${cloudRevision===0&&!appEntries.length?'Your app journal entry is in the Home Screen app. Connect that app below and publish from there.':'This sends journal, medications, labs, care plan, and costs to the shared link. The photo and document files stay on this device.'}</p>`:''}<button id="createOwnerPair" class="secondary-button" type="button">Connect Home Screen app</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for Home Screen app</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Now open the Home Screen app, paste under Owner sign-in, and tap Connect. Do not send this sign-in in chat.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
+    ? `<strong>Signed in as owner</strong><p>${esc(syncMessage)}</p>${unpublishedLocal?`<p>${appEntries.length} app journal entr${appEntries.length===1?'y':'ies'} found on this device.</p><button id="publishLocal" class="primary-button" type="button" ${!readyToPublish?'disabled':''}>${cloudRevision===0?'Publish this device’s record':'Retry safe sync'}</button><p>${cloudRevision===0&&!appEntries.length?'Your app journal entry is in the Home Screen app. Connect that app below and publish from there.':'This shares compatible changes without replacing newer entries. If the same entry differs on both copies, it will ask for review.'}</p>`:''}<button id="createOwnerPair" class="secondary-button" type="button">Connect Home Screen app</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for Home Screen app</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Now open the Home Screen app, paste under Owner sign-in, and tap Connect. Do not send this sign-in in chat.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button>`
     : `<strong>${ownerSession?'Signed in; owner access is pending':'Owner sign-in'}</strong><p>${ownerSession?'Your entries remain on this device until owner access is assigned.':'Connect this Home Screen app once using the browser window that already says “Signed in as owner.” After that, save journal entries here and they will update the shared record.'}</p>${!ownerSession?'<form id="ownerPairPaste"><label class="field"><span>Paste sign-in copied from the browser</span><input type="password" name="code" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Connect this app</button></form><details><summary>Use an email link instead</summary><p class="field-help">An email link works only once. Opening or previewing it in Mail or Safari can use it before this app does.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a new link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste the unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form><p class="field-help">Do not send sign-in information in chat.</p></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
   if(ownerPairCode&&q('#ownerPairCode'))q('#ownerPairCode').value=ownerPairCode;
   q('#createOwnerPair')?.addEventListener('click',async event=>{
@@ -351,8 +415,7 @@ function renderSharedStatus(){
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
   q('#publishLocal')?.addEventListener('click',async()=>{
     if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
-    if(cloudRevision>0&&!window.confirm('Publish this device’s local record over the currently shared version? Keep your backup for comparison.'))return;
-    const ok=await publishCloud(true);if(ok)renderAll();
+    const ok=cloudRevision>0?await reconcileCloud():await publishCloud(true);if(ok)renderAll();
   });
   for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
