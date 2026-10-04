@@ -8,9 +8,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roger Care">
   <title>Roger Care</title>
-  <link rel="manifest" href="manifest.webmanifest?v=17">
+  <link rel="manifest" href="manifest.webmanifest?v=18">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=17">
+  <link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -136,9 +136,10 @@
         <section class="card journal-trend-card">
           <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Compare Roger’s trends</h2></div></div>
           <div class="compare-metrics">
-            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
-            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="weight">Weight</option></select></label>
           </div>
+          <div class="compare-view" role="group" aria-label="Compare by"><button class="compare-view-button active" type="button" data-compare-view="calendar" aria-pressed="true">Calendar dates</button><button class="compare-view-button" type="button" data-compare-view="aligned" aria-pressed="false">Days after chemo</button></div>
           <div class="compare-range" role="group" aria-label="Date range">
             <button class="compare-range-button active" type="button" data-compare-range="all" aria-pressed="true">All dates</button>
             <button class="compare-range-button" type="button" data-compare-range="cycles" aria-pressed="false">Treatment periods</button>
@@ -148,7 +149,14 @@
           <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
           <div id="journalTrend"></div>
           <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
-          <p class="medication-note">Both tracks share dates but use their own labeled scales. Purple marks treatment; red marks CBC. A loose stool flag means a score of 6 or higher or a note of diarrhea. Mixed energy descriptions use the lower reported level. Blank values mean no observation was recorded. Patterns show timing, not cause.</p>
+          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. These patterns show timing, not cause.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><div class="section-kicker">WEEKLY CHECK-IN</div><h2>How much was Roger himself?</h2></div></div>
+          <p class="field-help">A quick impression compared with Roger’s usual self. This is your observation, not a medical score.</p>
+          <form id="wellbeingForm" class="form-grid two"><label class="field"><span>Week ending</span><input name="date" type="date" required></label><label class="field"><span>Overall wellbeing (0–10)</span><input name="score" type="number" min="0" max="10" step="1" inputmode="numeric" required></label><label class="field wide"><span>What felt different? (optional)</span><input name="notes" placeholder="Play, sleep, comfort, his usual Roger things…"></label><button class="secondary-button" type="submit">Save weekly check-in</button></form>
+          <div id="wellbeingHistory" class="stack compact-stack"></div>
         </section>
 
         <section class="card">
@@ -265,8 +273,8 @@
           </div>
           <p class="body-copy">A visit snapshot with medications, prior complications, upcoming care, and source labels, followed by the longitudinal record.</p>
           <div class="button-stack">
-            <button id="downloadCareSummary" class="primary-button" type="button">Download care-team summary</button>
-            <button id="printCareSummary" class="secondary-button" type="button">Print / Save as PDF</button>
+            <button id="downloadCareSummary" class="primary-button" type="button">Download vet handoff (PDF)</button>
+            <button id="printCareSummary" class="secondary-button" type="button">Print handoff</button>
           </div>
         </section>
 
@@ -336,7 +344,8 @@
         <label class="field"><span>Urination</span><select name="urination"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>accident / unusual</option></select></label>
       </div>
       <div class="form-grid two"><label class="field"><span>Mood / behavior</span><input name="mood" placeholder="Normal Roger, quieter…"></label><label class="field"><span>Play / engagement</span><input name="play" placeholder="Normal, reduced…"></label></div>
-      <div class="form-grid two"><label class="field"><span>Sleep</span><input name="sleep" placeholder="Normal, restless…"></label><label class="field"><span>Roger things</span><input name="rogerThings" placeholder="Yes, reduced…"></label></div>
+      <div class="form-grid two"><label class="field"><span>Sleep</span><input name="sleep" placeholder="Normal, restless…"></label><label class="field"><span>Roger things</span><input name="rogerThings" list="rogerThingsOptions" placeholder="Yes, reduced…"></label></div>
+      <datalist id="rogerThingsOptions"><option value="Yes"><option value="Reduced"><option value="None"></datalist>
       <label class="field"><span>GI observations</span><input name="gi" placeholder="Gurgling, drooling, no vomiting…"></label>
       <label class="field"><span>Medication mentioned in notes</span><input name="medications" type="text" placeholder="Prednisone, Cerenia…"></label>
       <p class="field-help">For a dose, use + Medication so it appears in the dose history and charts.</p>
@@ -418,6 +427,6 @@
 
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
-  <script src="app.js?v=17" defer></script>
+  <script src="app.js?v=18" defer></script>
 </body>
 </html>

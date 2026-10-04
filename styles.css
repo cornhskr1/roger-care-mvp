@@ -249,6 +249,10 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .compare-metrics,.compare-custom-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
 .compare-metrics select,.compare-custom-dates input{width:100%;min-width:0}
 .compare-range{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;margin-top:13px;background:#f0eef5;border-radius:13px}
+.compare-view{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;margin-top:13px;background:#e9eef4;border-radius:13px}
+.compare-view-button{border:0;background:transparent;border-radius:10px;min-height:42px;padding:6px;color:var(--muted);font-family:inherit;font-size:13px;font-weight:750;cursor:pointer}
+.compare-view-button.active{background:#fff;color:var(--owner);box-shadow:0 1px 5px #2620431a}
+.compare-range[hidden]{display:none}
 .compare-range-button{border:0;background:transparent;border-radius:10px;min-height:44px;padding:6px;color:var(--muted);font-family:inherit;font-size:13px;font-weight:700;line-height:1.2;cursor:pointer}
 .compare-range-button.active{background:#fff;color:var(--ksu);box-shadow:0 1px 5px #2620431a}
 .compare-cycle-picker{display:flex;gap:7px;overflow-x:auto;padding:11px 1px 2px}
@@ -271,6 +275,9 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .trend-legend i{width:9px;height:9px;display:inline-block;border-radius:3px}
 .trend-owner{background:var(--owner)}.trend-chemo{background:var(--ksu)}.trend-cbc{background:var(--blood)}
 .journal-stool-line{font-size:13px;line-height:1.5;margin-top:9px;color:var(--ink)}
+.journal-source{padding:11px 0 2px}.journal-source+.journal-source{border-top:1px solid var(--line);margin-top:11px}
+.journal-source .row-between{align-items:center}.journal-source-count{font-size:12px;color:var(--muted);font-weight:700}
+.form-grid .wide{grid-column:1/-1}.wellbeing-row{display:flex;gap:8px;flex-wrap:wrap;padding:9px 0;border-top:1px solid var(--line);font-size:13px}.wellbeing-row span{color:var(--muted)}
 .journal-med-line{margin-top:8px}
 .journal-history-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:22px 2px 8px}.journal-history-head .secondary-button{font-size:13px;min-height:40px;padding:7px 10px}
 .original-entry{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}

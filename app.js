@@ -20,7 +20,7 @@ let state = null;
 let timelineFilter = 'all';
 let careTeamMode = false;
 let selectedTreatmentWindow = 'all';
-const comparison={primary:'energy',secondary:'nausea',range:'all',cycles:new Set(),from:'2026-08-14',to:'2026-10-03',selectedDate:null};
+const comparison={primary:'energy',secondary:'nausea',view:'calendar',range:'all',cycles:new Set(),from:'2026-08-14',to:'2026-10-03',selectedDate:null};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -107,6 +107,7 @@ function mergeCanonicalSeed(canonical, saved){
 
   const migratedSaved = migrateState(saved);
   merged.observations = mergeById(canonical.observations, migratedSaved.observations, false);
+  merged.qualityOfLife = mergeById(canonical.qualityOfLife||[],migratedSaved.qualityOfLife||[],true);
   merged.costs = mergeById(canonical.costs, migratedSaved.costs, false);
   merged.medicationAdministrations = mergeById(canonical.medicationAdministrations, migratedSaved.medicationAdministrations, false);
   merged.medications = mergeById(canonical.medications, migratedSaved.medications, false);
@@ -126,7 +127,7 @@ function mergeCanonicalSeed(canonical, saved){
   merged._savedAt = migratedSaved._savedAt||null;
   for (const correction of merged.recordCorrections){
     const rows=merged[correction.collection];
-    if(!['observations','medicationAdministrations','costs'].includes(correction.collection)||!Array.isArray(rows))continue;
+    if(!['observations','medicationAdministrations','costs','qualityOfLife'].includes(correction.collection)||!Array.isArray(rows))continue;
     const index=rows.findIndex(row=>row.id===correction.id);
     if(index>=0)rows[index]={...rows[index],...correction.after};
   }
@@ -147,6 +148,7 @@ function migrateState(input){
   const next = input || {};
   next.costs = Array.isArray(next.costs) ? next.costs : [];
   next.observations = Array.isArray(next.observations) ? next.observations : [];
+  next.qualityOfLife = Array.isArray(next.qualityOfLife) ? next.qualityOfLife : [];
   next.medications = Array.isArray(next.medications) ? next.medications : [];
   next.medicationCourses = Array.isArray(next.medicationCourses) ? next.medicationCourses : [];
   next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
@@ -207,6 +209,7 @@ function bindDialogs(){
   q('#comparePrimary').addEventListener('change',event=>{comparison.primary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';q('#compareSecondary').value='none';}renderJournalTrend();});
   q('#compareSecondary').addEventListener('change',event=>{comparison.secondary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';event.target.value='none';}renderJournalTrend();});
   qa('[data-compare-range]').forEach(btn=>btn.addEventListener('click',()=>{comparison.range=btn.dataset.compareRange;comparison.selectedDate=null;renderJournalTrend();}));
+  qa('[data-compare-view]').forEach(btn=>btn.addEventListener('click',()=>{comparison.view=btn.dataset.compareView;comparison.selectedDate=null;renderJournalTrend();}));
   q('#compareCyclePicker').addEventListener('click',event=>{const button=event.target.closest('[data-compare-cycle]');if(!button)return;const n=Number(button.dataset.compareCycle);if(comparison.cycles.has(n))comparison.cycles.delete(n);else comparison.cycles.add(n);comparison.selectedDate=null;renderJournalTrend();});
   for(const [id,key] of [['compareFrom','from'],['compareTo','to']])q(`#${id}`).addEventListener('change',event=>{comparison[key]=event.target.value;comparison.selectedDate=null;renderJournalTrend();});
   q('#journalTrend').addEventListener('click',event=>{const hit=event.target.closest('[data-compare-date]');if(hit){comparison.selectedDate=hit.dataset.compareDate;renderComparisonDetail();}});
@@ -311,6 +314,13 @@ function recordCorrection(collection,id,after){
 }
 
 function bindForms(){
+  q('#wellbeingForm').addEventListener('submit',async event=>{
+    event.preventDefault();const fd=new FormData(event.currentTarget),date=String(fd.get('date')||''),score=Number(fd.get('score'));
+    if(!date||!Number.isInteger(score)||score<0||score>10)return toast('Choose a date and a score from 0 to 10',true);
+    const existing=state.qualityOfLife.find(x=>x.date===date),entry={id:existing?.id||uid('qol'),date,score,notes:String(fd.get('notes')||'').trim(),source:'owner weekly check-in'};
+    if(existing)recordCorrection('qualityOfLife',existing.id,entry);else state.qualityOfLife.push(entry);
+    if(!await saveChanges())return;event.currentTarget.reset();renderAll();toast(existing?'Weekly check-in corrected':'Weekly check-in saved');
+  });
   q('#journalForm').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
@@ -541,7 +551,12 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
+  renderProfile(); renderHome(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus();
+}
+function renderWellbeing(){
+  const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const form=q('#wellbeingForm');if(form&&!form.elements.date.value)form.elements.date.value=todayIso();
+  q('#wellbeingHistory').innerHTML=rows.length?rows.slice(0,6).map(x=>`<div class="wellbeing-row"><strong>${fmtDate(x.date)} · ${x.score}/10</strong>${x.notes?`<span>${esc(x.notes)}</span>`:''}</div>`).join(''):'<p class="empty-state">No weekly check-in yet. The daily journal remains available as-is.</p>';
 }
 
 function readBackupMeta(){try{return JSON.parse(localStorage.getItem(BACKUP_META_KEY)||'{}')}catch(_){return {}}}
@@ -878,8 +893,10 @@ function symptomSeverity(o){
 
 function renderJournal(){
   const obs=[...state.observations].sort((a,b)=>b.date.localeCompare(a.date));
-  const recentDates=new Set([...new Set(obs.map(o=>o.date))].slice(0,7));
-  const shown=journalShowAll?obs:obs.filter(o=>recentDates.has(o.date));
+  const byDate=new Map();
+  obs.forEach(o=>{if(!byDate.has(o.date))byDate.set(o.date,[]);byDate.get(o.date).push(o);});
+  const days=[...byDate.entries()];
+  const shown=journalShowAll?days:days.slice(0,7);
   const nauseaDays=new Set(obs.filter(o=>Number(o.nausea)>0).map(o=>o.date)).size;
   const medDays=new Set([...state.medicationAdministrations.filter(a=>a.status==='given').map(a=>a.date),...reportedCourseDays('med-prednisone').map(a=>a.date)]).size;
   els.journalSummary.innerHTML = [
@@ -889,11 +906,16 @@ function renderJournal(){
     [fmtDate([state.journalCoverageThrough,obs[0]?.date].filter(Boolean).sort().at(-1)||'2026-10-03').replace(', 2026',''),'ENTRIES THROUGH']
   ].map(x=>`<div class="summary-tile"><div class="summary-value">${x[0]}</div><div class="summary-label">${x[1]}</div></div>`).join('');
   renderJournalTrend();
-  q('#journalHistoryToggle').textContent=journalShowAll?'Show recent entries':`Show all ${new Set(obs.map(o=>o.date)).size} days`;
-  els.journalEntries.innerHTML = shown.map(o=>{
-    const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
-    const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
-    return `<article class="observation-card"><div class="row-between"><div><div class="item-title">${fmtDate(o.date)}</div><div class="item-meta">${o.rawEntry?'Original owner journal':'App entry'}${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div></div><div class="row-actions">${severityChip(o)}<button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</article>`;
+  q('#journalHistoryToggle').textContent=journalShowAll?'Show recent entries':`Show all ${days.length} days`;
+  els.journalEntries.innerHTML = shown.map(([date,entries])=>{
+    entries.sort((a,b)=>Number(Boolean(b.rawEntry))-Number(Boolean(a.rawEntry)));
+    const sources=entries.map(o=>{
+      const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
+      const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
+      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">Correct</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
+    }).join('');
+    const severity=entries.reduce((a,b)=>symptomSeverity(a)>symptomSeverity(b)?a:b);
+    return `<article class="observation-card"><div class="row-between"><div class="item-title">${fmtDate(date)}${entries.length>1?` <small class="journal-source-count">· ${entries.length} notes</small>`:''}</div>${severityChip(severity)}</div>${sources}</article>`;
   }).join('');
 }
 function observationChips(o){
@@ -908,6 +930,8 @@ const COMPARE_METRICS={
   stoolCount:{label:'Bowel movements',min:0,ticks:[0,2,4,6],unit:'',kind:'owner'},
   stoolScore:{label:'Highest stool score',min:1,max:8,ticks:[1,4,6,8],unit:'',kind:'owner'},
   looseStool:{label:'Loose stool / diarrhea',min:0,max:1,ticks:[0,1],names:['No score ≥6','Score ≥6 / noted'],unit:'',kind:'owner'},
+  rogerThings:{label:'Roger things',min:0,max:2,ticks:[0,1,2],names:['None','Reduced','Yes'],unit:'',kind:'owner'},
+  qol:{label:'Weekly wellbeing',min:0,max:10,ticks:[0,5,10],unit:'/10',kind:'owner'},
   cerenia:{label:'Cerenia doses logged',min:0,ticks:[0,1,2],unit:'',kind:'medication'},
   neutrophils:{label:'Neutrophils',min:0,ticks:[0,5,10,15],unit:' K/µL',kind:'lab'},
   weight:{label:'Weight',ticks:[],unit:' lb',kind:'weight'}
@@ -923,28 +947,40 @@ function energyLevel(text){
   if(v.includes('high'))return 4;
   return null;
 }
+function rogerThingsLevel(text){const value=String(text||'').toLowerCase();if(!value)return null;if(/none|no interest|not himself/.test(value))return 0;if(/reduced|less/.test(value))return 1;if(/yes|normal/.test(value))return 2;return null;}
 function comparisonRows(){
   const byDate=new Map();
-  const row=date=>{if(!byDate.has(date))byDate.set(date,{date,observations:[],labs:[],medications:[],treatments:[]});return byDate.get(date);};
+  const row=date=>{if(!byDate.has(date))byDate.set(date,{date,observations:[],labs:[],medications:[],treatments:[],qualityOfLife:[]});return byDate.get(date);};
   (state.observations||[]).forEach(o=>row(o.date).observations.push(o));
+  (state.qualityOfLife||[]).forEach(o=>row(o.date).qualityOfLife.push(o));
   (state.labs||[]).filter(l=>l.metric==='Neutrophils').forEach(l=>row(l.date).labs.push(l));
-  (state.medicationAdministrations||[]).filter(a=>a.medicationId==='med-cerenia').forEach(a=>row(a.date).medications.push(a));
+  (state.medicationAdministrations||[]).forEach(a=>row(a.date).medications.push(a));
   (state.treatments||[]).forEach(t=>row(t.date).treatments.push(t));
   return [...byDate.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(d=>{
-    const entries=d.observations,stools=entries.flatMap(o=>o.stoolEvents||[]).filter(s=>s.status==='observed');
-    const legacy=entries.filter(o=>!o.stoolEvents?.length&&o.stool).map(o=>Number.parseFloat(o.stool)).filter(Number.isFinite);
-    const scores=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy];
+    const entries=d.observations;
+    const originalStools=entries.filter(o=>o.rawEntry).flatMap(o=>o.stoolEvents||[]).filter(s=>s.status==='observed');
+    const matchedOriginal=new Set();
+    const addedStools=entries.filter(o=>!o.rawEntry).flatMap(o=>o.stoolEvents||[]).filter(s=>s.status==='observed').filter(s=>{
+      const index=originalStools.findIndex((prior,i)=>!matchedOriginal.has(i)&&Number(prior.score)===Number(s.score)&&(!s.period||!prior.period||String(prior.period).toLowerCase()===String(s.period).toLowerCase()));
+      if(index<0)return true;matchedOriginal.add(index);return false;
+    });
+    const stools=[...originalStools,...addedStools];
+    const legacy=entries.filter(o=>!o.stoolEvents?.length&&o.stool).map(o=>({score:Number.parseFloat(o.stool),period:/\b(AM|PM|Before bed|Overnight)\b/i.exec(o.stool)?.[1]?.toLowerCase()})).filter(s=>Number.isFinite(s.score)&&!stools.some(existing=>Number(existing.score)===s.score&&(!s.period||String(existing.period).toLowerCase()===s.period)));
+    const scores=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy.map(s=>s.score)];
     const energy=entries.map(o=>energyLevel(o.energy)).filter(v=>v!==null);
+    const rogerThings=entries.map(o=>rogerThingsLevel(o.rogerThings)).filter(v=>v!==null);
     const nausea=entries.map(o=>o.nausea).filter(v=>v!==null&&v!==undefined&&v!=='').map(Number);
     const lab=d.labs.at(-1),ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     const treatmentWeight=d.treatments.map(t=>Number(t.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     return {...d,values:{
       energy:energy.length?Math.min(...energy):null,
+      rogerThings:rogerThings.length?Math.min(...rogerThings):null,
+      qol:d.qualityOfLife.length?Number(d.qualityOfLife.at(-1).score):null,
       nausea:nausea.length?Math.max(...nausea):null,
       stoolCount:stools.length+legacy.length||((entries.some(o=>o.stoolEvents?.some(s=>s.status==='none')))?0:null),
       stoolScore:scores.length?Math.max(...scores):null,
       looseStool:/diarrhea/i.test(entries.map(o=>`${o.gi||''} ${o.notes||''}`).join(' '))||scores.some(s=>s>=6)?1:scores.length?0:null,
-      cerenia:d.medications.filter(a=>a.status==='given').length,
+      cerenia:d.medications.filter(a=>a.medicationId==='med-cerenia'&&a.status==='given').length,
       neutrophils:lab?Number(lab.value):null,
       weight:ownerWeight??treatmentWeight??null
     }};
@@ -979,22 +1015,35 @@ function comparisonValue(key,value){
   const metric=COMPARE_METRICS[key];
   return metric.names?.[value]||`${value}${metric.unit}`;
 }
+function comparisonEventsForDate(date,day){
+  const events=[];
+  for(const course of state.medicationCourses||[])if(course.startDate===date)events.push(`${medicationName(course.medicationId)} course: ${course.dose||'dose unrecorded'}`);
+  for(const med of day.medications)events.push(`${medicationName(med.medicationId)} ${med.dose||''} ${med.status}`.trim());
+  const words=day.observations.map(o=>`${o.notes||''} ${o.rawEntry||''}`).join(' ');
+  if(/cat food/i.test(words))events.push('Cat food mentioned');
+  if(/increased food|food to 1C/i.test(words))events.push('Food amount changed');
+  return [...new Set(events)];
+}
 function renderComparisonDetail(){
   const target=q('#compareDayDetail'),date=comparison.selectedDate,day=comparisonRows().find(row=>row.date===date);
   if(!day){target.innerHTML='<p class="empty-state">Tap a date on either track to inspect the recorded values.</p>';return;}
   const a=comparison.primary,b=comparison.secondary;
-  const notes=day.observations.map(o=>`<div class="compare-note">${esc(o.notes||'Owner entry')}${o.rawEntry?' · original journal':' · app entry'}</div>`).join('');
+  const notes=day.observations.map(o=>`<div class="compare-note"><strong>${o.rawEntry?'Original owner journal':'App entry'}:</strong> ${esc(o.notes||'No further note')}</div>`).join('');
   const lab=day.labs.at(-1);
-  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a]))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b]))}</strong></span>`:''}</div>${notes}${lab?`<div class="compare-note">CBC: ${esc(lab.displayValue||lab.value)} ${esc(lab.unit)} · ${esc(lab.source)}</div>`:''}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}`;
+  const events=comparisonEventsForDate(date,day);
+  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a]))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b]))}</strong></span>`:''}</div>${notes}${day.qualityOfLife.map(x=>`<div class="compare-note">Weekly wellbeing: ${x.score}/10${x.notes?' · '+esc(x.notes):''} · owner check-in</div>`).join('')}${lab?`<div class="compare-note">CBC: ${esc(lab.displayValue||lab.value)} ${esc(lab.unit)} · ${esc(lab.source)}</div>`:''}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}${events.length?`<div class="compare-note"><strong>Other events:</strong> ${esc(events.join(' · '))}</div>`:''}`;
 }
 function renderJournalTrend(){
   if(!els.journalTrend)return;
   const treatments=[...(state.treatments||[])].sort((a,b)=>a.number-b.number);
   if(!comparisonCyclesReady){treatments.forEach(t=>comparison.cycles.add(t.number));comparisonCyclesReady=true;}
+  qa('[data-compare-view]').forEach(btn=>{const active=btn.dataset.compareView===comparison.view;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));});
   qa('[data-compare-range]').forEach(btn=>{const active=btn.dataset.compareRange===comparison.range;btn.classList.toggle('active',active);btn.setAttribute('aria-pressed',String(active));});
-  q('#compareCyclePicker').hidden=comparison.range!=='cycles';
-  q('#compareCustomDates').hidden=comparison.range!=='custom';
+  q('.compare-range').hidden=comparison.view==='aligned';
+  q('#compareCyclePicker').hidden=comparison.view!=='aligned'&&comparison.range!=='cycles';
+  q('#compareCustomDates').hidden=comparison.view==='aligned'||comparison.range!=='custom';
   q('#compareCyclePicker').innerHTML=treatments.map(t=>`<button class="compare-cycle ${comparison.cycles.has(t.number)?'active':''}" type="button" data-compare-cycle="${t.number}" aria-pressed="${comparison.cycles.has(t.number)}">#${t.number}<small>${fmtDate(t.date).replace(', 2026','')}</small></button>`).join('');
+  if(comparison.view==='aligned'){renderAlignedComparison(treatments);return;}
   const rows=comparisonRows(),range=comparisonRange(rows);
   if(!range||range.error){els.journalTrend.innerHTML=`<p class="empty-state">${range?.error||'Add a dated journal entry to start comparing.'}</p>`;q('#compareDayDetail').innerHTML='';return;}
   const visible=rows.filter(r=>range.contains(r.date));
@@ -1025,6 +1074,48 @@ function renderJournalTrend(){
   const label=keys.map(key=>COMPARE_METRICS[key].label).join(' and ');
   els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span></div>`;
   if(!visible.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=visible.at(-1).date;
+  renderComparisonDetail();
+}
+
+function renderAlignedComparison(treatments){
+  const chosen=treatments.filter(t=>comparison.cycles.has(t.number)),rows=comparisonRows(),byDate=new Map(rows.map(r=>[r.date,r]));
+  if(!chosen.length){els.journalTrend.innerHTML='<p class="empty-state">Select at least one treatment period.</p>';q('#compareDayDetail').innerHTML='';return;}
+  const plotted=chosen.map(t=>{
+    const window=cycleWindowFor(t,treatments),days=[];
+    for(let offset=0;offset<=13;offset++){const date=addDays(t.date,offset);if(date>=window.endExclusive)break;const row=byDate.get(date);if(row)days.push({offset,row});}
+    return {t,days};
+  });
+  const all=plotted.flatMap(p=>p.days.map(d=>d.row));
+  const keys=[comparison.primary,...(comparison.secondary==='none'?[]:[comparison.secondary])];
+  const W=790,H=keys.length===2?424:255,L=130,R=26,top=83,laneH=115,gap=76;
+  const x=offset=>L+(W-L-R)*offset/13;
+  const colors=['#512888','#237a91','#9d6180','#577794','#8b7b44','#4c816b','#994b57','#68779c'];
+  let svg=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
+  for(let offset=0;offset<=13;offset++){
+    svg+=`<line x1="${x(offset)}" x2="${x(offset)}" y1="67" y2="${H-35}" stroke="#edf0f4"/><text x="${x(offset)}" y="${H-12}" font-size="11" text-anchor="middle" fill="#707181">${offset}</text>`;
+  }
+  plotted.forEach(({t,days},i)=>days.forEach(({offset,row})=>{
+    const cx=x(offset),color=colors[i%colors.length];
+    if(row.labs.length)svg+=`<circle cx="${cx}" cy="28" r="4" fill="#b44f5c"><title>Cycle #${t.number}, day ${offset}: CBC on ${esc(fmtDate(row.date))}</title></circle>`;
+    const events=comparisonEventsForDate(row.date,row);
+    if(events.length)svg+=`<rect x="${cx-3}" y="42" width="6" height="6" fill="${color}"><title>Cycle #${t.number}, day ${offset}: ${esc(events.join('; '))}</title></rect>`;
+  }));
+  keys.forEach((key,lane)=>{
+    const metric=comparisonScale(key,all),yTop=top+lane*(laneH+gap),bottom=yTop+laneH;
+    const y=value=>bottom-(value-metric.min)/(metric.max-metric.min||1)*laneH;
+    svg+=`<text x="${L}" y="${yTop-15}" font-size="14" font-weight="800" fill="#303848">${esc(metric.label)}${metric.unit?` · ${esc(metric.unit.trim())}`:''}</text>`;
+    for(const tick of metric.ticks){if(tick<metric.min||tick>metric.max)continue;svg+=`<line x1="${L}" x2="${W-R}" y1="${y(tick)}" y2="${y(tick)}" stroke="#e5e7ef"/><text x="${L-8}" y="${y(tick)+4}" text-anchor="end" font-size="11" fill="#707181">${esc(metric.names?.[tick]||tick)}</text>`;}
+    plotted.forEach(({t,days},i)=>{
+      const color=colors[i%colors.length];let segment=[],last=null;
+      const flush=()=>{if(segment.length>1)svg+=`<polyline points="${segment.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round"/>`;segment=[];};
+      for(const {offset,row} of days){const value=row.values[key];if(value===null||!Number.isFinite(value)){flush();last=null;continue;}if(last!==null&&offset-last>1)flush();segment.push(`${x(offset)},${y(value)}`);last=offset;}
+      flush();
+      for(const {offset,row} of days){const value=row.values[key];if(value===null||!Number.isFinite(value))continue;const title=`Cycle #${t.number} · day ${offset} · ${fmtDate(row.date)} · ${metric.label}: ${comparisonValue(key,value)}`;svg+=`<circle cx="${x(offset)}" cy="${y(value)}" r="5" fill="${color}" stroke="white" stroke-width="1.5"><title>${esc(title)}</title></circle><circle cx="${x(offset)}" cy="${y(value)}" r="12" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(title)}"><title>${esc(title)}. Tap for source notes.</title></circle>`;}
+    });
+  });
+  const legend=chosen.map((t,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>Chemo #${t.number} · ${fmtDate(t.date).replace(', 2026','')}</span>`).join('');
+  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}</div><p class="field-help">Red dots: CBC · small squares: medication or food context. Tap a plotted point for the dated note.</p>`;
+  if(!all.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=all.at(-1)?.date||null;
   renderComparisonDetail();
 }
 
@@ -1253,7 +1344,7 @@ async function openDocument(id){
 
 function bindExports(){
   document.addEventListener('click',event=>{if(!event.target.closest('[data-open-backup]'))return;navigate('more');q('#backupStatus').scrollIntoView({block:'center',behavior:'smooth'});});
-  q('#downloadCareSummary').addEventListener('click',()=>downloadText('roger-care-team-summary.html',buildCareSummaryHtml(),'text/html'));
+  q('#downloadCareSummary').addEventListener('click',()=>{try{downloadText('roger-vet-handoff.pdf',buildCareSummaryPdf(),'application/pdf');toast('Vet handoff PDF downloaded');}catch(_){toast('Could not create the PDF. Use Print handoff instead.',true);}});
   q('#printCareSummary').addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return toast('Pop-up blocked. Use Download instead.',true);w.document.write(buildCareSummaryHtml());w.document.close();w.focus();setTimeout(()=>w.print(),300);});
   q('#exportBackup').addEventListener('click',async()=>{
     try{await loadDocuments();const packed=await Promise.all(documents.map(async d=>{
@@ -1311,6 +1402,91 @@ async function backupDigest(value){
 function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
 function dataUrlToBlob(url){const [header,payload]=url.split(',',2);if(!header?.includes(';base64')||!payload)throw new Error('data');const binary=atob(payload),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:header.slice(5).split(';')[0]||'application/octet-stream'});}
 function downloadText(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+function pdfPlain(value){
+  return String(value??'').replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2192/g,' -> ').replace(/\u00b5/g,'u').replace(/\u00b2/g,'2').replace(/\u2265/g,'>=')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e\n]/g,' ');
+}
+function buildCareSummaryPdf(){
+  const pages=[[]],margin=45;let y=747;
+  const page=()=>{pages.push([]);y=747;};
+  const line=(value,size=10,bold=false,indent=0,leading=14)=>{
+    if(y<55)page();pages.at(-1).push({text:pdfPlain(value),size,bold,x:margin+indent,y});y-=leading;
+  };
+  const wrap=(value,size=10,bold=false,indent=0)=>{
+    for(const paragraph of pdfPlain(value).split('\n')){
+      const words=paragraph.split(/\s+/).filter(Boolean);let current='';
+      for(const word of words){if((current+' '+word).trim().length>Math.max(52,82-Math.round(indent/8))&&current){line(current,size,bold,indent,size+4);current='';}current+=(current?' ':'')+word;}
+      line(current||' ',size,bold,indent,size+4);
+    }
+  };
+  const heading=value=>{y-=7;if(y<75)page();line(value,13,true,0,19);};
+  const p=state.profile,neut=state.labs.filter(l=>l.metric==='Neutrophils').sort((a,b)=>a.date.localeCompare(b.date));
+  const nadir=neut.reduce((a,b)=>!a||Number(b.value)<Number(a.value)?b:a,null),latest=neut.at(-1),pred=medicationStats('med-prednisone');
+  line(`${p.fullName||p.name} | Veterinary handoff`,18,true,0,27);
+  wrap(`KSU ${p.patientIds?.ksu||'unrecorded'} | Optimum ${p.patientIds?.optimum||'unrecorded'} | ${p.breed} | Prepared ${new Date().toLocaleDateString('en-US')}`,9);
+  heading('Visit snapshot');
+  wrap(`Diagnosis: ${p.diagnosis}. Status: ${p.currentStatus}.`);
+  wrap(`Neutrophils: lowest ${nadir?`${nadir.displayValue||nadir.value} ${nadir.unit} on ${fmtDate(nadir.date)}`:'not recorded'}; latest ${latest?`${latest.displayValue||latest.value} ${latest.unit} on ${fmtDate(latest.date)}`:'not recorded'}.`);
+  wrap(`Prednisone: prescribed 10 mg every 24 hours from Oct 2; owner reports daily administration through ${pred.last?fmtDate(pred.last):'date unrecorded'}. Later doses are not inferred.`);
+  wrap('Amoxicillin: owner reports seven days after the Aug 20 count of 250/uL; dose and frequency unrecorded.');
+  const plan=state.carePlan||{visits:[]};
+  heading('Upcoming care');
+  for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'} (${v.source||'source unrecorded'})`,9,false,8);
+  wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`);
+  heading('Recent owner notes');
+  const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-5).reverse();
+  for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries)wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${o.notes||'No note'}`,9,false,8);}
+  line('Owner observations are reported separately from clinical records.',9,false,0,15);
+  page();line('Treatment periods | same days after chemotherapy',16,true,0,25);
+  const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),byDate=new Map(comparisonRows().map(row=>[row.date,row]));
+  for(const t of treatments){
+    heading(`Chemo #${t.number} | ${fmtDate(t.date)} | ${t.doseMg} mg (${t.doseMgM2} mg/m2)`);
+    wrap(`Dose context: ${t.doseReason||'not recorded'}`,9);
+    const window=cycleWindowFor(t,treatments);
+    for(let offset=0;offset<=13;offset++){
+      const date=addDays(t.date,offset);if(date>=window.endExclusive)break;
+      const day=byDate.get(date);if(!day)continue;
+      const v=day.values,hasData=day.observations.length||day.labs.length||day.medications.length||day.qualityOfLife.length;
+      if(!hasData)continue;
+      const parts=[];
+      if(v.energy!==null)parts.push(`energy ${comparisonValue('energy',v.energy)}`);
+      if(v.nausea!==null)parts.push(`nausea ${comparisonValue('nausea',v.nausea)}`);
+      if(v.stoolCount!==null)parts.push(`${v.stoolCount} bowel movements${v.stoolScore!==null?`, highest score ${v.stoolScore}`:''}`);
+      if(day.labs.length)parts.push(day.labs.map(l=>`${l.metric} ${l.displayValue||l.value} ${l.unit}`).join(', '));
+      if(day.medications.length)parts.push(day.medications.map(m=>`${medicationName(m.medicationId)} ${m.dose||''} ${m.status}`).join(', '));
+      const context=comparisonEventsForDate(date,day).filter(s=>/food/i.test(s));if(context.length)parts.push(context.join(', '));
+      wrap(`Day ${offset} (${fmtDate(date)}): ${parts.join('; ')||'owner note only'}`,9,false,8);
+    }
+  }
+  heading('Medication courses and administrations');
+  for(const c of state.medicationCourses||[])wrap(`${medicationName(c.medicationId)}: ${fmtDate(c.startDate)} to ${fmtDate(courseRecordedEnd(c))}; ${c.dose||'dose unrecorded'}; ${c.frequency||'frequency unrecorded'}; ${c.status}`,9,false,8);
+  for(const a of state.medicationAdministrations||[])wrap(`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${medicationName(a.medicationId)} ${a.dose||'dose unrecorded'} ${a.status}${a.reason?' - '+a.reason:''}`,9,false,8);
+  heading('Source-backed laboratory results');
+  for(const l of state.labs.filter(l=>['Neutrophils','Hematocrit','Platelets','ALT','ALP'].includes(l.metric)).sort((a,b)=>a.date.localeCompare(b.date)))wrap(`${fmtDate(l.date)}: ${l.metric} ${l.displayValue||l.value} ${l.unit}; ${l.source||'source unrecorded'}`,9,false,8);
+  page();line('Owner daily journal | exact wording kept in the app backup',15,true,0,24);
+  const grouped=new Map();for(const o of [...state.observations].sort((a,b)=>a.date.localeCompare(b.date))){if(!grouped.has(o.date))grouped.set(o.date,[]);grouped.get(o.date).push(o);}
+  for(const [date,entries] of grouped){heading(fmtDate(date));for(const o of entries){line(o.rawEntry?'Original owner journal':'App entry',9,true,8,13);wrap(o.rawEntry||o.notes||'No further note',9,false,8);}}
+  heading('Document index and open record checks');
+  for(const d of documents)wrap(`${d.name} | ${fmtDate(d.date)} | ${d.provider||d.type}`,9,false,8);
+  wrap('Source documents are indexed here but are not attached to this PDF. The complete JSON backup holds uploaded files.');
+  wrap('Record checks: verify the Oct 2 vinblastine invoice lines; reconcile the July 14 Optimum invoice; confirm amoxicillin dose and frequency.');
+  const clean=value=>pdfPlain(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+  const objects=['','<< /Type /Catalog /Pages 2 0 R >>','','<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>','<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>'];
+  const kids=[];
+  pages.forEach((lines,index)=>{
+    const pageId=objects.length,contentId=pageId+1;kids.push(`${pageId} 0 R`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);
+    const commands=lines.map(item=>`BT /${item.bold?'F2':'F1'} ${item.size} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${clean(item.text)}) Tj ET`).join('\n')+`\nBT /F1 8 Tf 1 0 0 1 45 30 Tm (Roger Oberle | ${index+1} / ${pages.length}) Tj ET`;
+    objects.push(`<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`);
+  });
+  objects[2]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
+  let pdf='%PDF-1.4\n',offsets=[0];
+  for(let id=1;id<objects.length;id++){offsets[id]=pdf.length;pdf+=`${id} 0 obj\n${objects[id]}\nendobj\n`;}
+  const xref=pdf.length;pdf+=`xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for(let id=1;id<objects.length;id++)pdf+=`${String(offsets[id]).padStart(10,'0')} 00000 n \n`;
+  pdf+=`trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdf;
+}
 function buildCareSummaryHtml(){
   const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]};
   const rows=state.treatments.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>#${x.number}</td><td>${x.doseMg} mg</td><td>${x.doseMgM2}</td><td>${x.weightLb} lb</td><td>${esc(x.doseReason)}</td></tr>`).join('');

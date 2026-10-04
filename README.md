@@ -54,6 +54,8 @@ The owner's original daily journal spans all 51 dates from 8/14 through 10/3. `d
 
 The journal comparison chart shows any one or two measures on separate labeled scales: energy, nausea signs, movement count, highest stool score, loose stool/diarrhea flag, logged Cerenia doses, neutrophils, and weight. It can show all journal dates, any combination of treatment periods, or a custom date range. Treatment and CBC dates are marked on the shared time axis, and selecting a date shows its recorded values and source notes. A missing nausea observation stays blank rather than becoming zero; the chart reflects recorded timing without implying causation. New local journal entries and medication administrations update it when saved.
 
+The journal now groups notes from the same date into one day card, with every source note and its own correction control retained. Matching scored bowel movements from an imported journal entry and an app entry count once in the comparison; distinct movements remain separate. The comparison can align selected treatment cycles by day after chemotherapy, with CBC and medication/food markers, and now includes Roger things and optional weekly wellbeing scores. Gaps mean no value was recorded. The vet handoff downloads as a PDF for phone sharing, with a one-page visit snapshot followed by cycle details, medicines, labs, and owner notes. The complete JSON backup remains the authoritative copy of original wording, corrections, and uploaded documents.
+
 ## Next technical milestones
 
 1. Secure authentication and encrypted cloud sync
