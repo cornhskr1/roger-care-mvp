@@ -1852,7 +1852,7 @@ function renderJournalTrend(){
     for(const row of visible){
       if(!row.observations.some(isNauseaAssociatedObservation))continue;
       const xx=x(row.date);
-      svg+=`<rect x="${xx-dayWidth*.28}" y="${plotTop}" width="${dayWidth*.56}" height="${plotBottom-plotTop}" fill="#c98a2d" opacity=".10"><title>${esc(fmtDate(row.date))} · nausea-associated observation</title></rect>`;
+      svg+=`<line x1="${xx}" x2="${xx}" y1="58" y2="72" stroke="#c98a2d" stroke-width="3" stroke-linecap="round"><title>${esc(fmtDate(row.date))} · nausea-associated observation</title></line><circle cx="${xx}" cy="76" r="4" fill="#c98a2d" stroke="#fff" stroke-width="1.2"><title>${esc(fmtDate(row.date))} · nausea-associated observation</title></circle>`;
     }
     for(const med of state.medicationAdministrations||[]){
       if(med.medicationId!=='med-cerenia'||med.status!=='given'||med.date<range.from||med.date>range.to)continue;
@@ -1862,7 +1862,7 @@ function renderJournalTrend(){
     const today=todayIso();
     if(today>=range.from&&today<=range.to&&nauseaPattern.todayOffset>=0){
       const xx=x(today);
-      svg+=`<line x1="${xx}" x2="${xx}" y1="${plotTop}" y2="${plotBottom}" stroke="#9b6a20" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${xx+4}" y="61" font-size="10" font-weight="800" fill="#8a6421">Today · +${nauseaPattern.todayOffset}</text>`;
+      svg+=`<line x1="${xx}" x2="${xx}" y1="${plotTop}" y2="${plotBottom}" stroke="#9b6a20" stroke-width="2.5" stroke-dasharray="6 4"/><circle cx="${xx}" cy="54" r="4.5" fill="#9b6a20" stroke="#fff" stroke-width="1.2"/><text x="${xx+7}" y="58" font-size="11" font-weight="900" fill="#7b5318">Today · +${nauseaPattern.todayOffset}</text>`;
     }
   }
   for(const t of treatments){if(t.date<range.from||t.date>range.to)continue;svg+=`<line x1="${x(t.date)}" x2="${x(t.date)}" y1="38" y2="${H-32}" stroke="#512888" stroke-width="1" opacity=".35"/><text x="${x(t.date)+4}" y="20" font-size="11" font-weight="800" fill="#512888">#${t.number}</text>`;}
@@ -1884,7 +1884,7 @@ function renderJournalTrend(){
   if(span%tickStep)svg+=`<text x="${x(range.to)}" y="${H-12}" text-anchor="end" font-size="11" fill="#707181">${range.to.slice(5).replace('-','/')}</text>`;
   for(const row of visible){const values=keys.map(key=>`${COMPARE_METRICS[key].label}: ${comparisonValue(key,row.values[key],row)}`).join(' · ');svg+=`<rect x="${x(row.date)-7}" y="40" width="14" height="${H-73}" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(fmtDate(row.date))}: ${esc(values)}"><title>${esc(fmtDate(row.date))} · ${esc(values)}. Tap for source notes.</title></rect>`;}
   const label=keys.map(key=>COMPARE_METRICS[key].label).join(' and ');
-  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span>${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Roger nausea range</span><span><i class="trend-nausea-observed"></i>Observed nausea</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div>`;
+  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span>${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Usual nausea window</span><span><i class="trend-nausea-observed"></i>Nausea observed</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div>`;
   if(!visible.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=visible.at(-1).date;
   renderComparisonDetail();
 }
@@ -1913,7 +1913,7 @@ function renderAlignedComparison(treatments){
     if(coreRight>coreLeft)svg+=`<rect x="${coreLeft}" y="61" width="${coreRight-coreLeft}" height="${H-96}" rx="5" fill="#d9a63e" opacity=".13"><title>Most recorded timing: day +${nauseaPattern.coreStart} to +${nauseaPattern.coreEnd}</title></rect>`;
     if(nauseaPattern.todayOffset>=0&&nauseaPattern.todayOffset<=13){
       const xx=x(nauseaPattern.todayOffset);
-      svg+=`<line x1="${xx}" x2="${xx}" y1="61" y2="${H-35}" stroke="#9b6a20" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${xx+4}" y="58" font-size="10" font-weight="800" fill="#8a6421">Today · +${nauseaPattern.todayOffset}</text>`;
+      svg+=`<line x1="${xx}" x2="${xx}" y1="61" y2="${H-35}" stroke="#9b6a20" stroke-width="2.5" stroke-dasharray="6 4"/><circle cx="${xx}" cy="55" r="4.5" fill="#9b6a20" stroke="#fff" stroke-width="1.2"/><text x="${xx+7}" y="58" font-size="11" font-weight="900" fill="#7b5318">Today · +${nauseaPattern.todayOffset}</text>`;
     }
   }
   svg+=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
@@ -1942,7 +1942,7 @@ function renderAlignedComparison(treatments){
     });
   });
   const legend=chosen.map((t,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>Chemo #${t.number} · ${fmtDate(t.date).replace(', 2026','')}</span>`).join('');
-  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Roger nausea range</span><span><i class="trend-nausea-observed"></i>Observed nausea</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div><p class="field-help">Red dots: CBC · amber dots: nausea-associated observations · teal diamonds: Cerenia · small squares: other medication or food context. Tap a plotted point for the dated note.</p>`;
+  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Usual nausea window</span><span><i class="trend-nausea-observed"></i>Nausea observed</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div><p class="field-help">Red dots: CBC · amber dots: nausea-associated observations · teal diamonds: Cerenia · small squares: other medication or food context. Tap a plotted point for the dated note.</p>`;
   if(!all.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=all.at(-1)?.date||null;
   renderComparisonDetail();
 }
