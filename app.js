@@ -2361,7 +2361,8 @@ function careSnapshotData(){
   const supportive=(state.medicationAdministrations||[]).filter(a=>a.status==='given'&&a.date>=start&&a.date<=end);
   const supportiveCounts=[...new Set(supportive.map(a=>a.medicationId))].map(id=>({name:medicationName(id),count:supportive.filter(a=>a.medicationId===id).length}));
   const pred=(state.medicationCourses||[]).filter(course=>course.medicationId==='med-prednisone'&&course.startDate<=end&&(!course.endDate||course.endDate>=start)).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1)||null;
-  const predThrough=pred?courseRecordedEnd(pred):null;
+  const predRecordedThrough=pred?courseRecordedEnd(pred):null;
+  const predThrough=predRecordedThrough?(predRecordedThrough>end?end:predRecordedThrough):null;
   const latestNeut=(state.labs||[]).filter(l=>l.metric==='Neutrophils'&&l.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||null;
   const questions=(state.carePlan?.questions||[]).filter(question=>question.status!=='resolved');
   const appetiteText=!appetiteRows.length?'Not specifically recorded in this period.':appetiteReduced.length?`Below Roger's normal on ${appetiteReduced.length} of ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.${minAppetite!==null?` Lowest recorded intake: about ${minAppetite}% of normal.`:''}`:`At or near Roger's normal on all ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.`;
