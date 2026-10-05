@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=28">
+  <link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -358,10 +358,22 @@
         <label class="field"><span>Appetite</span><select name="appetite"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>refused food</option></select></label>
         <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>slightly reduced</option><option>low</option><option>very low</option></select></label>
       </div>
-      <div class="form-grid two">
-        <label class="field"><span>Nausea signs</span><select name="nausea"><option value="">Not logged</option><option value="0">None observed</option><option value="1">Signs observed</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
-        <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" placeholder="Not logged"></label>
-      </div>
+      <fieldset class="nausea-fieldset">
+        <legend>Possible nausea-associated behaviors</legend>
+        <p class="field-help">You do not need to decide whether Roger is nauseous. Record what you can actually see so his care team can interpret it.</p>
+        <div class="nausea-choice-grid">
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="lip_licking"><span><strong>Lip licking / smacking</strong><small>Repeated licking or smacking when it is not part of eating or grooming.</small></span></label>
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="repeated_swallowing"><span><strong>Repeated swallowing</strong><small>Frequent swallowing, gulping, or repeated throat motions.</small></span></label>
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="drooling"><span><strong>Drooling / extra saliva</strong><small>More drool or saliva than is normal for Roger.</small></span></label>
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="pacing_restlessness"><span><strong>Pacing / restlessness</strong><small>Unable to settle, repeatedly changing position, or pacing without an obvious reason.</small></span></label>
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="stomach_noises"><span><strong>Stomach noises / gurgling</strong><small>Noticeable stomach or intestinal sounds occurring with the episode.</small></span></label>
+          <label class="nausea-choice"><input type="checkbox" name="nauseaSigns" value="food_interest_change"><span><strong>Approached food, then walked away</strong><small>Showed interest in food but did not eat normally.</small></span></label>
+        </div>
+        <label class="nausea-choice nausea-none"><input id="nauseaNoneObserved" type="checkbox" name="nauseaNoneObserved" value="1"><span><strong>None of these observed</strong><small>Use this when you specifically checked and did not see nausea-associated behaviors.</small></span></label>
+        <label class="field nausea-other"><span>Another behavior you noticed</span><input id="nauseaOther" name="nauseaOther" type="text" placeholder="Describe only what you observed"></label>
+        <p id="nauseaLegacyHint" class="field-help nausea-legacy" hidden></p>
+      </fieldset>
+      <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" placeholder="Not logged"></label>
       <fieldset class="stool-fieldset"><legend>Bowel movements</legend><p class="field-help">Add one row for each stool, including extra trips. Leave a score blank if you could not assess it.</p><div id="stoolRows" class="stool-rows"></div><button id="addStoolRow" class="secondary-button" type="button">+ Another bowel movement</button></fieldset>
       <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="">Not logged</option><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
       <div class="form-grid two">
@@ -460,6 +472,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=41" defer></script>
+  <script src="app.js?v=42" defer></script>
 </body>
 </html>

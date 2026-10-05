@@ -32,6 +32,14 @@ let timelineFilter = 'all';
 let careTeamMode = false;
 let selectedTreatmentWindow = 'all';
 const comparison={primary:'energy',secondary:'nausea',view:'calendar',range:'all',cycles:new Set(),from:'2026-08-14',to:'2026-10-03',selectedDate:null};
+const NAUSEA_SIGN_LABELS={
+  lip_licking:'lip licking / smacking',
+  repeated_swallowing:'repeated swallowing',
+  drooling:'drooling / extra saliva',
+  pacing_restlessness:'pacing / restlessness',
+  stomach_noises:'stomach noises / gurgling',
+  food_interest_change:'approached food, then walked away'
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -198,7 +206,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),8);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),9);
   return next;
 }
 
@@ -566,6 +574,15 @@ function bindDialogs(){
     const r = d.getBoundingClientRect();
     if (event.clientY < r.top) d.close();
   }));
+  const nauseaNone=q('#nauseaNoneObserved');
+  const nauseaChoices=qa('input[name="nauseaSigns"]');
+  nauseaNone?.addEventListener('change',()=>{
+    if(!nauseaNone.checked)return;
+    nauseaChoices.forEach(box=>{box.checked=false;});
+    q('#nauseaOther').value='';
+  });
+  nauseaChoices.forEach(box=>box.addEventListener('change',()=>{if(box.checked&&nauseaNone)nauseaNone.checked=false;}));
+  q('#nauseaOther')?.addEventListener('input',event=>{if(event.target.value.trim()&&nauseaNone)nauseaNone.checked=false;});
   q('#careModeButton').addEventListener('click', () => {
     careTeamMode = !careTeamMode;
     document.body.classList.toggle('care-team-mode', careTeamMode);
@@ -601,7 +618,7 @@ function openJournalDialog(id=''){
   const row=state.observations.find(o=>o.id===id);
   if(row)for(const [name,value] of Object.entries(row)){
     const field=form.elements.namedItem(name);
-    if(field&&name!=='medications'){
+    if(field&&!['medications','nauseaSigns','nauseaNoneObserved'].includes(name)){
       const selected=value??'';
       if(field.tagName==='SELECT'&&selected!==''&&![...field.options].some(option=>option.value===String(selected))){
         const option=new Option(String(selected),String(selected));option.dataset.historical='';field.add(option);
@@ -610,6 +627,14 @@ function openJournalDialog(id=''){
     }
   }
   if(row)form.elements.namedItem('medications').value=(row.medications||[]).join(', ');
+  const savedSigns=Array.isArray(row?.nauseaSigns)?row.nauseaSigns:[];
+  qa('input[name="nauseaSigns"]').forEach(box=>{box.checked=savedSigns.includes(box.value);});
+  q('#nauseaNoneObserved').checked=Boolean(row?.nauseaNoneObserved);
+  q('#nauseaOther').value=row?.nauseaOther||'';
+  const legacyHint=q('#nauseaLegacyHint');
+  const hasLegacyNausea=Boolean(row&&Number(row.nausea)>0&&!Array.isArray(row.nauseaSigns)&&!row.nauseaOther);
+  legacyHint.hidden=!hasLegacyNausea;
+  legacyHint.textContent=hasLegacyNausea?`Historical entry: nausea was previously recorded as ${Number(row.nausea)===1?'signs observed':Number(row.nausea)===2?'moderate':'severe'}. It will stay unchanged unless you select behaviors above or mark none observed.`:'';
   q('#stoolRows').replaceChildren();
   const legacyStool=String(row?.stool||'');
   const legacyPeriod=/\b(Before bed|Overnight|AM|PM)\b/i.exec(legacyStool)?.[1];
@@ -677,18 +702,25 @@ function bindForms(){
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const stoolEvents=collectStoolRows();
-    const tracked=['appetite','energy','nausea','vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
-    if(!stoolEvents.length&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
+    const editId=String(fd.get('editId')||'');
+    const existing=editId?state.observations.find(o=>o.id===editId):null;
+    const nauseaSigns=fd.getAll('nauseaSigns').map(String).filter(value=>NAUSEA_SIGN_LABELS[value]);
+    const nauseaNoneObserved=fd.get('nauseaNoneObserved')==='1';
+    const nauseaOther=String(fd.get('nauseaOther')||'').trim();
+    const legacyNausea=existing&&!Array.isArray(existing.nauseaSigns)&&!existing.nauseaOther&&existing.nausea!==null&&existing.nausea!==undefined&&existing.nausea!=='';
+    const nausea=nauseaNoneObserved?0:(nauseaSigns.length||nauseaOther?1:(legacyNausea?Number(existing.nausea):null));
+    const tracked=['appetite','energy','vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
+    const nauseaTracked=nauseaNoneObserved||nauseaSigns.length>0||Boolean(nauseaOther)||legacyNausea;
+    if(!stoolEvents.length&&!nauseaTracked&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
     const obs = {
       id: uid('obs'), date: fd.get('date'), appetite: fd.get('appetite'), energy: fd.get('energy'),
-      nausea:fd.get('nausea')===''?null:Number(fd.get('nausea')), vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
+      nausea,nauseaSigns,nauseaOther,nauseaNoneObserved, vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
       stool:stoolEvents.map(s=>`${s.period}${s.time?' '+s.time:''}: ${s.status==='observed'?(s.score??'unscored'):s.status}${s.notes?' ('+s.notes+')':''}`).join(' | '),stoolEvents,
       hydration: fd.get('hydration'), urination: fd.get('urination'), pain:fd.get('pain')===''?null:Number(fd.get('pain')),
       mood:fd.get('mood'),play:fd.get('play'),sleep:fd.get('sleep'),rogerThings:fd.get('rogerThings'),gi:fd.get('gi'),
       medications: String(fd.get('medications') || '').split(',').map(x=>x.trim()).filter(Boolean),
       notes: String(fd.get('notes')||'').trim(), source:'owner_observation'
     };
-    const editId=String(fd.get('editId')||'');
     if(editId){if(!recordCorrection('observations',editId,{...obs,id:editId}))return toast('Entry no longer found',true);}
     else state.observations.push(obs);
     state.observations.sort((a,b)=>a.date.localeCompare(b.date));
@@ -1032,14 +1064,26 @@ function renderClinicalReview(){
   }).join('');
 }
 
+function nauseaLabels(o){
+  const labels=(Array.isArray(o.nauseaSigns)?o.nauseaSigns:[]).map(value=>NAUSEA_SIGN_LABELS[value]||value);
+  if(String(o.nauseaOther||'').trim())labels.push(String(o.nauseaOther).trim());
+  return labels;
+}
+function nauseaSummary(o){
+  const labels=nauseaLabels(o);
+  if(labels.length)return `nausea-associated: ${labels.join(', ')}`;
+  if(Number(o.nausea)>0)return Number(o.nausea)===1?'nausea signs (legacy entry)':`${['none','mild','moderate','severe'][Number(o.nausea)]} nausea (legacy entry)`;
+  return '';
+}
 function compactObservation(o){
-  const parts=[]; if(o.energy)parts.push(`energy ${o.energy}`); if(o.nausea)parts.push(o.nausea===1?'nausea signs':`nausea ${['none','mild','moderate','severe'][o.nausea]}`); if(o.vomiting)parts.push(`${o.vomiting} vomit`);
+  const parts=[]; if(o.energy)parts.push(`energy ${o.energy}`); const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText); if(o.vomiting)parts.push(`${o.vomiting} vomit`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scored=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
   if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}`);
   else if(o.stool)parts.push(`stool ${o.stool}`);
   return parts.join(', ') || (o.notes||'').slice(0,60);
 }
+
 function severityChip(o){
   const severity=symptomSeverity(o);
   if(severity>=2)return '<span class="chip warn">symptoms logged</span>';
@@ -1270,7 +1314,7 @@ function renderCycleDetails(treatment,window){
 
 function symptomSummary(o){
   const parts=[];
-  if(Number(o.nausea)>0) parts.push(Number(o.nausea)===1?'nausea signs':`${['none','mild','moderate','severe'][Number(o.nausea)]} nausea`);
+  const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText);
   if(Number(o.vomiting)>0) parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scores=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
@@ -1320,13 +1364,21 @@ function renderJournal(){
 }
 function observationChips(o){
   const chips=[];
-  if(o.appetite)chips.push(`appetite: ${o.appetite}`); if(o.energy)chips.push(`energy: ${o.energy}`); if(Number(o.nausea)>0)chips.push(`nausea signs${Number(o.nausea)>1?` · ${['','', 'moderate','severe'][o.nausea]}`:''}`); if(Number(o.vomiting)>0)chips.push(`vomiting: ${o.vomiting}`); if(o.stool&&!o.stoolEvents?.length)chips.push(`stool: ${o.stool}`); if(o.hydration)chips.push(`water: ${o.hydration}`); if(o.urination)chips.push(`${o.urination}`); if(Number(o.pain)>0)chips.push(`pain: ${o.pain}/3`);if(o.rogerThings)chips.push(`Roger things: ${o.rogerThings}`);
+  if(o.appetite)chips.push(`appetite: ${o.appetite}`);
+  if(o.energy)chips.push(`energy: ${o.energy}`);
+  const nauseaText=nauseaSummary(o);if(nauseaText)chips.push(nauseaText);else if(o.nauseaNoneObserved)chips.push('no nausea-associated behaviors observed');
+  if(Number(o.vomiting)>0)chips.push(`vomiting: ${o.vomiting}`);
+  if(o.stool&&!o.stoolEvents?.length)chips.push(`stool: ${o.stool}`);
+  if(o.hydration)chips.push(`water: ${o.hydration}`);
+  if(o.urination)chips.push(`${o.urination}`);
+  if(Number(o.pain)>0)chips.push(`pain: ${o.pain}/3`);
+  if(o.rogerThings)chips.push(`Roger things: ${o.rogerThings}`);
   return chips.map(x=>`<span class="chip">${esc(x)}</span>`).join('');
 }
 
 const COMPARE_METRICS={
   energy:{label:'Energy level',min:0,max:4,ticks:[0,1,2,3,4],names:['Very low','Low','Slightly reduced','Normal','High'],unit:'',kind:'owner'},
-  nausea:{label:'Nausea signs',min:0,max:3,ticks:[0,1,2,3],names:['None','Signs','Moderate','Severe'],unit:'',kind:'owner'},
+  nausea:{label:'Nausea observations',min:0,max:3,ticks:[0,1,2,3],names:['None observed','Behaviors observed','Legacy moderate','Legacy severe'],unit:'',kind:'owner'},
   stoolCount:{label:'Bowel movements',min:0,ticks:[0,2,4,6],unit:'',kind:'owner'},
   stoolScore:{label:'Highest stool score',min:1,max:8,ticks:[1,4,6,8],unit:'',kind:'owner'},
   looseStool:{label:'Loose stool / diarrhea',min:0,max:1,ticks:[0,1],names:['No score ≥6','Score ≥6 / noted'],unit:'',kind:'owner'},

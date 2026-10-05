@@ -325,3 +325,19 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .import-review h3{margin:.2rem 0;font-size:1.15rem}
 .import-check{display:flex;align-items:center;gap:.65rem;font-weight:700;color:#252534}
 .import-check input{width:1.25rem;height:1.25rem;accent-color:#512888;flex:none}
+
+
+/* Guided nausea observations */
+.nausea-fieldset{border:1px solid var(--line);border-radius:16px;padding:12px;margin:0;min-width:0;background:linear-gradient(180deg,#fff,#fbfafc)}
+.nausea-fieldset legend{font-size:15px;font-weight:850;padding:0 5px;color:var(--owner)}
+.nausea-choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nausea-choice{display:flex;align-items:flex-start;gap:9px;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff;cursor:pointer;min-width:0}
+.nausea-choice input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--owner);flex:0 0 auto}
+.nausea-choice span{display:grid;gap:2px;min-width:0}
+.nausea-choice strong{font-size:12px;line-height:1.3;color:var(--ink)}
+.nausea-choice small{font-size:10px;line-height:1.35;color:var(--muted)}
+.nausea-choice:has(input:checked){border-color:var(--owner);background:var(--blue-soft)}
+.nausea-none{margin-top:9px;background:var(--green-soft)}
+.nausea-other{margin-top:9px}
+.nausea-legacy{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:var(--gold-soft);color:var(--gold)}
+@media(max-width:520px){.nausea-choice-grid{grid-template-columns:1fr}}
