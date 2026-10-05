@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=31">
+  <link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -55,6 +55,14 @@
         <section class="card journal-brief-card owner-only">
           <div class="card-head"><div><div class="section-kicker">SINCE THE LAST TREATMENT</div><h2>Your journal at a glance</h2></div><button class="text-button" data-nav="journal" type="button">Open journal</button></div>
           <div id="journalBrief" aria-live="polite"></div>
+        </section>
+
+        <section class="card care-team-card">
+          <div class="card-head">
+            <div><div class="section-kicker">CARE TEAM</div><h2>Call the right place fast</h2></div>
+            <button class="text-button" data-nav="more" type="button">Manage</button>
+          </div>
+          <div id="careTeamQuick"></div>
         </section>
 
         <section class="card">
@@ -290,6 +298,20 @@
         <section class="card">
           <div class="card-head">
             <div>
+              <div class="section-kicker">CARE TEAM & EMERGENCY PLAN</div>
+              <h2>Who do I call if Roger needs help?</h2>
+            </div>
+          </div>
+          <p class="body-copy">Keep the people and places you may need under stress in one spot. Phone and directions buttons appear on Home as soon as they are saved.</p>
+          <form id="careTeamForm" class="form-stack">
+            <div id="careTeamFields" class="care-team-editor"></div>
+            <button type="submit" class="secondary-button">Save care team & emergency plan</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div>
               <div class="section-kicker">CARE TEAM</div>
               <h2>Vet handoff</h2>
             </div>
@@ -511,6 +533,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=44" defer></script>
+  <script src="app.js?v=45" defer></script>
 </body>
 </html>

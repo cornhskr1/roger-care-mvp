@@ -376,3 +376,28 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .stool-flag-choice span{font-size:10px;font-weight:800;line-height:1.25}
 .stool-flag-choice:has(input:checked){border-color:var(--owner);background:var(--blue-soft)}
 @media(max-width:420px){.stool-flag-grid{grid-template-columns:1fr}}
+
+
+/* Care team + emergency plan */
+.care-team-list{display:grid;gap:8px}
+.care-contact{border:1px solid var(--line);border-radius:14px;padding:11px;background:#fff}
+.care-contact.emergency{border-color:#e7c1c1;background:#fffafa}
+.care-contact-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.care-contact-role{font-size:9px;font-weight:900;letter-spacing:.07em;color:var(--muted);text-transform:uppercase}
+.care-contact-name{font-size:14px;font-weight:900;margin-top:2px}
+.care-contact-meta{font-size:11px;line-height:1.4;color:var(--muted);margin-top:4px}
+.care-contact-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.care-action{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:7px 11px;border-radius:10px;border:1px solid var(--line);background:var(--green-soft);color:var(--green);font-size:12px;font-weight:850;text-decoration:none}
+.care-contact.emergency .care-action.primary{background:var(--red);border-color:var(--red);color:#fff}
+.emergency-plan-status{display:flex;gap:9px;align-items:flex-start;border-radius:12px;padding:10px 11px;margin-bottom:9px;background:var(--green-soft);font-size:12px;line-height:1.4}
+.emergency-plan-status.incomplete{background:var(--gold-soft);color:var(--gold)}
+.emergency-plan-status strong{display:block}
+.care-team-editor{display:grid;gap:12px}
+.care-team-edit-card{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fff}
+.care-team-edit-card.emergency{border-color:#e7c1c1;background:#fffafa}
+.care-team-edit-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:9px}
+.care-team-edit-title{font-size:14px;font-weight:900}
+.care-team-edit-role{font-size:10px;color:var(--muted);font-weight:850}
+.care-team-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.care-team-edit-grid .wide{grid-column:1/-1}
+@media(max-width:520px){.care-team-edit-grid{grid-template-columns:1fr}.care-team-edit-grid .wide{grid-column:auto}.care-contact-head{display:block}}
