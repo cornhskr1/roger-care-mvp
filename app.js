@@ -484,8 +484,45 @@ function mergeKeyedCareRows(baseRows=[],localRows=[],onlineRows=[]){
   const merged=[];
   for(const id of order){
     const result=mergeThreeWayNode(base.get(id),local.get(id),online.get(id));
-    if(!result.ok)return {ok:false};
+    if(!result.ok)return {ok:false,conflict:id};
     if(result.value!==undefined)merged.push(result.value);
+  }
+  return {ok:true,value:merged};
+}
+function normalizeCareTeamField(field,value){
+  const raw=String(value??'').trim();
+  if(field==='phone'){
+    const digits=raw.replace(/\D/g,'');
+    return digits.length===11&&digits.startsWith('1')?digits.slice(1):digits;
+  }
+  if(field==='name'||field==='address')return raw.toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ');
+  if(field==='source'){
+    if(/owner-entered care team update/i.test(raw))return 'owner-entered care team update';
+    return raw.toLowerCase().replace(/\s+/g,' ');
+  }
+  return raw.replace(/\s+/g,' ');
+}
+function mergeCareTeamRows(baseRows=[],localRows=[],onlineRows=[]){
+  const baseList=mergeCareTeam(baseRows),localList=mergeCareTeam(localRows),onlineList=mergeCareTeam(onlineRows);
+  const base=new Map(baseList.map(row=>[row.id,row])),local=new Map(localList.map(row=>[row.id,row])),online=new Map(onlineList.map(row=>[row.id,row]));
+  const order=[...online.keys(),...local.keys(),...base.keys()].filter((id,index,list)=>list.indexOf(id)===index);
+  const merged=[];
+  for(const id of order){
+    const b=base.get(id)||{},l=local.get(id)||{},o=online.get(id)||{};
+    const row={};
+    for(const field of new Set([...Object.keys(b),...Object.keys(l),...Object.keys(o)])){
+      const bv=b[field],lv=l[field],ov=o[field];
+      if(sameCloudValue(lv,ov)){row[field]=structuredClone(lv);continue;}
+      const bn=normalizeCareTeamField(field,bv),ln=normalizeCareTeamField(field,lv),on=normalizeCareTeamField(field,ov);
+      if(ln===on){row[field]=structuredClone(ov);continue;}
+      if(ln===bn){row[field]=structuredClone(ov);continue;}
+      if(on===bn){row[field]=structuredClone(lv);continue;}
+      if(field==='source'&&(ln==='owner-entered care team update'||on==='owner-entered care team update')){
+        row[field]='Owner-entered care team update';continue;
+      }
+      return {ok:false,conflict:`${id}.${field}`};
+    }
+    merged.push(row);
   }
   return {ok:true,value:merged};
 }
@@ -495,19 +532,13 @@ function mergeCarePlanThreeWay(basePlan={},localPlan={},onlinePlan={}){
   for(const key of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(online)])){
     let result;
     if(key==='careTeam'){
-      // Older cloud bases predate the Care Team feature. Treat the known default
-      // provider rows as baseline structure, not as owner edits.
-      result=mergeKeyedCareRows(
-        mergeCareTeam(base[key]||[]),
-        mergeCareTeam(local[key]||[]),
-        mergeCareTeam(online[key]||[])
-      );
+      result=mergeCareTeamRows(base[key]||[],local[key]||[],online[key]||[]);
     }else if(['visits','questions'].includes(key)){
       result=mergeKeyedCareRows(base[key]||[],local[key]||[],online[key]||[]);
     }else{
       result=mergeThreeWayNode(base[key],local[key],online[key]);
     }
-    if(!result.ok)return {ok:false,conflict:key};
+    if(!result.ok)return {ok:false,conflict:key+(result.conflict?` · ${result.conflict}`:'')};
     if(result.value!==undefined)merged[key]=result.value;
   }
   return {ok:true,value:merged};
