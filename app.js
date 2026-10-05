@@ -99,6 +99,7 @@ let recoveredFromSnapshot = false;
 let backupPreparedAt = null;
 let backupPreparedStateAt = null;
 let importDraft = null;
+let questionDraftSource = null;
 
 const q = sel => document.querySelector(sel);
 const qa = sel => [...document.querySelectorAll(sel)];
@@ -139,7 +140,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','careTeamQuick','careTeamFields','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -207,6 +208,7 @@ function mergeCanonicalSeed(canonical, saved){
       return savedSchemaVersion>=7&&prior?{...visit,date:prior.date||null,source:prior.source||visit.source}:visit;
     }),
     careTeam:mergeCareTeam(savedPlan.careTeam||canonical.carePlan?.careTeam||[]),
+    questions:Array.isArray(savedPlan.questions)?structuredClone(savedPlan.questions):structuredClone(canonical.carePlan?.questions||[]),
   };
   merged.recordCorrections = migratedSaved.recordCorrections||[];
   merged._savedAt = migratedSaved._savedAt||null;
@@ -242,9 +244,10 @@ function migrateState(input){
   next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
   next.medicationPurchases = Array.isArray(next.medicationPurchases) ? next.medicationPurchases : [];
   next.recordCorrections = Array.isArray(next.recordCorrections) ? next.recordCorrections : [];
-  next.carePlan = next.carePlan||{visits:structuredClone(DEFAULT_VISITS),vetCallInstructions:'',vetCallSource:'',careTeam:structuredClone(DEFAULT_CARE_TEAM)};
+  next.carePlan = next.carePlan||{visits:structuredClone(DEFAULT_VISITS),vetCallInstructions:'',vetCallSource:'',careTeam:structuredClone(DEFAULT_CARE_TEAM),questions:[]};
   if(!Array.isArray(next.carePlan.visits)||!next.carePlan.visits.length)next.carePlan.visits=structuredClone(DEFAULT_VISITS);
   next.carePlan.careTeam=mergeCareTeam(next.carePlan.careTeam);
+  next.carePlan.questions=Array.isArray(next.carePlan.questions)?next.carePlan.questions:[];
 
   const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
   if (combinedIndex >= 0) {
@@ -261,7 +264,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),13);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),14);
   return next;
 }
 
@@ -584,10 +587,10 @@ function renderSharedStatus(){
     if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
     const ok=cloudRevision>0?(cloudBaseRecord?await publishCloud(false):await reconcileCloud()):await publishCloud(true);if(ok)renderAll();
   });
-  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#wellbeingForm button[type=submit]']){
+  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
   }
-  qa('[data-edit-observation],[data-edit-medication],[data-edit-cost]').forEach(node=>node.disabled=!ownerCanEdit);
+  qa('[data-edit-observation],[data-edit-medication],[data-edit-cost],[data-question-observation],[data-question-status]').forEach(node=>node.disabled=!ownerCanEdit);
 }
 
 function bindNav(){
@@ -667,6 +670,16 @@ function bindDialogs(){
     if(medication)openMedicationDialog(medication.dataset.editMedication);
     const cost=event.target.closest('[data-edit-cost]');
     if(cost)openCostCorrectionDialog(cost.dataset.editCost);
+    const ask=event.target.closest('[data-question-observation]');
+    if(ask){
+      const row=state.observations.find(o=>o.id===ask.dataset.questionObservation);
+      if(row){questionDraftSource={type:'observation',id:row.id,date:row.date};navigate('home');renderQuestions();const input=q('#questionInput');if(input){input.value=`Ask about ${fmtDate(row.date)}: `;input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
+    }
+    const statusButton=event.target.closest('[data-question-status]');
+    if(statusButton&&ownerCanEdit){
+      const item=(state.carePlan?.questions||[]).find(question=>question.id===statusButton.dataset.questionStatus);
+      if(item){item.status=item.status==='resolved'?'open':'resolved';item.resolvedAt=item.status==='resolved'?new Date().toISOString():null;saveChanges().then(ok=>{if(ok){renderQuestions();toast(item.status==='resolved'?'Question marked asked':'Question reopened');}});}
+    }
   });
 }
 
@@ -950,6 +963,16 @@ function bindForms(){
     if(!await saveChanges())return; renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast(editId?'Medication record corrected':'Medication administration saved');
   });
 
+  q('#questionForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const input=q('#questionInput'),text=String(input?.value||'').trim();
+    if(!text)return;
+    state.carePlan.questions=Array.isArray(state.carePlan.questions)?state.carePlan.questions:[];
+    state.carePlan.questions.push({id:uid('question'),text,createdAt:new Date().toISOString(),status:'open',resolvedAt:null,source:questionDraftSource?structuredClone(questionDraftSource):null});
+    if(!await saveChanges())return;
+    input.value='';questionDraftSource=null;renderQuestions();toast('Question saved for the next visit');
+  });
+
   q('#careTeamForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const current=mergeCareTeam(state.carePlan?.careTeam||[]);
@@ -1121,7 +1144,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderCareTeam(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
+  renderProfile(); renderHome(); renderQuestions(); renderCareTeam(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
 }
 function renderWellbeing(){
   const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
@@ -1143,6 +1166,18 @@ function renderBackupStatus(){
 
 function phoneHref(value){const clean=String(value||'').replace(/[^\d+]/g,'');return clean?`tel:${clean}`:'';}
 function directionsHref(address){return address?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`:'';}
+function renderQuestions(){
+  const root=els.nextVisitQuestions,context=q('#questionContext');if(!root)return;
+  const questions=[...(state.carePlan?.questions||[])].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  const open=questions.filter(item=>item.status!=='resolved'),resolved=questions.filter(item=>item.status==='resolved');
+  const itemHtml=item=>{const source=item.source?.type==='observation'&&item.source?.date?` · from ${fmtDate(item.source.date)} journal entry`:'';return `<article class="question-item ${item.status==='resolved'?'resolved':''}"><div class="question-item-text">${esc(item.text)}</div><div class="question-item-meta">Added ${item.createdAt?new Date(item.createdAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'date unknown'}${source}</div><div class="question-item-actions"><button class="text-button" type="button" data-question-status="${esc(item.id)}">${item.status==='resolved'?'Reopen':'Mark asked'}</button></div></article>`;};
+  const openHtml=open.length?open.map(itemHtml).join(''):'<div class="empty-state">No open questions. Add one whenever something occurs to you.</div>';
+  const history=resolved.length?`<details class="question-history"><summary>${resolved.length} asked / resolved question${resolved.length===1?'':'s'}</summary><div class="question-list">${resolved.map(itemHtml).join('')}</div></details>`:'';
+  root.innerHTML=openHtml+history;
+  if(context){context.hidden=!questionDraftSource;context.textContent=questionDraftSource?.date?`Linked to Roger's ${fmtDate(questionDraftSource.date)} journal entry. The question will keep that context.`:'';}
+  qa('[data-question-status]').forEach(button=>button.disabled=!ownerCanEdit);
+}
+
 function renderCareTeam(){
   const plan=state.carePlan||{};
   const team=mergeCareTeam(plan.careTeam||[]);
@@ -1606,7 +1641,7 @@ function renderJournal(){
     const sources=entries.map(o=>{
       const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
       const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${esc(stoolEventSummary(s))}`).join(' · ')}</div>`:'';
-      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">${o.rawEntry?'Correct':'Edit entry'}</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
+      return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><div class="row-actions"><button class="text-button" type="button" data-question-observation="${esc(o.id)}">Ask at next visit</button><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">${o.rawEntry?'Correct':'Edit entry'}</button></div></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
     }).join('');
     const severity=entries.reduce((a,b)=>symptomSeverity(a)>symptomSeverity(b)?a:b);
     return `<article class="observation-card"><div class="row-between"><div class="item-title">${fmtDate(date)}${entries.length>1?` <small class="journal-source-count">· ${entries.length} notes</small>`:''}</div>${severityChip(severity)}</div>${sources}</article>`;
@@ -2255,6 +2290,10 @@ function buildCareSummaryPdf(){
   heading('Upcoming care');
   for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
   wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`);
+  const openQuestions=(plan.questions||[]).filter(question=>question.status!=='resolved');
+  heading('Questions for care team');
+  if(openQuestions.length)openQuestions.forEach((question,index)=>wrap(`${index+1}. ${question.text}`,9,false,8));
+  else wrap('No open owner questions recorded.',9,false,8);
   heading('Recent owner notes');
   const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-3).reverse();
   for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries){const note=String(o.notes||'No note');wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${note.length>150?note.slice(0,147)+'...':note}`,9,false,8);}}
@@ -2313,6 +2352,8 @@ function buildCareSummaryHtml(){
   const prnRows=(state.medications||[]).filter(m=>!['med-prednisone','med-amoxicillin'].includes(m.id)).map(m=>{const a=medicationStats(m.id);return `<tr><td>${esc(m.name)}</td><td>${a.given.length} given; ${state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length} held</td><td>${a.last?fmtDate(a.last):'No dose logged'}</td><td>${esc(m.prescribedDose)}</td></tr>`;}).join('');
   const medicationEvents=state.medicationAdministrations.filter(a=>a.medicationId==='med-metronidazole').map(a=>`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${a.dose} ${a.status} (${a.reason||'reason unrecorded'})`).join('; ');
   const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date TBD'}</strong> <small>(${esc(v.source||'Source unrecorded')})</small></li>`).join('');
+  const openQuestions=(plan.questions||[]).filter(question=>question.status!=='resolved');
+  const questionRows=openQuestions.map(question=>`<li>${esc(question.text)}${question.source?.date?` <small>(from ${fmtDate(question.source.date)} journal entry)</small>`:''}</li>`).join('');
   const docs=documents.map(d=>`<li>${esc(d.name)} · ${fmtDate(d.date)} · ${esc(d.provider||d.type)}</li>`).join('');
   const correctionCount=state.recordCorrections?.length||0;
   const correctionRows=(state.recordCorrections||[]).map(c=>{
@@ -2325,6 +2366,7 @@ function buildCareSummaryHtml(){
   <div class="grid"><div><h2>Key bloodwork</h2><p><strong>Neutrophil nadir:</strong> ${nadir?`${esc(nadir.displayValue||nadir.value)} ${esc(nadir.unit)} on ${fmtDate(nadir.date)}`:'Not recorded'} (250/µL on 8/20).<br><strong>Latest:</strong> ${latest?`${esc(latest.displayValue||latest.value)} ${esc(latest.unit)} on ${fmtDate(latest.date)}`:'Not recorded'}.</p><p>Chemo #3 was delayed one week after the 9/3 count of 1.79 K/µL.</p></div>
   <div><h2>Medication now / recently</h2><p><strong>Prednisone:</strong> prescribed 10 mg every 24 hours from 10/2; owner-confirmed daily administration through ${pred.last?fmtDate(pred.last):'date unknown'} (${pred.given.length} days total). Do not infer subsequent doses.</p><p><strong>Amoxicillin:</strong> seven-day owner-reported course 8/20–8/26 after neutrophils 250/µL; dose and frequency not recorded.</p><p><strong>Metronidazole:</strong> ${esc(medicationEvents||'No administrations logged')}.</p></div></div>
   <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
   <h2>Recent owner observations</h2><ul>${recentObs}</ul><p class="small">Owner observations and medication use are owner reported. Dates without a confirmed visit or dose remain pending; this handoff is a record for discussion with the care team.</p></section>
   <h2>Medication courses</h2><table><thead><tr><th>Medication</th><th>Reported dates</th><th>Dose / frequency</th><th>Basis</th></tr></thead><tbody>${courseRows}</tbody></table>
   <h2>PRN / visit medications</h2><table><thead><tr><th>Medication</th><th>Logged use</th><th>Last given</th><th>Prescription on file</th></tr></thead><tbody>${prnRows}</tbody></table>
