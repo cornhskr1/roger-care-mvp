@@ -1788,6 +1788,70 @@ function renderNauseaTimingInsight(){
     : `No nausea-associated observation is recorded yet after chemo #${pattern.latest.number}.`;
   root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded. This is a timing aid from Roger's history, not a recommendation to give medication; follow his veterinary instructions for Cerenia use.</p>`;
 }
+function observationHasDiarrhea(o){
+  const stools=(o?.stoolEvents||[]).filter(row=>row.status==='observed');
+  if(stools.some(stoolIsLoose))return true;
+  const text=[o?.stool,o?.gi,o?.notes,o?.rawEntry].filter(Boolean).join(' ');
+  return /diarrhea|watery stool|liquid stool/i.test(text);
+}
+function observationHasKsuBleedWarning(o){
+  return observationHasStoolFlag(o,'black_tarry')||
+    (o?.vomitFlags||[]).includes('coffee_ground_like')||
+    /dark[, ]+tarry stool|coffee[- ]?ground/i.test([o?.stool,o?.gi,o?.notes,o?.rawEntry].filter(Boolean).join(' '));
+}
+function guidanceForObservation(o){
+  if(!o)return [];
+  const items=[];
+  if(observationHasKsuBleedWarning(o)){
+    items.push({...VET_GUIDANCE_ON_FILE.prednisoneBleed,reason:'You recorded a black/tarry stool or coffee-ground-like vomit finding.'});
+    return items;
+  }
+  if(isNauseaAssociatedObservation(o)||Number(o.vomiting)>0){
+    const detail=isNauseaAssociatedObservation(o)?nauseaObservationLabel(o):`${Number(o.vomiting)} vomiting episode${Number(o.vomiting)===1?'':'s'} recorded`;
+    items.push({...VET_GUIDANCE_ON_FILE.cerenia,reason:`Matched observation: ${detail}.`});
+  }
+  if(observationHasDiarrhea(o)){
+    items.push({...VET_GUIDANCE_ON_FILE.metronidazole,reason:'Matched observation: diarrhea / loose or watery stool.'});
+  }
+  return items;
+}
+function guidanceForObservations(observations=[]){
+  const map=new Map();
+  for(const observation of observations){
+    for(const item of guidanceForObservation(observation)){
+      if(!map.has(item.id))map.set(item.id,item);
+    }
+  }
+  return [...map.values()];
+}
+function guidanceCardsHtml(items=[]){
+  if(!items.length)return '';
+  return `<section class="vet-guidance-stack">${items.map(item=>`<article class="vet-guidance-card ${item.kind==='urgent'?'urgent':''}"><div class="section-kicker">VETERINARY GUIDANCE ON FILE</div><strong>${esc(item.title)}</strong><p class="vet-guidance-instruction">${esc(item.instruction)}</p><p class="vet-guidance-reason">${esc(item.reason||'Shown because it matches the observation you recorded.')}</p><div class="vet-guidance-source">${esc(item.source)} · ${fmtDate(item.sourceDate)}</div></article>`).join('')}<p class="vet-guidance-footnote">Roger Care is matching your observation to veterinary instructions already on file. It is not creating a new medication or treatment recommendation.</p></section>`;
+}
+function journalGuidanceDraft(){
+  const form=q('#journalForm');
+  if(!form)return null;
+  const nauseaSigns=qa('input[name="nauseaSigns"]:checked').map(box=>box.value);
+  const nauseaOther=String(form.elements.namedItem('nauseaOther')?.value||'').trim();
+  const vomitingRaw=form.elements.namedItem('vomiting')?.value;
+  return {
+    nausea:nauseaSigns.length||nauseaOther?1:0,
+    nauseaSigns,
+    nauseaOther,
+    vomiting:vomitingRaw===''||vomitingRaw==null?null:Number(vomitingRaw),
+    vomitFlags:qa('input[name="vomitFlags"]:checked').map(box=>box.value),
+    stoolEvents:collectStoolRows(),
+    gi:String(form.elements.namedItem('gi')?.value||''),
+    notes:''
+  };
+}
+function renderJournalVetGuidance(){
+  const root=q('#journalVetGuidance');
+  if(!root)return;
+  const items=guidanceForObservation(journalGuidanceDraft());
+  root.hidden=!items.length;
+  root.innerHTML=items.length?guidanceCardsHtml(items):'';
+}
 function comparisonRange(rows){
   if(!rows.length)return null;
   const firstOwner=rows.find(r=>r.observations.length)?.date||rows[0].date;
