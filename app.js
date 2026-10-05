@@ -803,7 +803,7 @@ function recordCorrection(collection,id,after){
 
 function bindForms(){
   document.addEventListener('submit',event=>{
-    if(['ownerLogin','ownerLinkPaste','ownerPairPaste'].includes(event.target.id)||ownerCanEdit)return;
+    if(['ownerLogin','ownerLinkPaste'].includes(event.target.id)||ownerCanEdit)return;
     event.preventDefault();event.stopImmediatePropagation();
     toast('Only Roger’s owner can change this record. Sign in first.',true);
   },true);
@@ -2212,7 +2212,11 @@ function bindExports(){
       }):null;
       if(!window.confirm(`Restore this backup? It will replace the app's current entries${hasDocuments?' and uploaded documents':''} on this device.`))return;
       if(restored)await replaceDocuments(restored);
-      state=migrateState(incoming);await persist();unpublishedLocal=true;manualPublishRequired=true;syncMessage='Backup restored on this device. Confirm a fresh backup before publishing.';await loadDocuments();renderAll();
+      state=migrateState(incoming);await persist();unpublishedLocal=true;
+      try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
+      syncMessage='Backup restored on this device. Syncing automatically.';
+      await loadDocuments();renderAll();
+      if(ownerCanEdit)setTimeout(()=>publishCloudMirror(),0);
       toast(hasDocuments?'Complete backup restored':'Older backup restored; existing device documents kept');
     }catch(_){toast('That backup could not be imported',true);}
     finally{event.target.value='';}
