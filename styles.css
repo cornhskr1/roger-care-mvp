@@ -472,3 +472,17 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .snapshot-share-actions .text-button{grid-column:1/-1;justify-self:center;min-height:38px}
 .snapshot-range-context{font-size:10px;line-height:1.4;color:var(--muted);margin-top:3px}
 @media(max-width:520px){.snapshot-range-picker{grid-template-columns:1fr 1fr}.snapshot-custom-range{grid-template-columns:1fr}.snapshot-share-actions{grid-template-columns:1fr}.snapshot-share-actions .text-button{grid-column:auto;justify-self:stretch}}
+
+
+/* Simplified sync states */
+.shared-status.is-synced,.sync-summary.is-synced{background:var(--green-soft);border-color:#bddaca}
+.shared-status.is-synced strong,.sync-summary.is-synced strong{color:var(--green)}
+.shared-status.is-local,.sync-summary.is-local{background:#f8f3fc;border-color:#d9cdea}
+.shared-status.needs-attention,.sync-summary.needs-attention{background:var(--gold-soft);border-color:#dfc483}
+.shared-status.needs-attention strong,.sync-summary.needs-attention strong{color:var(--gold)}
+.sync-summary{padding:2px 0}
+.sync-summary>strong{font-size:15px}
+.sync-advanced{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.sync-advanced summary{cursor:pointer;font-size:12px;font-weight:850;color:var(--muted);min-height:32px}
+.sync-advanced[open] summary{margin-bottom:8px}
+.sync-advanced button{margin:5px 7px 5px 0}

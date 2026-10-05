@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=37">
+  <link rel="stylesheet" href="styles.css?v=38">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -361,21 +361,30 @@
           </form>
         </section>
 
+        <section class="card owner-only sync-card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CLOUD SYNC</div>
+              <h2>Saved across devices</h2>
+            </div>
+          </div>
+          <section id="sharedControls" class="shared-controls" aria-live="polite"></section>
+        </section>
+
         <section class="card owner-only">
           <div class="card-head">
             <div>
-              <div class="section-kicker">BACKUP</div>
-              <h2>Protect Roger’s record</h2>
+              <div class="section-kicker">FILE BACKUP</div>
+              <h2>Keep an extra copy</h2>
             </div>
           </div>
           <div id="backupStatus" class="backup-status" aria-live="polite"></div>
-          <section id="sharedControls" class="shared-controls" aria-live="polite"></section>
           <div class="button-stack">
-            <button id="exportBackup" class="primary-button" type="button">Download complete backup</button>
+            <button id="exportBackup" class="primary-button" type="button">Create file backup</button>
             <button id="confirmBackupSaved" class="secondary-button" type="button" hidden>I saved a copy outside this device</button>
-            <label class="secondary-button file-button">Import app backup<input id="importBackup" type="file" accept="application/json" hidden></label>
+            <label class="secondary-button file-button">Restore file backup<input id="importBackup" type="file" accept="application/json" hidden></label>
           </div>
-          <p class="medication-note">Includes journal entries, medication records, corrections, profile, and uploaded documents. Save the downloaded JSON file to Files/iCloud Drive or another location outside this browser. A download alone cannot confirm where the file ended up. Keep older dated copies too.</p>
+          <p class="medication-note">This is separate from cloud sync. A file backup includes the complete record and uploaded document files that remain on this device.</p>
         </section>
 
         <section class="card">
@@ -571,6 +580,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=50" defer></script>
+  <script src="app.js?v=51" defer></script>
 </body>
 </html>
