@@ -584,7 +584,7 @@ async function reconcileCloud(){
     toast('Your change is now shared.');return true;
   }catch(_){
     if(savedRecord){
-      cloudRevision=savedRevision;cloudUpdatedAt=savedAt;unpublishedLocal=false;manualPublishRequired=false;
+      cloudRevision=savedRevision;cloudUpdatedAt=savedAt;unpublishedLocal=false;manualPublishRequired=false;syncNeedsAttention=false;
       syncMessage='Shared record updated. Refresh to update this screen.';
       try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
       return true;
