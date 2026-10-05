@@ -17,6 +17,7 @@ let ownerPairCode = null;
 let manualPublishRequired = false;
 let syncMessage = '';
 let syncNeedsAttention = false;
+let syncMergeConflict = '';
 const DEFAULT_VISITS = [
   {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
@@ -492,15 +493,27 @@ function mergeCarePlanThreeWay(basePlan={},localPlan={},onlinePlan={}){
   const base=plainCloudObject(basePlan)?basePlan:{},local=plainCloudObject(localPlan)?localPlan:{},online=plainCloudObject(onlinePlan)?onlinePlan:{};
   const merged={};
   for(const key of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(online)])){
-    const result=['visits','careTeam','questions'].includes(key)
-      ? mergeKeyedCareRows(base[key]||[],local[key]||[],online[key]||[])
-      : mergeThreeWayNode(base[key],local[key],online[key]);
-    if(!result.ok)return {ok:false};
+    let result;
+    if(key==='careTeam'){
+      // Older cloud bases predate the Care Team feature. Treat the known default
+      // provider rows as baseline structure, not as owner edits.
+      result=mergeKeyedCareRows(
+        mergeCareTeam(base[key]||[]),
+        mergeCareTeam(local[key]||[]),
+        mergeCareTeam(online[key]||[])
+      );
+    }else if(['visits','questions'].includes(key)){
+      result=mergeKeyedCareRows(base[key]||[],local[key]||[],online[key]||[]);
+    }else{
+      result=mergeThreeWayNode(base[key],local[key],online[key]);
+    }
+    if(!result.ok)return {ok:false,conflict:key};
     if(result.value!==undefined)merged[key]=result.value;
   }
   return {ok:true,value:merged};
 }
 function mergeIndependentChanges(local,online){
+  syncMergeConflict='';
   const merged=structuredClone(online);
   for(const key of new Set([...Object.keys(local),...Object.keys(online)])){
     if(key==='_savedAt')continue;
@@ -508,12 +521,12 @@ function mergeIndependentChanges(local,online){
     if(key==='journalCoverageThrough'){merged[key]=[local[key],online[key]].filter(Boolean).sort().at(-1);continue;}
     if(key==='carePlan'){
       const result=mergeCarePlanThreeWay(cloudBaseRecord?.carePlan||{},local.carePlan||{},online.carePlan||{});
-      if(!result.ok)return null;
+      if(!result.ok){syncMergeConflict=`Care Plan · ${result.conflict||'unknown field'}`;return null;}
       merged.carePlan=result.value;continue;
     }
     if(key==='profile'){
       const own={...local.profile},remote={...online.profile};delete own.photoDataUrl;delete remote.photoDataUrl;
-      if(!sameCloudValue(own,remote))return null;
+      if(!sameCloudValue(own,remote)){syncMergeConflict='Profile';return null;}
       merged.profile={...remote,...(local.profile?.photoDataUrl?{photoDataUrl:local.profile.photoDataUrl}:{})};continue;
     }
     if(Array.isArray(local[key])&&Array.isArray(online[key])){
@@ -531,7 +544,7 @@ function mergeIndependentChanges(local,online){
             else {
               const onlineCorrection=(online.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
                 sameCloudValue(change.before,row)&&sameCloudValue({...row,...change.after},onlineRow));
-              if(!onlineCorrection)return null;
+              if(!onlineCorrection){syncMergeConflict=`${key} · ${id}`;return null;}
             }
           }
         }
@@ -542,14 +555,14 @@ function mergeIndependentChanges(local,online){
         for(const row of rows){
           const prior=byDate.get(row.date);
           if(!prior){byDate.set(row.date,row);continue;}
-          if(Number(prior.score)!==Number(row.score)||prior.notes&&row.notes&&prior.notes!==row.notes)return null;
+          if(Number(prior.score)!==Number(row.score)||prior.notes&&row.notes&&prior.notes!==row.notes){syncMergeConflict=`qualityOfLife · ${row.date||'same date'}`;return null;}
           if(!prior.notes&&row.notes)byDate.set(row.date,row);
         }
         merged[key]=[...byDate.values()];continue;
       }
       merged[key]=rows;continue;
     }
-    if(!sameCloudValue(local[key],online[key]))return null;
+    if(!sameCloudValue(local[key],online[key])){syncMergeConflict=key;return null;}
   }
   merged._savedAt=new Date().toISOString();
   return merged;
@@ -564,8 +577,8 @@ async function reconcileCloud(){
     const merged=mergeIndependentChanges(cloudRecord(),latest.record);
     if(!merged){
       syncNeedsAttention=true;
-      syncMessage='Another device changed the same information. Your changes are safe here and need review before they can be combined.';
-      toast('Sync needs attention. Nothing was overwritten.',true);return false;
+      syncMessage=`Roger Care could not safely combine ${syncMergeConflict||'one section'} yet. Your changes are safe here.`;
+      toast(`Sync needs attention: ${syncMergeConflict||'one section'}. Nothing was overwritten.`,true);return false;
     }
     const equivalent=(_record)=>sameCloudValue({..._record,_savedAt:null},{...latest.record,_savedAt:null});
     if(equivalent(merged)){
