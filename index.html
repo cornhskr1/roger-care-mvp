@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=33">
+  <link rel="stylesheet" href="styles.css?v=34">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -63,6 +63,22 @@
             <button class="text-button" data-nav="more" type="button">Manage</button>
           </div>
           <div id="careTeamQuick"></div>
+        </section>
+
+        <section class="card question-card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">NEXT VISIT</div>
+              <h2>Questions for Roger's care team</h2>
+            </div>
+          </div>
+          <p class="body-copy">Capture the question when it occurs to you. Open questions will carry into Roger's visit summary.</p>
+          <form id="questionForm" class="question-form">
+            <label class="field"><span>What do you want to ask?</span><input id="questionInput" name="question" type="text" maxlength="500" placeholder="Does the nausea timing 2–3 days after treatment matter?" required></label>
+            <button class="primary-button compact" type="submit">Add question</button>
+          </form>
+          <div id="questionContext" class="question-context" hidden></div>
+          <div id="nextVisitQuestions" class="question-list"></div>
         </section>
 
         <section class="card">
@@ -543,6 +559,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=46" defer></script>
+  <script src="app.js?v=47" defer></script>
 </body>
 </html>
