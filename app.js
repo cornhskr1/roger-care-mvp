@@ -1786,7 +1786,8 @@ function renderNauseaTimingInsight(){
   const latest=pattern.latestCurrent
     ? `Latest nausea-associated observation: ${fmtDate(pattern.latestCurrent.date)} (day +${pattern.latestCurrentOffset}) · ${nauseaObservationLabel(pattern.latestCurrent)}.`
     : `No nausea-associated observation is recorded yet after chemo #${pattern.latest.number}.`;
-  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded. This is a timing aid from Roger's history, not a recommendation to give medication; follow his veterinary instructions for Cerenia use.</p>`;
+  const guidance=pattern.latestCurrent?guidanceForObservation(pattern.latestCurrent):[];
+  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded.</p>${guidanceCardsHtml(guidance)}`;
 }
 function observationHasDiarrhea(o){
   const stools=(o?.stoolEvents||[]).filter(row=>row.status==='observed');
