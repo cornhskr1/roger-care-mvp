@@ -426,3 +426,19 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .safety-prompt.contact .safety-prompt-actions a.primary{background:var(--gold);border-color:var(--gold);color:#fff}
 .safety-prompt-note{font-size:10px;line-height:1.4;color:var(--muted)}
 @media(max-width:520px){.vomit-choice-grid{grid-template-columns:1fr}}
+
+
+/* Questions for next visit */
+.question-form{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin-top:10px}
+.question-form .primary-button{min-height:46px}
+.question-context{margin:8px 0 0;padding:8px 10px;border-radius:10px;background:var(--blue-soft);color:var(--blue);font-size:11px;line-height:1.4}
+.question-list{display:grid;gap:8px;margin-top:12px}
+.question-item{border:1px solid var(--line);border-radius:13px;padding:11px;background:#fff}
+.question-item.resolved{opacity:.72;background:#fafafa}
+.question-item-text{font-size:13px;line-height:1.45;font-weight:750}
+.question-item-meta{font-size:10px;line-height:1.35;color:var(--muted);margin-top:4px}
+.question-item-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.question-item-actions button{min-height:36px;padding:6px 9px}
+.question-history{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+.question-history summary{font-size:11px;font-weight:850;color:var(--muted);cursor:pointer}
+@media(max-width:520px){.question-form{grid-template-columns:1fr}.question-form .primary-button{width:100%}}
