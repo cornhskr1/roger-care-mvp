@@ -89,6 +89,10 @@ const STOOL_FLAG_LABELS={
   large_volume:'larger volume than usual',
   small_frequent:'small / frequent stools'
 };
+const VOMIT_FLAG_LABELS={
+  bright_red_blood:'bright-red blood in vomit',
+  coffee_ground_like:'dark material resembling coffee grounds'
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -257,7 +261,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),12);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),13);
   return next;
 }
 
@@ -600,7 +604,7 @@ function bindDialogs(){
   q('#journalAddButton').addEventListener('click', () => openJournalDialog());
   q('#medicationAddButton').addEventListener('click', () => openMedicationDialog());
   q('#addStoolRow').addEventListener('click',()=>addStoolRow());
-  q('#stoolRows').addEventListener('click',event=>{if(event.target.closest('[data-remove-stool]'))event.target.closest('.stool-input-row').remove();});
+  q('#stoolRows').addEventListener('click',event=>{if(event.target.closest('[data-remove-stool]')){event.target.closest('.stool-input-row').remove();renderSafetyPrompt();}});
   q('#comparePrimary').addEventListener('change',event=>{comparison.primary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';q('#compareSecondary').value='none';}renderJournalTrend();});
   q('#compareSecondary').addEventListener('change',event=>{comparison.secondary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';event.target.value='none';}renderJournalTrend();});
   qa('[data-compare-range]').forEach(btn=>btn.addEventListener('click',()=>{comparison.range=btn.dataset.compareRange;comparison.selectedDate=null;renderJournalTrend();}));
@@ -634,6 +638,16 @@ function bindDialogs(){
   });
   nauseaChoices.forEach(box=>box.addEventListener('change',()=>{if(box.checked&&nauseaNone)nauseaNone.checked=false;}));
   q('#nauseaOther')?.addEventListener('input',event=>{if(event.target.value.trim()&&nauseaNone)nauseaNone.checked=false;});
+  const vomitNone=q('#vomitNoneObserved');
+  const vomitChoices=qa('input[name="vomitFlags"]');
+  vomitNone?.addEventListener('change',()=>{
+    if(!vomitNone.checked)return;
+    vomitChoices.forEach(box=>{box.checked=false;});
+    renderSafetyPrompt();
+  });
+  vomitChoices.forEach(box=>box.addEventListener('change',()=>{if(box.checked&&vomitNone)vomitNone.checked=false;renderSafetyPrompt();}));
+  q('#journalForm')?.addEventListener('input',renderSafetyPrompt);
+  q('#journalForm')?.addEventListener('change',renderSafetyPrompt);
   q('#careModeButton').addEventListener('click', () => {
     careTeamMode = !careTeamMode;
     document.body.classList.toggle('care-team-mode', careTeamMode);
@@ -669,7 +683,7 @@ function openJournalDialog(id=''){
   const row=state.observations.find(o=>o.id===id);
   if(row)for(const [name,value] of Object.entries(row)){
     const field=form.elements.namedItem(name);
-    if(field&&!['medications','nauseaSigns','nauseaNoneObserved','appetiteBehaviors','energyBehaviors'].includes(name)){
+    if(field&&!['medications','nauseaSigns','nauseaNoneObserved','appetiteBehaviors','energyBehaviors','vomitFlags','vomitNoneObserved'].includes(name)){
       const selected=value??'';
       if(field.tagName==='SELECT'&&selected!==''&&![...field.options].some(option=>option.value===String(selected))){
         const option=new Option(String(selected),String(selected));option.dataset.historical='';field.add(option);
@@ -704,6 +718,9 @@ function openJournalDialog(id=''){
   const hasLegacyNausea=Boolean(row&&Number(row.nausea)>0&&!Array.isArray(row.nauseaSigns)&&!row.nauseaOther);
   legacyHint.hidden=!hasLegacyNausea;
   legacyHint.textContent=hasLegacyNausea?`Historical entry: nausea was previously recorded as ${Number(row.nausea)===1?'signs observed':Number(row.nausea)===2?'moderate':'severe'}. It will stay unchanged unless you select behaviors above or mark none observed.`:'';
+  const savedVomitFlags=Array.isArray(row?.vomitFlags)?row.vomitFlags:[];
+  qa('input[name="vomitFlags"]').forEach(box=>{box.checked=savedVomitFlags.includes(box.value);});
+  q('#vomitNoneObserved').checked=Boolean(row?.vomitNoneObserved);
   q('#stoolRows').replaceChildren();
   const legacyStool=String(row?.stool||'');
   const legacyPeriod=/\b(Before bed|Overnight|AM|PM)\b/i.exec(legacyStool)?.[1];
@@ -715,6 +732,7 @@ function openJournalDialog(id=''){
   q('#journalDialogTitle').textContent=row?(row.rawEntry?'Correct original note':'Edit daily entry'):'New daily entry';
   q('#journalSaveButton').textContent=row?'Save changes':'Save entry';
   q('#journalEditHelp').textContent=row?.rawEntry?'The original text below this entry stays intact. Your changes are saved with a correction record.':'Start now and come back later to add more to this same day.';
+  renderSafetyPrompt();
   els.journalDialog.showModal();
 }
 
@@ -769,6 +787,44 @@ function stoolEventSummary(row){
   return parts.join(' · ')||'observed';
 }
 
+function vomitFlagLabels(o){return (Array.isArray(o?.vomitFlags)?o.vomitFlags:[]).map(value=>VOMIT_FLAG_LABELS[value]||value);}
+function journalSafetySignals(){
+  const form=q('#journalForm');if(!form)return {tier:null,reasons:[]};
+  const vomiting=Number(form.elements.namedItem('vomiting')?.value||0);
+  const vomitFlags=qa('input[name="vomitFlags"]:checked').map(box=>box.value);
+  const stoolFlags=qa('#stoolRows [data-stool-flag]:checked').map(box=>box.value);
+  const urgent=[],contact=[];
+  if(vomitFlags.includes('coffee_ground_like'))urgent.push('dark material resembling coffee grounds in vomit');
+  if(vomitFlags.includes('bright_red_blood'))urgent.push('bright-red blood in vomit');
+  if(stoolFlags.includes('black_tarry'))urgent.push('black / tarry stool');
+  if(stoolFlags.includes('bright_red_blood'))contact.push('bright-red blood in stool');
+  if(vomiting>=3)contact.push(`${vomiting} vomiting episodes logged today`);
+  return urgent.length?{tier:'urgent',reasons:[...urgent,...contact]}:contact.length?{tier:'contact',reasons:contact}:{tier:null,reasons:[]};
+}
+function safetyContactActions(tier){
+  const team=mergeCareTeam(state?.carePlan?.careTeam||[]);
+  const emergency=team.find(contact=>contact.kind==='emergency'&&phoneHref(contact.phone));
+  const specialty=team.find(contact=>contact.id==='ksu'&&phoneHref(contact.phone));
+  const primary=team.find(contact=>contact.id==='optimum'&&phoneHref(contact.phone));
+  const ordered=tier==='urgent'?[emergency,specialty,primary]:[specialty,primary,emergency];
+  const seen=new Set();
+  return ordered.filter(Boolean).filter(contact=>{if(seen.has(contact.id))return false;seen.add(contact.id);return true;}).slice(0,3).map((contact,index)=>`<a class="${index===0?'primary':''}" href="${esc(phoneHref(contact.phone))}">Call ${esc(contact.kind==='emergency'?'emergency hospital':contact.id==='ksu'?'K-State':'Optimum')}</a>`).join('');
+}
+function renderSafetyPrompt(){
+  const root=q('#safetyPrompt'),form=q('#journalForm'),details=q('.vomit-fieldset');if(!root||!form)return;
+  const vomiting=Number(form.elements.namedItem('vomiting')?.value||0);
+  if(details)details.hidden=!(vomiting>0||qa('input[name="vomitFlags"]:checked').length);
+  if(vomiting<=0){qa('input[name="vomitFlags"]').forEach(box=>{box.checked=false;});if(q('#vomitNoneObserved'))q('#vomitNoneObserved').checked=false;}
+  const signal=journalSafetySignals();
+  if(!signal.tier){root.hidden=true;root.className='safety-prompt';root.innerHTML='';return;}
+  const urgent=signal.tier==='urgent';
+  const title=urgent?'Urgent veterinary attention':'Contact Roger’s veterinary team';
+  const copy=urgent?'These observations can be associated with gastrointestinal bleeding. Contact Roger’s veterinary team or emergency hospital now for guidance.':'Blood in the stool or more than two vomiting episodes in a day warrants prompt veterinary guidance. Contact Roger’s veterinary team today.';
+  const instructions=state?.carePlan?.vetCallInstructions?`<div class="safety-prompt-note"><strong>Roger-specific instructions on file:</strong> ${esc(state.carePlan.vetCallInstructions)}</div>`:'';
+  root.hidden=false;root.className=`safety-prompt ${signal.tier}`;
+  root.innerHTML=`<div class="safety-prompt-title">${esc(title)}</div><div class="safety-prompt-copy">${esc(copy)}</div><div class="safety-prompt-reasons"><strong>What you recorded:</strong> ${esc(signal.reasons.join('; '))}</div><div class="safety-prompt-actions">${safetyContactActions(signal.tier)}</div>${instructions}<div class="safety-prompt-note">This prompt does not diagnose the cause. If Roger appears severely ill, weak, collapses, or has trouble breathing, seek emergency veterinary care.</div>`;
+}
+
 function recordCorrection(collection,id,after){
   const rows=state[collection],index=rows.findIndex(row=>row.id===id);
   if(index<0)return false;
@@ -816,6 +872,10 @@ function bindForms(){
     const nauseaOther=String(fd.get('nauseaOther')||'').trim();
     const legacyNausea=existing&&!Array.isArray(existing.nauseaSigns)&&!existing.nauseaOther&&existing.nausea!==null&&existing.nausea!==undefined&&existing.nausea!=='';
     const nausea=nauseaNoneObserved?0:(nauseaSigns.length||nauseaOther?1:(legacyNausea?Number(existing.nausea):null));
+    const vomitFlags=fd.getAll('vomitFlags').map(String).filter(value=>VOMIT_FLAG_LABELS[value]);
+    const vomitNoneObserved=fd.get('vomitNoneObserved')==='1';
+    const vomiting=fd.get('vomiting')===''?null:Number(fd.get('vomiting'));
+    if(vomitFlags.length&&!(Number(vomiting)>0))return toast('Enter at least one vomiting episode before describing the vomit.',true);
     const tracked=['vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
     const appetiteTracked=appetitePercent!==null||appetiteBehaviors.length>0||Boolean(appetiteOther)||legacyAppetite;
     const energyTracked=Boolean(energyBaselineLevel)||energyBehaviors.length>0||Boolean(energyOther)||legacyEnergy;
@@ -823,7 +883,7 @@ function bindForms(){
     if(!stoolEvents.length&&!appetiteTracked&&!energyTracked&&!nauseaTracked&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
     const obs = {
       id: uid('obs'), date: fd.get('date'), appetite,appetitePercent,appetiteBehaviors,appetiteOther,energy,energyBaselineLevel,energyBehaviors,energyOther,
-      nausea,nauseaSigns,nauseaOther,nauseaNoneObserved, vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
+      nausea,nauseaSigns,nauseaOther,nauseaNoneObserved,vomiting,vomitFlags,vomitNoneObserved,
       stool:stoolEvents.map(s=>`${s.period}${s.time?' '+s.time:''}: ${s.status==='observed'?stoolEventSummary(s):s.status}`).join(' | '),stoolEvents,
       hydration: fd.get('hydration'), urination: fd.get('urination'), pain:fd.get('pain')===''?null:Number(fd.get('pain')),
       mood:fd.get('mood'),play:fd.get('play'),sleep:fd.get('sleep'),rogerThings:fd.get('rogerThings'),gi:fd.get('gi'),
@@ -1258,7 +1318,7 @@ function compactObservation(o){
   const appetiteText=appetiteSummary(o);if(appetiteText)parts.push(appetiteText);
   const energyText=energySummary(o);if(energyText)parts.push(energyText);
   const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText);
-  if(o.vomiting)parts.push(`${o.vomiting} vomit`);
+  if(o.vomiting){const findings=vomitFlagLabels(o);parts.push(`${o.vomiting} vomit${Number(o.vomiting)===1?'':'s'}${findings.length?'; '+findings.join(', '):''}`);}
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scored=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
   if(stools.length){const flagged=stools.find(s=>stoolFlagLabels(s).length)||stools.find(s=>s.consistency)||stools.at(-1);parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}${flagged?'; '+stoolEventSummary(flagged):''}`);}
@@ -1499,7 +1559,7 @@ function symptomSummary(o){
   const appetiteText=appetiteSummary(o);if(appetiteText&&/decreased|refused|~(?:0|25|50|75)%/.test(appetiteText))parts.push(appetiteText);
   const energyText=energySummary(o);if(energyText&&/below|very low|reduced|low/.test(energyText))parts.push(energyText);
   const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText);
-  if(Number(o.vomiting)>0) parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}`);
+  if(Number(o.vomiting)>0){const findings=vomitFlagLabels(o);parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}${findings.length?'; '+findings.join(', '):''}`);}
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scores=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
   if(stools.length){const flagged=stools.find(s=>stoolFlagLabels(s).length)||stools.find(s=>s.consistency)||stools.at(-1);parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scores.length?', highest '+Math.max(...scores):''}${flagged?'; '+stoolEventSummary(flagged):''}`);}
@@ -1511,6 +1571,8 @@ function symptomSeverity(o){
   let s=0;
   s=Math.max(s,Number(o.nausea)||0,Number(o.pain)||0);
   if(Number(o.vomiting)>0) s=Math.max(s,2);
+  if((o.vomitFlags||[]).some(flag=>['bright_red_blood','coffee_ground_like'].includes(flag))||observationHasStoolFlag(o,'black_tarry'))s=Math.max(s,3);
+  if(Number(o.vomiting)>=3)s=Math.max(s,2);
   const observedStools=(o.stoolEvents||[]).filter(row=>row.status==='observed');
   const scores=observedStools.map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
   const stool=scores.length?Math.max(...scores):parseFloat(o.stool);
@@ -1555,7 +1617,7 @@ function observationChips(o){
   const appetiteText=appetiteSummary(o);if(appetiteText)chips.push(appetiteText);
   const energyText=energySummary(o);if(energyText)chips.push(energyText);
   const nauseaText=nauseaSummary(o);if(nauseaText)chips.push(nauseaText);else if(o.nauseaNoneObserved)chips.push('no nausea-associated behaviors observed');
-  if(Number(o.vomiting)>0)chips.push(`vomiting: ${o.vomiting}`);
+  if(Number(o.vomiting)>0){const findings=vomitFlagLabels(o);chips.push(`vomiting: ${o.vomiting}${findings.length?' · '+findings.join(', '):''}`);}
   if(o.stool&&!o.stoolEvents?.length)chips.push(`stool: ${o.stool}`);
   if(o.hydration)chips.push(`water: ${o.hydration}`);
   if(o.urination)chips.push(`${o.urination}`);
