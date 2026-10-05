@@ -2266,7 +2266,12 @@ function mostCommonLabels(values,limit=3){
 function careSnapshotData(){
   const treatment=latestTreatment();
   const rows=comparisonRows().filter(row=>row.date>=treatment.date&&row.observations.length);
-  const end=rows.at(-1)?.date||treatment.date;
+  const candidateDates=[
+    ...rows.map(row=>row.date),
+    ...(state.medicationAdministrations||[]).filter(a=>a.date>=treatment.date).map(a=>a.date),
+    ...(state.labs||[]).filter(l=>l.date>=treatment.date).map(l=>l.date)
+  ].sort();
+  const end=candidateDates.at(-1)||treatment.date;
   const observations=(state.observations||[]).filter(o=>o.date>=treatment.date&&o.date<=end);
   const appetiteRows=rows.filter(row=>row.observations.some(appetiteIsKnown));
   const appetiteReduced=appetiteRows.filter(row=>row.observations.some(appetiteIsReduced));
