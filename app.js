@@ -140,7 +140,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','careSnapshotPreview','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -1144,7 +1144,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderQuestions(); renderCareTeam(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
+  renderProfile(); renderHome(); renderCareSnapshotPreview(); renderQuestions(); renderCareTeam(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
 }
 function renderWellbeing(){
   const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
@@ -2201,7 +2201,7 @@ async function openDocument(id){
 
 function bindExports(){
   document.addEventListener('click',event=>{if(!event.target.closest('[data-open-backup]'))return;navigate('more');q('#backupStatus').scrollIntoView({block:'center',behavior:'smooth'});});
-  q('#downloadCareSummary').addEventListener('click',()=>{try{downloadText('roger-vet-handoff.pdf',buildCareSummaryPdf(),'application/pdf');toast('Vet handoff PDF downloaded');}catch(_){toast('Could not create the PDF. Use Print handoff instead.',true);}});
+  q('#downloadCareSummary').addEventListener('click',()=>{try{downloadText('roger-care-snapshot.pdf',buildCareSummaryPdf(),'application/pdf');toast('Care Snapshot PDF downloaded');}catch(_){toast('Could not create the Care Snapshot PDF. Use Print complete record instead.',true);}});
   q('#printCareSummary').addEventListener('click',()=>{const w=window.open('','_blank');if(!w)return toast('Pop-up blocked. Use Download instead.',true);w.document.write(buildCareSummaryHtml());w.document.close();w.focus();setTimeout(()=>w.print(),300);});
   q('#exportBackup').addEventListener('click',async()=>{
     try{await loadDocuments();const packed=await Promise.all(documents.map(async d=>{
@@ -2259,6 +2259,72 @@ async function backupDigest(value){
 function blobToDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});}
 function dataUrlToBlob(url){const [header,payload]=url.split(',',2);if(!header?.includes(';base64')||!payload)throw new Error('data');const binary=atob(payload),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return new Blob([bytes],{type:header.slice(5).split(';')[0]||'application/octet-stream'});}
 function downloadText(filename,text,type){const blob=new Blob([text],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}
+function mostCommonLabels(values,limit=3){
+  const counts=new Map();for(const value of values.filter(Boolean))counts.set(value,(counts.get(value)||0)+1);
+  return [...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,limit).map(([label,count])=>({label,count}));
+}
+function careSnapshotData(){
+  const treatment=latestTreatment();
+  const rows=comparisonRows().filter(row=>row.date>=treatment.date&&row.observations.length);
+  const candidateDates=[
+    ...rows.map(row=>row.date),
+    ...(state.medicationAdministrations||[]).filter(a=>a.date>=treatment.date).map(a=>a.date),
+    ...(state.labs||[]).filter(l=>l.date>=treatment.date).map(l=>l.date)
+  ].sort();
+  const end=candidateDates.at(-1)||treatment.date;
+  const observations=(state.observations||[]).filter(o=>o.date>=treatment.date&&o.date<=end);
+  const appetiteRows=rows.filter(row=>row.observations.some(appetiteIsKnown));
+  const appetiteReduced=appetiteRows.filter(row=>row.observations.some(appetiteIsReduced));
+  const appetitePercents=observations.map(o=>Number(o.appetitePercent)).filter(n=>Number.isFinite(n)&&n>=0);
+  const minAppetite=appetitePercents.length?Math.min(...appetitePercents):null;
+  const energyRows=rows.filter(row=>row.values.energy!==null);
+  const energyReduced=energyRows.filter(row=>row.values.energy<3);
+  const nauseaRows=rows.filter(row=>row.values.nausea!==null);
+  const nauseaDays=nauseaRows.filter(row=>row.values.nausea>0);
+  const nauseaTop=mostCommonLabels(observations.flatMap(o=>nauseaLabels(o)));
+  const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null);
+  const looseDays=stoolRows.filter(row=>row.values.looseStool===1);
+  const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/\bblood\b|black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
+  const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
+  const stoolScores=stoolRows.map(row=>row.values.stoolScore).filter(value=>value!==null&&Number.isFinite(Number(value))).map(Number);
+  const vomitingRows=rows.filter(row=>row.observations.some(o=>o.vomiting!==null&&o.vomiting!==undefined&&o.vomiting!==''));
+  const vomitingEpisodes=vomitingRows.reduce((sum,row)=>sum+Math.max(0,...row.observations.map(o=>Number(o.vomiting)||0)),0);
+  const vomitFindings=[...new Set(observations.flatMap(o=>vomitFlagLabels(o)))];
+  const weightPoints=[
+    ...state.treatments.filter(t=>t.date>=treatment.date&&t.date<=end&&Number(t.weightLb)>0).map(t=>({date:t.date,value:Number(t.weightLb),source:`Chemo #${t.number}`})),
+    ...observations.filter(o=>Number(o.weightLb)>0).map(o=>({date:o.date,value:Number(o.weightLb),source:'owner / clinic journal'}))
+  ].sort((a,b)=>a.date.localeCompare(b.date));
+  const latestWeight=weightPoints.at(-1)||{date:treatment.date,value:Number(treatment.weightLb),source:`Chemo #${treatment.number}`};
+  const window={start:treatment.date,endExclusive:addDays(end,1),displayEnd:end};
+  const cerenia=medicationStats('med-cerenia',window);
+  const supportive=(state.medicationAdministrations||[]).filter(a=>a.status==='given'&&a.date>=treatment.date&&a.date<=end);
+  const supportiveCounts=[...new Set(supportive.map(a=>a.medicationId))].map(id=>({name:medicationName(id),count:supportive.filter(a=>a.medicationId===id).length}));
+  const pred=(state.medicationCourses||[]).filter(course=>course.medicationId==='med-prednisone'&&course.startDate<=end&&(!course.endDate||course.endDate>=treatment.date)).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1)||null;
+  const predThrough=pred?courseRecordedEnd(pred):null;
+  const latestNeut=(state.labs||[]).filter(l=>l.metric==='Neutrophils'&&l.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||null;
+  const questions=(state.carePlan?.questions||[]).filter(question=>question.status!=='resolved');
+  const appetiteText=!appetiteRows.length?'Not specifically recorded in this period.':appetiteReduced.length?`Below Roger's normal on ${appetiteReduced.length} of ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.${minAppetite!==null?` Lowest recorded intake: about ${minAppetite}% of normal.`:''}`:`At or near Roger's normal on all ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.`;
+  const energyText=!energyRows.length?'Not specifically recorded in this period.':energyReduced.length?`Below Roger's normal on ${energyReduced.length} of ${energyRows.length} logged energy day${energyRows.length===1?'':'s'}.`:`At Roger's normal level on all ${energyRows.length} logged energy day${energyRows.length===1?'':'s'}.`;
+  const nauseaText=!nauseaRows.length?'Not specifically recorded in this period.':nauseaDays.length?`Nausea-associated behaviors recorded on ${nauseaDays.length} of ${nauseaRows.length} days with a nausea observation.${nauseaTop.length?` Most frequent: ${nauseaTop.map(item=>item.label).join(', ')}.`:''}`:`No nausea-associated behaviors recorded on ${nauseaRows.length} day${nauseaRows.length===1?'':'s'} with a nausea observation.`;
+  const stoolText=!stoolRows.length?'No bowel-movement observations recorded in this period.':`${looseDays.length} of ${stoolRows.length} logged stool day${stoolRows.length===1?'':'s'} had loose, unformed, watery, or legacy score 6+ stool.${stoolScores.length?` Highest recorded legacy score: ${Math.max(...stoolScores)}.`:''}${bloodDays.length?` Blood or black/tarry appearance was recorded on ${bloodDays.length} day${bloodDays.length===1?'':'s'}${blackTarryDays.length?` (${blackTarryDays.length} black/tarry)`:''}.`:''}`;
+  const vomitingText=!vomitingRows.length?'Vomiting was not specifically recorded in this period.':vomitingEpisodes?`${vomitingEpisodes} vomiting episode${vomitingEpisodes===1?'':'s'} recorded across ${vomitingRows.length} logged day${vomitingRows.length===1?'':'s'}.${vomitFindings.length?` Appearance findings: ${vomitFindings.join(', ')}.`:''}`:`No vomiting recorded on ${vomitingRows.length} day${vomitingRows.length===1?'':'s'} with a vomiting entry.`;
+  const weightText=latestWeight.date===treatment.date?`${latestWeight.value} lb at treatment #${treatment.number}; no newer weight is recorded in this snapshot period.`:`${treatment.weightLb} lb at treatment #${treatment.number}; latest recorded ${latestWeight.value} lb on ${fmtDate(latestWeight.date)}.`;
+  const medicationParts=[];
+  if(pred)medicationParts.push(`Prednisone ${pred.dose||'dose unrecorded'} ${pred.frequency||''}${predThrough?`, owner-confirmed through ${fmtDate(predThrough)}`:''}`);
+  medicationParts.push(`Cerenia: ${cerenia.given.length} recorded dose${cerenia.given.length===1?'':'s'}`);
+  for(const med of supportiveCounts.filter(item=>item.name!=='Cerenia'&&item.name!=='Prednisone'))medicationParts.push(`${med.name}: ${med.count} recorded administration${med.count===1?'':'s'}`);
+  const medicationText=medicationParts.join('. ')+'.';
+  const clinicalText=`Chemo #${treatment.number}: ${treatment.doseMg} mg vinblastine (${treatment.doseMgM2} mg/m²) on ${fmtDate(treatment.date)}.${latestNeut?` Latest stored neutrophils: ${latestNeut.displayValue||latestNeut.value} ${latestNeut.unit} on ${fmtDate(latestNeut.date)}.`:''}`;
+  return {treatment,start:treatment.date,end,rows,observations,appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions};
+}
+function renderCareSnapshotPreview(){
+  const root=els.careSnapshotPreview;if(!root||!state)return;
+  const snapshot=careSnapshotData();
+  const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} – ${fmtDate(snapshot.end)}`;
+  const items=[['APPETITE',snapshot.appetiteText],['ENERGY',snapshot.energyText],['NAUSEA-ASSOCIATED',snapshot.nauseaText],['GI / STOOL',snapshot.stoolText],['VOMITING',snapshot.vomitingText],['MEDICATIONS',snapshot.medicationText]];
+  root.innerHTML=`<div class="care-snapshot-period"><div><strong>Since chemo #${snapshot.treatment.number}</strong><span>${esc(range)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><div class="care-snapshot-note">Structured from Roger's recorded observations. Missing or unlogged days remain unknown; this snapshot is for discussion with the veterinary team.</div>`;
+}
+
 function pdfPlain(value){
   return String(value??'').replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2192/g,' -> ').replace(/\u00b5/g,'u').replace(/\u00b2/g,'2').replace(/\u2265/g,'>=')
     .normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e\n]/g,' ');
@@ -2277,28 +2343,31 @@ function buildCareSummaryPdf(){
     }
   };
   const heading=value=>{y-=7;if(y<75)page();line(value,13,true,0,19);};
-  const p=state.profile,neut=state.labs.filter(l=>l.metric==='Neutrophils').sort((a,b)=>a.date.localeCompare(b.date));
-  const nadir=neut.reduce((a,b)=>!a||Number(b.value)<Number(a.value)?b:a,null),latest=neut.at(-1),pred=medicationStats('med-prednisone');
-  line(`${p.fullName||p.name} | Veterinary handoff`,18,true,0,27);
+  const p=state.profile,snapshot=careSnapshotData(),plan=state.carePlan||{visits:[]};
+  const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} - ${fmtDate(snapshot.end)}`;
+  line(`${p.fullName||p.name} | CARE SNAPSHOT`,18,true,0,27);
   wrap(`KSU ${p.patientIds?.ksu||'unrecorded'} | Optimum ${p.patientIds?.optimum||'unrecorded'} | ${p.breed} | Prepared ${new Date().toLocaleDateString('en-US')}`,9);
-  heading('Visit snapshot');
+  heading(`How has ${p.name} been doing since chemo #${snapshot.treatment.number}?`);
+  wrap(`${range} | ${snapshot.rows.length} day(s) with owner observations.`,9);
   wrap(`Diagnosis: ${p.diagnosis}. Status: ${p.currentStatus}.`);
-  wrap(`Neutrophils: lowest ${nadir?`${nadir.displayValue||nadir.value} ${nadir.unit} on ${fmtDate(nadir.date)}`:'not recorded'}; latest ${latest?`${latest.displayValue||latest.value} ${latest.unit} on ${fmtDate(latest.date)}`:'not recorded'}.`);
-  wrap(`Prednisone: prescribed 10 mg every 24 hours from Oct 2; owner reports daily administration through ${pred.last?fmtDate(pred.last):'date unrecorded'}. Later doses are not inferred.`);
-  wrap('Amoxicillin: owner reports seven days after the Aug 20 count of 250/uL; dose and frequency unrecorded.');
-  const plan=state.carePlan||{visits:[]};
+  heading('Home observations');
+  wrap(`Appetite: ${snapshot.appetiteText}`,9,false,8);
+  wrap(`Energy: ${snapshot.energyText}`,9,false,8);
+  wrap(`Nausea-associated observations: ${snapshot.nauseaText}`,9,false,8);
+  wrap(`GI / stool: ${snapshot.stoolText}`,9,false,8);
+  wrap(`Vomiting: ${snapshot.vomitingText}`,9,false,8);
+  wrap(`Weight: ${snapshot.weightText}`,9,false,8);
+  heading('Treatment & medication context');
+  wrap(snapshot.clinicalText,9,false,8);
+  wrap(snapshot.medicationText,9,false,8);
+  heading('Questions for care team');
+  if(snapshot.questions.length)snapshot.questions.forEach((question,index)=>wrap(`${index+1}. ${question.text}${question.source?.date?` (from ${fmtDate(question.source.date)} journal entry)`:''}`,9,false,8));
+  else wrap('No open owner questions recorded.',9,false,8);
   heading('Upcoming care');
   for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
-  wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`);
-  const openQuestions=(plan.questions||[]).filter(question=>question.status!=='resolved');
-  heading('Questions for care team');
-  if(openQuestions.length)openQuestions.forEach((question,index)=>wrap(`${index+1}. ${question.text}`,9,false,8));
-  else wrap('No open owner questions recorded.',9,false,8);
-  heading('Recent owner notes');
-  const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-3).reverse();
-  for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries){const note=String(o.notes||'No note');wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${note.length>150?note.slice(0,147)+'...':note}`,9,false,8);}}
-  line('Owner observations are labeled separately from clinical records.',9,false,0,15);
-  page();line('Treatment history | concise review',16,true,0,25);
+  wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`,9,false,8);
+  line('Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This snapshot supports discussion with the veterinary team; it does not diagnose cause.',9,false,0,15);
+  page();line('Clinical history | concise review',16,true,0,25);
   const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),rows=comparisonRows();
   for(const t of treatments){
     const window=cycleWindowFor(t,treatments);
@@ -2327,7 +2396,7 @@ function buildCareSummaryPdf(){
   pages.forEach((lines,index)=>{
     const pageId=objects.length,contentId=pageId+1;kids.push(`${pageId} 0 R`);
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);
-    const commands=lines.map(item=>`BT /${item.bold?'F2':'F1'} ${item.size} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${clean(item.text)}) Tj ET`).join('\n')+`\nBT /F1 8 Tf 1 0 0 1 45 30 Tm (Roger Oberle | ${index+1} / ${pages.length}) Tj ET`;
+    const commands=lines.map(item=>`BT /${item.bold?'F2':'F1'} ${item.size} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${clean(item.text)}) Tj ET`).join('\n')+`\nBT /F1 8 Tf 1 0 0 1 45 30 Tm (Roger Oberle | Care Snapshot | ${index+1} / ${pages.length}) Tj ET`;
     objects.push(`<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`);
   });
   objects[2]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
@@ -2339,7 +2408,7 @@ function buildCareSummaryPdf(){
   return pdf;
 }
 function buildCareSummaryHtml(){
-  const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]};
+  const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]},snapshot=careSnapshotData();
   const rows=state.treatments.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>#${x.number}</td><td>${x.doseMg} mg</td><td>${x.doseMgM2}</td><td>${x.weightLb} lb</td><td>${esc(x.doseReason)}</td></tr>`).join('');
   const labs=state.labs.filter(x=>['Neutrophils','Hematocrit','Platelets','ALT','ALP'].includes(x.metric)).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.metric)}</td><td>${esc(x.displayValue||x.value)} ${esc(x.unit)}</td><td>${esc(x.context)}</td><td>${esc(x.source)}</td></tr>`).join('');
   const obs=[...state.observations].sort((a,b)=>a.date.localeCompare(b.date));
@@ -2360,14 +2429,14 @@ function buildCareSummaryHtml(){
     const changed=Object.entries(c.after||{}).filter(([key,value])=>key!=='id'&&JSON.stringify(value)!==JSON.stringify(c.before?.[key])).map(([key,value])=>`${key}: ${JSON.stringify(c.before?.[key]??'')} → ${JSON.stringify(value)}`).join('; ');
     return `<li>${esc(c.at?.slice(0,10)||'Date unknown')} · ${esc(c.collection)} · ${esc(c.id)}: ${esc(changed||'No field differences')}</li>`;
   }).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} vet handoff</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
-  <section class="snapshot"><h1>${esc(p.fullName||p.name)} · vet handoff</h1><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
-  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}. Source-backed restaging on 9/18 found no metastatic involvement in the supplied K-State record.</p>
-  <div class="grid"><div><h2>Key bloodwork</h2><p><strong>Neutrophil nadir:</strong> ${nadir?`${esc(nadir.displayValue||nadir.value)} ${esc(nadir.unit)} on ${fmtDate(nadir.date)}`:'Not recorded'} (250/µL on 8/20).<br><strong>Latest:</strong> ${latest?`${esc(latest.displayValue||latest.value)} ${esc(latest.unit)} on ${fmtDate(latest.date)}`:'Not recorded'}.</p><p>Chemo #3 was delayed one week after the 9/3 count of 1.79 K/µL.</p></div>
-  <div><h2>Medication now / recently</h2><p><strong>Prednisone:</strong> prescribed 10 mg every 24 hours from 10/2; owner-confirmed daily administration through ${pred.last?fmtDate(pred.last):'date unknown'} (${pred.given.length} days total). Do not infer subsequent doses.</p><p><strong>Amoxicillin:</strong> seven-day owner-reported course 8/20–8/26 after neutrophils 250/µL; dose and frequency not recorded.</p><p><strong>Metronidazole:</strong> ${esc(medicationEvents||'No administrations logged')}.</p></div></div>
-  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} Care Snapshot</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.snapshot-item{border:1px solid #ddd;border-radius:9px;padding:10px}.snapshot-item strong{display:block;margin-bottom:4px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
+  <section class="snapshot"><h1>${esc(p.fullName||p.name)} · Care Snapshot</h1><p><strong>Since chemo #${snapshot.treatment.number}:</strong> ${fmtDate(snapshot.start)}${snapshot.end!==snapshot.start?`–${fmtDate(snapshot.end)}`:''} · Prepared ${new Date().toLocaleDateString('en-US')}</p><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
+  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}</p>
+  <h2>How has ${esc(p.name)} been doing?</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
+  <h2>Treatment & medication context</h2><p>${esc(snapshot.clinicalText)}</p><p>${esc(snapshot.medicationText)}</p>
   <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
-  <h2>Recent owner observations</h2><ul>${recentObs}</ul><p class="small">Owner observations and medication use are owner reported. Dates without a confirmed visit or dose remain pending; this handoff is a record for discussion with the care team.</p></section>
+  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  <p class="small">Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This Care Snapshot supports discussion with the veterinary team and does not diagnose cause.</p></section>
   <h2>Medication courses</h2><table><thead><tr><th>Medication</th><th>Reported dates</th><th>Dose / frequency</th><th>Basis</th></tr></thead><tbody>${courseRows}</tbody></table>
   <h2>PRN / visit medications</h2><table><thead><tr><th>Medication</th><th>Logged use</th><th>Last given</th><th>Prescription on file</th></tr></thead><tbody>${prnRows}</tbody></table>
   <h2>Clinical course</h2><table><thead><tr><th>Date</th><th>Treatment</th><th>Dose</th><th>mg/m²</th><th>Weight</th><th>Dose context</th></tr></thead><tbody>${rows}</tbody></table>
