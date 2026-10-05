@@ -455,3 +455,9 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .care-snapshot-value{font-size:12px;line-height:1.45;font-weight:750;margin-top:4px}
 .care-snapshot-note{font-size:10px;line-height:1.4;color:var(--muted);margin-top:9px}
 @media(max-width:520px){.care-snapshot-grid{grid-template-columns:1fr}}
+
+
+/* Key observations narrative */
+.care-snapshot-narrative{border:1px solid var(--line);border-radius:14px;padding:12px 13px;margin-bottom:9px;background:linear-gradient(145deg,#fff,#f7f5fb)}
+.care-snapshot-narrative p{font-size:13px;line-height:1.55;margin:7px 0 0}
+.care-snapshot-narrative p:first-of-type{font-weight:780;color:var(--ink)}

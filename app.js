@@ -2281,10 +2281,12 @@ function careSnapshotData(){
   const energyReduced=energyRows.filter(row=>row.values.energy<3);
   const nauseaRows=rows.filter(row=>row.values.nausea!==null);
   const nauseaDays=nauseaRows.filter(row=>row.values.nausea>0);
+  const nauseaDates=nauseaDays.map(row=>row.date);
   const nauseaTop=mostCommonLabels(observations.flatMap(o=>nauseaLabels(o)));
   const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null);
   const looseDays=stoolRows.filter(row=>row.values.looseStool===1);
   const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/\bblood\b|black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
+  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/bright\s*red.*blood|blood.*bright\s*red/i.test(String(value||'')))));
   const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
   const stoolScores=stoolRows.map(row=>row.values.stoolScore).filter(value=>value!==null&&Number.isFinite(Number(value))).map(Number);
   const vomitingRows=rows.filter(row=>row.observations.some(o=>o.vomiting!==null&&o.vomiting!==undefined&&o.vomiting!==''));
@@ -2297,6 +2299,8 @@ function careSnapshotData(){
   const latestWeight=weightPoints.at(-1)||{date:treatment.date,value:Number(treatment.weightLb),source:`Chemo #${treatment.number}`};
   const window={start:treatment.date,endExclusive:addDays(end,1),displayEnd:end};
   const cerenia=medicationStats('med-cerenia',window);
+  const cereniaDates=[...new Set(cerenia.given.map(a=>a.date))];
+  const cereniaOnNausea=nauseaDates.filter(date=>cereniaDates.includes(date)).length;
   const supportive=(state.medicationAdministrations||[]).filter(a=>a.status==='given'&&a.date>=treatment.date&&a.date<=end);
   const supportiveCounts=[...new Set(supportive.map(a=>a.medicationId))].map(id=>({name:medicationName(id),count:supportive.filter(a=>a.medicationId===id).length}));
   const pred=(state.medicationCourses||[]).filter(course=>course.medicationId==='med-prednisone'&&course.startDate<=end&&(!course.endDate||course.endDate>=treatment.date)).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1)||null;
@@ -2315,14 +2319,99 @@ function careSnapshotData(){
   for(const med of supportiveCounts.filter(item=>item.name!=='Cerenia'&&item.name!=='Prednisone'))medicationParts.push(`${med.name}: ${med.count} recorded administration${med.count===1?'':'s'}`);
   const medicationText=medicationParts.join('. ')+'.';
   const clinicalText=`Chemo #${treatment.number}: ${treatment.doseMg} mg vinblastine (${treatment.doseMgM2} mg/m²) on ${fmtDate(treatment.date)}.${latestNeut?` Latest stored neutrophils: ${latestNeut.displayValue||latestNeut.value} ${latestNeut.unit} on ${fmtDate(latestNeut.date)}.`:''}`;
-  return {treatment,start:treatment.date,end,rows,observations,appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions};
+  return {
+    treatment,start:treatment.date,end,rows,observations,
+    appetiteRows,appetiteReduced,minAppetite,
+    energyRows,energyReduced,
+    nauseaRows,nauseaDays,nauseaDates,nauseaTop,
+    stoolRows,looseDays,bloodDays,brightRedStoolDays,blackTarryDays,stoolScores,
+    vomitingRows,vomitingEpisodes,vomitFindings,
+    latestWeight,cerenia,cereniaDates,cereniaOnNausea,pred,predThrough,latestNeut,
+    appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions
+  };
 }
+function careSnapshotNarrative(snapshot){
+  const paragraphs=[];
+  const calendarDays=Math.max(1,daysBetween(snapshot.start,snapshot.end)+1);
+  const loggedDays=snapshot.rows.length;
+  const coverageLead=loggedDays&&loggedDays<calendarDays
+    ? `I have ${loggedDays} of ${calendarDays} days logged since chemo #${snapshot.treatment.number}, so this is a partial picture.`
+    : loggedDays
+      ? `Since chemo #${snapshot.treatment.number}, I have ${loggedDays} day${loggedDays===1?'':'s'} of home observations recorded.`
+      : `I do not have home observations logged yet since chemo #${snapshot.treatment.number}.`;
+
+  const urgent=[];
+  if(snapshot.blackTarryDays.length)urgent.push(`black/tarry stool on ${snapshot.blackTarryDays.length} day${snapshot.blackTarryDays.length===1?'':'s'}`);
+  if(snapshot.vomitFindings.includes('bright-red blood in vomit'))urgent.push('bright-red blood in vomit');
+  if(snapshot.vomitFindings.includes('dark material resembling coffee grounds'))urgent.push('dark material resembling coffee grounds in vomit');
+  if(snapshot.brightRedStoolDays.length)urgent.push(`bright-red blood in stool on ${snapshot.brightRedStoolDays.length} day${snapshot.brightRedStoolDays.length===1?'':'s'}`);
+
+  const changes=[];
+  if(snapshot.appetiteRows.length){
+    if(snapshot.appetiteReduced.length)changes.push(`his appetite was below normal on ${snapshot.appetiteReduced.length} of ${snapshot.appetiteRows.length} logged appetite day${snapshot.appetiteRows.length===1?'':'s'}${snapshot.minAppetite!==null?`, with the lowest recorded intake around ${snapshot.minAppetite}% of normal`:''}`);
+    else changes.push(`his appetite stayed at or near his normal level on the ${snapshot.appetiteRows.length} day${snapshot.appetiteRows.length===1?'':'s'} I logged it`);
+  }
+  if(snapshot.energyRows.length){
+    if(snapshot.energyReduced.length)changes.push(`his energy was below his usual baseline on ${snapshot.energyReduced.length} of ${snapshot.energyRows.length} logged day${snapshot.energyRows.length===1?'':'s'}`);
+    else changes.push(`his energy stayed at his usual baseline on the ${snapshot.energyRows.length} day${snapshot.energyRows.length===1?'':'s'} I logged it`);
+  }
+
+  const nausea=[];
+  if(snapshot.nauseaRows.length){
+    if(snapshot.nauseaDays.length){
+      const behaviors=snapshot.nauseaTop.length?snapshot.nauseaTop.map(item=>item.label).join(', '):'the behaviors recorded in the journal';
+      nausea.push(`I noticed nausea-associated behaviors on ${snapshot.nauseaDays.length} day${snapshot.nauseaDays.length===1?'':'s'}, most often ${behaviors}`);
+      if(snapshot.cerenia.given.length)nausea.push(`Cerenia was recorded ${snapshot.cerenia.given.length} time${snapshot.cerenia.given.length===1?'':'s'} in this period${snapshot.cereniaOnNausea?`, including on ${snapshot.cereniaOnNausea} of those nausea-observation day${snapshot.cereniaOnNausea===1?'':'s'}`:''}`);
+    }else nausea.push(`I did not record nausea-associated behaviors on the ${snapshot.nauseaRows.length} day${snapshot.nauseaRows.length===1?'':'s'} when I specifically logged them`);
+  }
+
+  const gi=[];
+  if(snapshot.stoolRows.length){
+    if(snapshot.looseDays.length)gi.push(`stool was loose, unformed, watery, or a legacy score of 6+ on ${snapshot.looseDays.length} of ${snapshot.stoolRows.length} logged stool day${snapshot.stoolRows.length===1?'':'s'}`);
+    else gi.push(`I did not record loose or diarrheic stool on the ${snapshot.stoolRows.length} stool day${snapshot.stoolRows.length===1?'':'s'} logged in this period`);
+  }
+  if(snapshot.vomitingRows.length){
+    if(snapshot.vomitingEpisodes)gi.push(`I recorded ${snapshot.vomitingEpisodes} vomiting episode${snapshot.vomitingEpisodes===1?'':'s'} across ${snapshot.vomitingRows.length} logged day${snapshot.vomitingRows.length===1?'':'s'}`);
+    else gi.push(`I did not record vomiting on the ${snapshot.vomitingRows.length} day${snapshot.vomitingRows.length===1?'':'s'} when vomiting was specifically logged`);
+  }
+
+  let first=coverageLead;
+  if(urgent.length)first+=` The most important finding${urgent.length===1?'':'s'} I recorded ${urgent.length===1?'was':'were'} ${urgent.join('; ')}.`;
+  else if(changes.length)first+=` The main things I noticed were that ${changes.join('; and ')}.`;
+  else if(loggedDays)first+=' The summary below reflects only the structured items I specifically logged.';
+  paragraphs.push(first);
+
+  const details=[...(!urgent.length?[]:changes),...nausea,...gi];
+  if(details.length)paragraphs.push(details.join('. ')+'.');
+
+  const closing=[];
+  const treatmentWeight=Number(snapshot.treatment.weightLb);
+  const latestWeight=Number(snapshot.latestWeight?.value);
+  if(Number.isFinite(treatmentWeight)&&Number.isFinite(latestWeight)){
+    if(snapshot.latestWeight.date===snapshot.treatment.date)closing.push(`His last recorded weight is ${latestWeight.toFixed(1)} lb from the treatment visit; I do not have a newer weight in this snapshot period`);
+    else{
+      const delta=latestWeight-treatmentWeight;
+      const deltaText=Math.abs(delta)>=0.1?` (${delta>0?'+':''}${delta.toFixed(1)} lb from treatment)`:'';
+      closing.push(`His latest recorded weight is ${latestWeight.toFixed(1)} lb on ${fmtDate(snapshot.latestWeight.date)}${deltaText}`);
+    }
+  }
+  if(snapshot.pred){
+    const dose=[snapshot.pred.dose,snapshot.pred.frequency].filter(Boolean).join(' ');
+    closing.push(`Prednisone is recorded as ${dose||'prescribed'}${snapshot.predThrough?`, and I have daily dosing confirmed through ${fmtDate(snapshot.predThrough)}`:''}`);
+  }
+  if(snapshot.questions.length)closing.push(`I have ${snapshot.questions.length} question${snapshot.questions.length===1?'':'s'} saved that I want to make sure I ask the care team`);
+  if(closing.length)paragraphs.push(closing.join('. ')+'.');
+
+  return paragraphs;
+}
+
 function renderCareSnapshotPreview(){
   const root=els.careSnapshotPreview;if(!root||!state)return;
   const snapshot=careSnapshotData();
   const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} – ${fmtDate(snapshot.end)}`;
+  const narrative=careSnapshotNarrative(snapshot);
   const items=[['APPETITE',snapshot.appetiteText],['ENERGY',snapshot.energyText],['NAUSEA-ASSOCIATED',snapshot.nauseaText],['GI / STOOL',snapshot.stoolText],['VOMITING',snapshot.vomitingText],['MEDICATIONS',snapshot.medicationText]];
-  root.innerHTML=`<div class="care-snapshot-period"><div><strong>Since chemo #${snapshot.treatment.number}</strong><span>${esc(range)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><div class="care-snapshot-note">Structured from Roger's recorded observations. Missing or unlogged days remain unknown; this snapshot is for discussion with the veterinary team.</div>`;
+  root.innerHTML=`<div class="care-snapshot-period"><div><strong>Since chemo #${snapshot.treatment.number}</strong><span>${esc(range)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><section class="care-snapshot-narrative"><div class="care-snapshot-label">KEY OBSERVATIONS</div>${narrative.map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</section><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><div class="care-snapshot-note">The summary above is generated only from Roger's recorded observations, medications, labs, and questions. Missing or unlogged days remain unknown.</div>`;
 }
 
 function pdfPlain(value){
@@ -2350,7 +2439,10 @@ function buildCareSummaryPdf(){
   heading(`How has ${p.name} been doing since chemo #${snapshot.treatment.number}?`);
   wrap(`${range} | ${snapshot.rows.length} day(s) with owner observations.`,9);
   wrap(`Diagnosis: ${p.diagnosis}. Status: ${p.currentStatus}.`);
-  heading('Home observations');
+  const narrative=careSnapshotNarrative(snapshot);
+  heading('Key observations');
+  narrative.forEach(paragraph=>wrap(paragraph,10,false,8));
+  heading('Structured detail');
   wrap(`Appetite: ${snapshot.appetiteText}`,9,false,8);
   wrap(`Energy: ${snapshot.energyText}`,9,false,8);
   wrap(`Nausea-associated observations: ${snapshot.nauseaText}`,9,false,8);
@@ -2432,7 +2524,7 @@ function buildCareSummaryHtml(){
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} Care Snapshot</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.snapshot-item{border:1px solid #ddd;border-radius:9px;padding:10px}.snapshot-item strong{display:block;margin-bottom:4px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
   <section class="snapshot"><h1>${esc(p.fullName||p.name)} · Care Snapshot</h1><p><strong>Since chemo #${snapshot.treatment.number}:</strong> ${fmtDate(snapshot.start)}${snapshot.end!==snapshot.start?`–${fmtDate(snapshot.end)}`:''} · Prepared ${new Date().toLocaleDateString('en-US')}</p><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
   <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}</p>
-  <h2>How has ${esc(p.name)} been doing?</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
+  <h2>How has ${esc(p.name)} been doing?</h2><div class="note"><strong>Key observations</strong>${careSnapshotNarrative(snapshot).map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</div><h2>Structured detail</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
   <h2>Treatment & medication context</h2><p>${esc(snapshot.clinicalText)}</p><p>${esc(snapshot.medicationText)}</p>
   <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
   <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
