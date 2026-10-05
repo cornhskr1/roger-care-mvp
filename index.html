@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=29">
+  <link rel="stylesheet" href="styles.css?v=30">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -354,10 +354,49 @@
       </div>
       <label class="field"><span>Date</span><input id="journalDate" name="date" type="date" required></label>
       <p id="journalEditHelp" class="field-help">Start now and come back later to add more to this same day.</p>
-      <div class="form-grid two">
-        <label class="field"><span>Appetite</span><select name="appetite"><option value="">Not logged</option><option>normal</option><option>increased</option><option>decreased</option><option>refused food</option></select></label>
-        <label class="field"><span>Energy</span><select name="energy"><option value="">Not logged</option><option>normal</option><option>slightly reduced</option><option>low</option><option>very low</option></select></label>
-      </div>
+      <fieldset class="microscope-fieldset">
+        <legend>Appetite compared with Roger's normal</legend>
+        <p class="field-help">Estimate how much of a normal meal he ate. "Normal" means Roger's usual appetite, not a generic dog's.</p>
+        <div class="amount-choice-grid" role="radiogroup" aria-label="Approximate appetite compared with normal">
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="125"><span>More than usual</span></label>
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="100"><span>About all</span><small>~100%</small></label>
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="75"><span>Most</span><small>~75%</small></label>
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="50"><span>About half</span><small>~50%</small></label>
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="25"><span>A little</span><small>~25%</small></label>
+          <label class="amount-choice"><input type="radio" name="appetiteAmount" value="0"><span>None</span><small>0%</small></label>
+        </div>
+        <div class="microscope-choice-grid">
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="ate_normally"><span><strong>Ate normally</strong><small>No unusual prompting or food preference.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="needed_encouragement"><span><strong>Needed encouragement</strong><small>Needed coaxing or repeated offers to eat.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="hand_fed"><span><strong>Hand-fed</strong><small>Ate better when food was offered by hand.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="treats_only"><span><strong>Wanted treats / special food only</strong><small>Interested in high-value food but not the normal meal.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="approached_then_left"><span><strong>Approached food, then walked away</strong><small>Showed interest but did not begin or continue eating normally.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="appetiteBehaviors" value="more_interest"><span><strong>More interested in food than usual</strong><small>Noticeably hungrier or more food-focused than Roger's baseline.</small></span></label>
+        </div>
+        <label class="field microscope-other"><span>Another appetite observation</span><input id="appetiteOther" name="appetiteOther" type="text" placeholder="Describe what you observed"></label>
+        <p id="appetiteLegacyHint" class="field-help microscope-legacy" hidden></p>
+      </fieldset>
+
+      <fieldset class="microscope-fieldset">
+        <legend>Energy compared with Roger's normal</legend>
+        <p class="field-help">Rate the change against Roger's usual day, then record the behaviors that made you choose it.</p>
+        <div class="energy-choice-grid" role="radiogroup" aria-label="Energy compared with Roger's normal">
+          <label class="energy-choice"><input type="radio" name="energyLevel" value="normal"><span><strong>Roger's normal</strong><small>Usual energy and engagement.</small></span></label>
+          <label class="energy-choice"><input type="radio" name="energyLevel" value="slightly reduced"><span><strong>Slightly below</strong><small>Mostly himself, but noticeably less energetic.</small></span></label>
+          <label class="energy-choice"><input type="radio" name="energyLevel" value="low"><span><strong>Clearly below</strong><small>Reduced activity or engagement was easy to notice.</small></span></label>
+          <label class="energy-choice"><input type="radio" name="energyLevel" value="very low"><span><strong>Very low</strong><small>Minimal interest in normal activities.</small></span></label>
+        </div>
+        <div class="microscope-choice-grid">
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="normal_routine"><span><strong>Normal routine</strong><small>Moved through the day much like Roger usually does.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="more_resting"><span><strong>Resting more than usual</strong><small>Spent more time lying down or sleeping.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="less_play"><span><strong>Less play / engagement</strong><small>Less interested in toys, play, or usual activities.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="less_following"><span><strong>Less following / interaction</strong><small>Less interested in following or staying near you than usual.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="slower_movement"><span><strong>Slower getting up or moving</strong><small>Took longer to rise or moved more slowly than usual.</small></span></label>
+          <label class="microscope-choice"><input type="checkbox" name="energyBehaviors" value="needed_prompting"><span><strong>Needed prompting</strong><small>Needed encouragement for an activity he normally starts himself.</small></span></label>
+        </div>
+        <label class="field microscope-other"><span>Another energy observation</span><input id="energyOther" name="energyOther" type="text" placeholder="Describe what you observed"></label>
+        <p id="energyLegacyHint" class="field-help microscope-legacy" hidden></p>
+      </fieldset>
       <fieldset class="nausea-fieldset">
         <legend>Possible nausea-associated behaviors</legend>
         <p class="field-help">You do not need to decide whether Roger is nauseous. Record what you can actually see so his care team can interpret it.</p>
@@ -472,6 +511,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=42" defer></script>
+  <script src="app.js?v=43" defer></script>
 </body>
 </html>

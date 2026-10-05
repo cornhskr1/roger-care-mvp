@@ -40,6 +40,28 @@ const NAUSEA_SIGN_LABELS={
   stomach_noises:'stomach noises / gurgling',
   food_interest_change:'approached food, then walked away'
 };
+const APPETITE_BEHAVIOR_LABELS={
+  ate_normally:'ate normally',
+  needed_encouragement:'needed encouragement',
+  hand_fed:'hand-fed',
+  treats_only:'wanted treats / special food only',
+  approached_then_left:'approached food, then walked away',
+  more_interest:'more interested in food than usual'
+};
+const ENERGY_BEHAVIOR_LABELS={
+  normal_routine:'normal routine',
+  more_resting:'resting more than usual',
+  less_play:'less play / engagement',
+  less_following:'less following / interaction',
+  slower_movement:'slower getting up or moving',
+  needed_prompting:'needed prompting for usual activity'
+};
+const ENERGY_LEVEL_LABELS={
+  normal:"Roger's normal",
+  'slightly reduced':'slightly below normal',
+  low:'clearly below normal',
+  'very low':'very low'
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -206,7 +228,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),9);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),10);
   return next;
 }
 
@@ -618,7 +640,7 @@ function openJournalDialog(id=''){
   const row=state.observations.find(o=>o.id===id);
   if(row)for(const [name,value] of Object.entries(row)){
     const field=form.elements.namedItem(name);
-    if(field&&!['medications','nauseaSigns','nauseaNoneObserved'].includes(name)){
+    if(field&&!['medications','nauseaSigns','nauseaNoneObserved','appetiteBehaviors','energyBehaviors'].includes(name)){
       const selected=value??'';
       if(field.tagName==='SELECT'&&selected!==''&&![...field.options].some(option=>option.value===String(selected))){
         const option=new Option(String(selected),String(selected));option.dataset.historical='';field.add(option);
@@ -627,6 +649,24 @@ function openJournalDialog(id=''){
     }
   }
   if(row)form.elements.namedItem('medications').value=(row.medications||[]).join(', ');
+  const appetitePercent=row?.appetitePercent;
+  qa('input[name="appetiteAmount"]').forEach(box=>{box.checked=appetitePercent!==null&&appetitePercent!==undefined&&appetitePercent!==''&&Number(box.value)===Number(appetitePercent);});
+  const appetiteBehaviors=Array.isArray(row?.appetiteBehaviors)?row.appetiteBehaviors:[];
+  qa('input[name="appetiteBehaviors"]').forEach(box=>{box.checked=appetiteBehaviors.includes(box.value);});
+  q('#appetiteOther').value=row?.appetiteOther||'';
+  const appetiteLegacy=q('#appetiteLegacyHint');
+  const hasLegacyAppetite=Boolean(row&&row.appetite&&row.appetitePercent===undefined&&!Array.isArray(row.appetiteBehaviors)&&!row.appetiteOther);
+  appetiteLegacy.hidden=!hasLegacyAppetite;
+  appetiteLegacy.textContent=hasLegacyAppetite?`Historical entry: appetite was recorded as "${row.appetite}". It will stay unchanged unless you add the new detail above.`:'';
+  const energyLevel=row?.energyBaselineLevel||'';
+  qa('input[name="energyLevel"]').forEach(box=>{box.checked=box.value===energyLevel;});
+  const energyBehaviors=Array.isArray(row?.energyBehaviors)?row.energyBehaviors:[];
+  qa('input[name="energyBehaviors"]').forEach(box=>{box.checked=energyBehaviors.includes(box.value);});
+  q('#energyOther').value=row?.energyOther||'';
+  const energyLegacy=q('#energyLegacyHint');
+  const hasLegacyEnergy=Boolean(row&&row.energy&&!row.energyBaselineLevel&&!Array.isArray(row.energyBehaviors)&&!row.energyOther);
+  energyLegacy.hidden=!hasLegacyEnergy;
+  energyLegacy.textContent=hasLegacyEnergy?`Historical entry: energy was recorded as "${row.energy}". It will stay unchanged unless you add the new detail above.`:'';
   const savedSigns=Array.isArray(row?.nauseaSigns)?row.nauseaSigns:[];
   qa('input[name="nauseaSigns"]').forEach(box=>{box.checked=savedSigns.includes(box.value);});
   q('#nauseaNoneObserved').checked=Boolean(row?.nauseaNoneObserved);
@@ -704,16 +744,32 @@ function bindForms(){
     const stoolEvents=collectStoolRows();
     const editId=String(fd.get('editId')||'');
     const existing=editId?state.observations.find(o=>o.id===editId):null;
+    const appetiteAmount=fd.get('appetiteAmount');
+    const appetitePercent=appetiteAmount===null||appetiteAmount===''?null:Number(appetiteAmount);
+    const appetiteBehaviors=fd.getAll('appetiteBehaviors').map(String).filter(value=>APPETITE_BEHAVIOR_LABELS[value]);
+    const appetiteOther=String(fd.get('appetiteOther')||'').trim();
+    const legacyAppetite=existing&&existing.appetite&&existing.appetitePercent===undefined&&!Array.isArray(existing.appetiteBehaviors)&&!existing.appetiteOther;
+    let appetite='';
+    if(appetitePercent!==null)appetite=appetitePercent>100?'increased':appetitePercent===0?'refused food':appetitePercent>=90?'normal':'decreased';
+    else if(appetiteBehaviors.length)appetite=appetiteBehaviors.includes('more_interest')?'increased':appetiteBehaviors.includes('ate_normally')?'normal':'decreased';
+    else if(legacyAppetite)appetite=existing.appetite;
+    const energyBaselineLevel=String(fd.get('energyLevel')||'');
+    const energyBehaviors=fd.getAll('energyBehaviors').map(String).filter(value=>ENERGY_BEHAVIOR_LABELS[value]);
+    const energyOther=String(fd.get('energyOther')||'').trim();
+    const legacyEnergy=existing&&existing.energy&&!existing.energyBaselineLevel&&!Array.isArray(existing.energyBehaviors)&&!existing.energyOther;
+    const energy=energyBaselineLevel||(legacyEnergy?existing.energy:'');
     const nauseaSigns=fd.getAll('nauseaSigns').map(String).filter(value=>NAUSEA_SIGN_LABELS[value]);
     const nauseaNoneObserved=fd.get('nauseaNoneObserved')==='1';
     const nauseaOther=String(fd.get('nauseaOther')||'').trim();
     const legacyNausea=existing&&!Array.isArray(existing.nauseaSigns)&&!existing.nauseaOther&&existing.nausea!==null&&existing.nausea!==undefined&&existing.nausea!=='';
     const nausea=nauseaNoneObserved?0:(nauseaSigns.length||nauseaOther?1:(legacyNausea?Number(existing.nausea):null));
-    const tracked=['appetite','energy','vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
+    const tracked=['vomiting','hydration','urination','pain','mood','play','sleep','rogerThings','gi','medications','notes'];
+    const appetiteTracked=appetitePercent!==null||appetiteBehaviors.length>0||Boolean(appetiteOther)||legacyAppetite;
+    const energyTracked=Boolean(energyBaselineLevel)||energyBehaviors.length>0||Boolean(energyOther)||legacyEnergy;
     const nauseaTracked=nauseaNoneObserved||nauseaSigns.length>0||Boolean(nauseaOther)||legacyNausea;
-    if(!stoolEvents.length&&!nauseaTracked&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
+    if(!stoolEvents.length&&!appetiteTracked&&!energyTracked&&!nauseaTracked&&!tracked.some(key=>String(fd.get(key)??'').trim()))return toast('Add a note or at least one observation before saving',true);
     const obs = {
-      id: uid('obs'), date: fd.get('date'), appetite: fd.get('appetite'), energy: fd.get('energy'),
+      id: uid('obs'), date: fd.get('date'), appetite,appetitePercent,appetiteBehaviors,appetiteOther,energy,energyBaselineLevel,energyBehaviors,energyOther,
       nausea,nauseaSigns,nauseaOther,nauseaNoneObserved, vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
       stool:stoolEvents.map(s=>`${s.period}${s.time?' '+s.time:''}: ${s.status==='observed'?(s.score??'unscored'):s.status}${s.notes?' ('+s.notes+')':''}`).join(' | '),stoolEvents,
       hydration: fd.get('hydration'), urination: fd.get('urination'), pain:fd.get('pain')===''?null:Number(fd.get('pain')),
@@ -1024,11 +1080,13 @@ function renderJournalBrief(treatment){
   const rows=comparisonRows().filter(r=>r.date>=treatment.date&&r.observations.length);
   if(!rows.length){els.journalBrief.innerHTML='<p class="empty-state">No journal days recorded since this treatment yet.</p>';return;}
   const last=rows.at(-1),reduced=rows.filter(r=>r.values.energy!==null&&r.values.energy<3),energyKnown=rows.filter(r=>r.values.energy!==null);
+  const appetiteKnown=rows.filter(r=>r.observations.some(appetiteIsKnown)),appetiteReduced=rows.filter(r=>r.observations.some(appetiteIsReduced));
   const nausea=rows.filter(r=>r.values.nausea>0),loose=rows.filter(r=>r.values.looseStool===1);
   const bloody=rows.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(v=>/\bblood\b/i.test(String(v||'')))));
   const scores=rows.map(r=>r.values.stoolScore).filter(v=>v!==null);
   const sentences=[`${rows.length} of ${daysBetween(treatment.date,last.date)+1} days logged since chemo #${treatment.number} (${fmtDate(treatment.date)}–${fmtDate(last.date)}).`];
   if(energyKnown.length)sentences.push(`Energy was reduced or low on ${reduced.length} of ${energyKnown.length} days with an energy entry${last.values.energy===3&&reduced.length?' and was recorded as normal on the latest day':''}.`);
+  if(appetiteKnown.length)sentences.push(`Appetite was below Roger's normal on ${appetiteReduced.length} of ${appetiteKnown.length} days with an appetite entry.`);
   const symptoms=[];
   if(nausea.length)symptoms.push(`nausea signs on ${nausea.length} day${nausea.length===1?'':'s'}`);
   if(loose.length)symptoms.push(`loose stool or diarrhea on ${loose.length} day${loose.length===1?'':'s'}`);
@@ -1048,7 +1106,7 @@ function renderClinicalReview(){
     const postCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date>t.date&&l.date<window.endExclusive);
     const lowest=postCounts.length?postCounts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
     const preCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date<=t.date&&daysBetween(l.date,t.date)<=2).sort((a,b)=>b.date.localeCompare(a.date));
-    const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,loose=days.filter(r=>r.values.looseStool===1).length;
+    const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,appetiteReduced=days.filter(r=>r.observations.some(appetiteIsReduced)).length,loose=days.filter(r=>r.values.looseStool===1).length;
     const blood=days.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
     const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given');
     const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&courseRecordedEnd(c)>=window.start&&c.status?.includes('owner-confirmed'));
@@ -1057,13 +1115,47 @@ function renderClinicalReview(){
     return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
       <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
       <div><strong>After dose</strong><span>Lowest measured neutrophils: ${esc(lowestText)}</span></div>
-      <div><strong>Home observations</strong><span>${days.length} day(s) logged · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
+      <div><strong>Home observations</strong><span>${days.length} day(s) logged · appetite below normal ${appetiteReduced} · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
       <div><strong>Medication context</strong><span>${esc(medSummary||'No medication use recorded in this period')}</span></div>
       <div class="review-wide"><strong>Next recorded decision</strong><span>${next?`${fmtDate(next.date)} · ${esc(next.doseReason||'Reason not recorded')}`:'Next dose is scheduled; no decision recorded yet.'}</span></div>
     </div></details>`;
   }).join('');
 }
 
+function appetiteIsKnown(o){
+  return (o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!=='')||Boolean(o.appetite);
+}
+function appetiteIsReduced(o){
+  if(o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!==''&&Number.isFinite(Number(o.appetitePercent)))return Number(o.appetitePercent)<90;
+  return /decreased|refused/i.test(String(o.appetite||''));
+}
+function appetiteIsRefused(o){
+  if(o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!==''&&Number.isFinite(Number(o.appetitePercent)))return Number(o.appetitePercent)===0;
+  return /refused/i.test(String(o.appetite||''));
+}
+function appetiteLabels(o){
+  const labels=(Array.isArray(o.appetiteBehaviors)?o.appetiteBehaviors:[]).map(value=>APPETITE_BEHAVIOR_LABELS[value]||value);
+  if(String(o.appetiteOther||'').trim())labels.push(String(o.appetiteOther).trim());
+  return labels;
+}
+function appetiteSummary(o){
+  const labels=appetiteLabels(o);
+  const hasPercent=o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!==''&&Number.isFinite(Number(o.appetitePercent));
+  let base='';
+  if(hasPercent)base=Number(o.appetitePercent)>100?'appetite: more than usual':`appetite: ~${Number(o.appetitePercent)}% of normal`;
+  else if(o.appetite)base=`appetite: ${o.appetite}`;
+  return [base,labels.length?labels.join(', '):''].filter(Boolean).join(' · ');
+}
+function energyLabels(o){
+  const labels=(Array.isArray(o.energyBehaviors)?o.energyBehaviors:[]).map(value=>ENERGY_BEHAVIOR_LABELS[value]||value);
+  if(String(o.energyOther||'').trim())labels.push(String(o.energyOther).trim());
+  return labels;
+}
+function energySummary(o){
+  const labels=energyLabels(o);
+  const base=o.energyBaselineLevel?`energy: ${ENERGY_LEVEL_LABELS[o.energyBaselineLevel]||o.energyBaselineLevel}`:o.energy?`energy: ${o.energy}`:'';
+  return [base,labels.length?labels.join(', '):''].filter(Boolean).join(' · ');
+}
 function nauseaLabels(o){
   const labels=(Array.isArray(o.nauseaSigns)?o.nauseaSigns:[]).map(value=>NAUSEA_SIGN_LABELS[value]||value);
   if(String(o.nauseaOther||'').trim())labels.push(String(o.nauseaOther).trim());
@@ -1076,7 +1168,11 @@ function nauseaSummary(o){
   return '';
 }
 function compactObservation(o){
-  const parts=[]; if(o.energy)parts.push(`energy ${o.energy}`); const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText); if(o.vomiting)parts.push(`${o.vomiting} vomit`);
+  const parts=[];
+  const appetiteText=appetiteSummary(o);if(appetiteText)parts.push(appetiteText);
+  const energyText=energySummary(o);if(energyText)parts.push(energyText);
+  const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText);
+  if(o.vomiting)parts.push(`${o.vomiting} vomit`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scored=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
   if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}`);
@@ -1314,13 +1410,14 @@ function renderCycleDetails(treatment,window){
 
 function symptomSummary(o){
   const parts=[];
+  const appetiteText=appetiteSummary(o);if(appetiteText&&/decreased|refused|~(?:0|25|50|75)%/.test(appetiteText))parts.push(appetiteText);
+  const energyText=energySummary(o);if(energyText&&/below|very low|reduced|low/.test(energyText))parts.push(energyText);
   const nauseaText=nauseaSummary(o);if(nauseaText)parts.push(nauseaText);
   if(Number(o.vomiting)>0) parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scores=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
   if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scores.length?', highest '+Math.max(...scores):''}`);
   else if(o.stool)parts.push(`stool ${o.stool}`);
-  if(String(o.energy||'').toLowerCase().includes('low')||String(o.energy||'').toLowerCase().includes('reduced')) parts.push(`energy ${o.energy}`);
   return `${fmtDate(o.date).replace(', 2026','')} · ${parts.join(', ')||o.notes.slice(0,80)}`;
 }
 
@@ -1331,6 +1428,8 @@ function symptomSeverity(o){
   const scores=(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
   const stool=scores.length?Math.max(...scores):parseFloat(o.stool);
   if(Number.isFinite(stool) && stool>=6) s=Math.max(s,2);
+  if(appetiteIsRefused(o))s=Math.max(s,2);
+  else if(appetiteIsReduced(o))s=Math.max(s,1);
   if(/low|reduced/i.test(o.energy||'')) s=Math.max(s,1);
   return s;
 }
@@ -1364,8 +1463,8 @@ function renderJournal(){
 }
 function observationChips(o){
   const chips=[];
-  if(o.appetite)chips.push(`appetite: ${o.appetite}`);
-  if(o.energy)chips.push(`energy: ${o.energy}`);
+  const appetiteText=appetiteSummary(o);if(appetiteText)chips.push(appetiteText);
+  const energyText=energySummary(o);if(energyText)chips.push(energyText);
   const nauseaText=nauseaSummary(o);if(nauseaText)chips.push(nauseaText);else if(o.nauseaNoneObserved)chips.push('no nausea-associated behaviors observed');
   if(Number(o.vomiting)>0)chips.push(`vomiting: ${o.vomiting}`);
   if(o.stool&&!o.stoolEvents?.length)chips.push(`stool: ${o.stool}`);
