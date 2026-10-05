@@ -2286,6 +2286,7 @@ function careSnapshotData(){
   const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null);
   const looseDays=stoolRows.filter(row=>row.values.looseStool===1);
   const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/\bblood\b|black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
+  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/bright\s*red.*blood|blood.*bright\s*red/i.test(String(value||'')))));
   const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
   const stoolScores=stoolRows.map(row=>row.values.stoolScore).filter(value=>value!==null&&Number.isFinite(Number(value))).map(Number);
   const vomitingRows=rows.filter(row=>row.observations.some(o=>o.vomiting!==null&&o.vomiting!==undefined&&o.vomiting!==''));
@@ -2323,7 +2324,7 @@ function careSnapshotData(){
     appetiteRows,appetiteReduced,minAppetite,
     energyRows,energyReduced,
     nauseaRows,nauseaDays,nauseaDates,nauseaTop,
-    stoolRows,looseDays,bloodDays,blackTarryDays,stoolScores,
+    stoolRows,looseDays,bloodDays,brightRedStoolDays,blackTarryDays,stoolScores,
     vomitingRows,vomitingEpisodes,vomitFindings,
     latestWeight,cerenia,cereniaDates,cereniaOnNausea,pred,predThrough,latestNeut,
     appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions
@@ -2343,8 +2344,7 @@ function careSnapshotNarrative(snapshot){
   if(snapshot.blackTarryDays.length)urgent.push(`black/tarry stool on ${snapshot.blackTarryDays.length} day${snapshot.blackTarryDays.length===1?'':'s'}`);
   if(snapshot.vomitFindings.includes('bright-red blood in vomit'))urgent.push('bright-red blood in vomit');
   if(snapshot.vomitFindings.includes('dark material resembling coffee grounds'))urgent.push('dark material resembling coffee grounds in vomit');
-  const brightBloodOnly=Math.max(0,snapshot.bloodDays.length-snapshot.blackTarryDays.length);
-  if(brightBloodOnly)urgent.push(`bright-red blood in stool on ${brightBloodOnly} day${brightBloodOnly===1?'':'s'}`);
+  if(snapshot.brightRedStoolDays.length)urgent.push(`bright-red blood in stool on ${snapshot.brightRedStoolDays.length} day${snapshot.brightRedStoolDays.length===1?'':'s'}`);
 
   const changes=[];
   if(snapshot.appetiteRows.length){
@@ -2378,7 +2378,7 @@ function careSnapshotNarrative(snapshot){
   let first=coverageLead;
   if(urgent.length)first+=` The most important finding${urgent.length===1?'':'s'} I recorded ${urgent.length===1?'was':'were'} ${urgent.join('; ')}.`;
   else if(changes.length)first+=` The main things I noticed were that ${changes.join('; and ')}.`;
-  else if(loggedDays)first+=' Nothing in the structured observations stands out as a major change from his usual baseline.';
+  else if(loggedDays)first+=' The summary below reflects only the structured items I specifically logged.';
   paragraphs.push(first);
 
   const details=[...(!urgent.length?[]:changes),...nausea,...gi];
@@ -2397,7 +2397,7 @@ function careSnapshotNarrative(snapshot){
   }
   if(snapshot.pred){
     const dose=[snapshot.pred.dose,snapshot.pred.frequency].filter(Boolean).join(' ');
-    closing.push(`I have prednisone recorded as ${dose||'prescribed'}${snapshot.predThrough?`, with owner-confirmed dosing through ${fmtDate(snapshot.predThrough)}`:''}`);
+    closing.push(`Prednisone is recorded as ${dose||'prescribed'}${snapshot.predThrough?`, and I have daily dosing confirmed through ${fmtDate(snapshot.predThrough)}`:''}`);
   }
   if(snapshot.questions.length)closing.push(`I have ${snapshot.questions.length} question${snapshot.questions.length===1?'':'s'} saved that I want to make sure I ask the care team`);
   if(closing.length)paragraphs.push(closing.join('. ')+'.');
