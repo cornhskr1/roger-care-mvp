@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=42">
+  <link rel="stylesheet" href="styles.css?v=43">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -484,6 +484,7 @@
       </fieldset>
       <fieldset class="stool-fieldset"><legend>Bowel movements</legend><p class="field-help">Add one row for each stool, including extra trips. Leave a score blank if you could not assess it.</p><div id="stoolRows" class="stool-rows"></div><button id="addStoolRow" class="secondary-button" type="button">+ Another bowel movement</button></fieldset>
       <div id="safetyPrompt" class="safety-prompt" aria-live="assertive" hidden></div>
+      <div id="journalVetGuidance" class="journal-vet-guidance" aria-live="polite" hidden></div>
       <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="">Not logged</option><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
       <div class="form-grid two">
         <label class="field"><span>Hydration / thirst</span><select name="hydration"><option value="">Not logged</option><option>normal</option><option>increased thirst</option><option>decreased drinking</option><option>good self-hydration</option></select></label>
@@ -581,6 +582,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=59" defer></script>
+  <script src="app.js?v=60" defer></script>
 </body>
 </html>
