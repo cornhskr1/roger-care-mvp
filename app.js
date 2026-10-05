@@ -1080,11 +1080,13 @@ function renderJournalBrief(treatment){
   const rows=comparisonRows().filter(r=>r.date>=treatment.date&&r.observations.length);
   if(!rows.length){els.journalBrief.innerHTML='<p class="empty-state">No journal days recorded since this treatment yet.</p>';return;}
   const last=rows.at(-1),reduced=rows.filter(r=>r.values.energy!==null&&r.values.energy<3),energyKnown=rows.filter(r=>r.values.energy!==null);
+  const appetiteKnown=rows.filter(r=>r.observations.some(appetiteIsKnown)),appetiteReduced=rows.filter(r=>r.observations.some(appetiteIsReduced));
   const nausea=rows.filter(r=>r.values.nausea>0),loose=rows.filter(r=>r.values.looseStool===1);
   const bloody=rows.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(v=>/\bblood\b/i.test(String(v||'')))));
   const scores=rows.map(r=>r.values.stoolScore).filter(v=>v!==null);
   const sentences=[`${rows.length} of ${daysBetween(treatment.date,last.date)+1} days logged since chemo #${treatment.number} (${fmtDate(treatment.date)}–${fmtDate(last.date)}).`];
   if(energyKnown.length)sentences.push(`Energy was reduced or low on ${reduced.length} of ${energyKnown.length} days with an energy entry${last.values.energy===3&&reduced.length?' and was recorded as normal on the latest day':''}.`);
+  if(appetiteKnown.length)sentences.push(`Appetite was below Roger's normal on ${appetiteReduced.length} of ${appetiteKnown.length} days with an appetite entry.`);
   const symptoms=[];
   if(nausea.length)symptoms.push(`nausea signs on ${nausea.length} day${nausea.length===1?'':'s'}`);
   if(loose.length)symptoms.push(`loose stool or diarrhea on ${loose.length} day${loose.length===1?'':'s'}`);
@@ -1104,7 +1106,7 @@ function renderClinicalReview(){
     const postCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date>t.date&&l.date<window.endExclusive);
     const lowest=postCounts.length?postCounts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
     const preCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date<=t.date&&daysBetween(l.date,t.date)<=2).sort((a,b)=>b.date.localeCompare(a.date));
-    const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,loose=days.filter(r=>r.values.looseStool===1).length;
+    const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,appetiteReduced=days.filter(r=>r.observations.some(appetiteIsReduced)).length,loose=days.filter(r=>r.values.looseStool===1).length;
     const blood=days.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
     const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given');
     const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&courseRecordedEnd(c)>=window.start&&c.status?.includes('owner-confirmed'));
@@ -1113,13 +1115,24 @@ function renderClinicalReview(){
     return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
       <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
       <div><strong>After dose</strong><span>Lowest measured neutrophils: ${esc(lowestText)}</span></div>
-      <div><strong>Home observations</strong><span>${days.length} day(s) logged · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
+      <div><strong>Home observations</strong><span>${days.length} day(s) logged · appetite below normal ${appetiteReduced} · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
       <div><strong>Medication context</strong><span>${esc(medSummary||'No medication use recorded in this period')}</span></div>
       <div class="review-wide"><strong>Next recorded decision</strong><span>${next?`${fmtDate(next.date)} · ${esc(next.doseReason||'Reason not recorded')}`:'Next dose is scheduled; no decision recorded yet.'}</span></div>
     </div></details>`;
   }).join('');
 }
 
+function appetiteIsKnown(o){
+  return (o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!=='')||Boolean(o.appetite);
+}
+function appetiteIsReduced(o){
+  if(o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!==''&&Number.isFinite(Number(o.appetitePercent)))return Number(o.appetitePercent)<90;
+  return /decreased|refused/i.test(String(o.appetite||''));
+}
+function appetiteIsRefused(o){
+  if(o.appetitePercent!==null&&o.appetitePercent!==undefined&&o.appetitePercent!==''&&Number.isFinite(Number(o.appetitePercent)))return Number(o.appetitePercent)===0;
+  return /refused/i.test(String(o.appetite||''));
+}
 function appetiteLabels(o){
   const labels=(Array.isArray(o.appetiteBehaviors)?o.appetiteBehaviors:[]).map(value=>APPETITE_BEHAVIOR_LABELS[value]||value);
   if(String(o.appetiteOther||'').trim())labels.push(String(o.appetiteOther).trim());
@@ -1415,6 +1428,8 @@ function symptomSeverity(o){
   const scores=(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
   const stool=scores.length?Math.max(...scores):parseFloat(o.stool);
   if(Number.isFinite(stool) && stool>=6) s=Math.max(s,2);
+  if(appetiteIsRefused(o))s=Math.max(s,2);
+  else if(appetiteIsReduced(o))s=Math.max(s,1);
   if(/low|reduced/i.test(o.energy||'')) s=Math.max(s,1);
   return s;
 }
