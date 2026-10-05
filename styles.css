@@ -499,3 +499,19 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .trend-legend .trend-nausea-observed{background:#c98a2d;border-radius:50%}
 .trend-legend .trend-cerenia{background:#197c91;transform:rotate(45deg);border-radius:2px}
 .trend-legend .trend-today{background:transparent;border-left:3px dashed #9b6a20;border-radius:0;width:8px}
+
+
+/* Observation-linked veterinary guidance */
+.vet-guidance-stack{display:grid;gap:8px;margin-top:10px}
+.vet-guidance-card{border:1px solid #c8d7d0;border-radius:13px;padding:11px 12px;background:linear-gradient(145deg,#f5fbf8,#fff)}
+.vet-guidance-card.urgent{border-color:#d9a2a2;background:var(--red-soft)}
+.vet-guidance-card .section-kicker{margin-bottom:4px;color:var(--green)}
+.vet-guidance-card.urgent .section-kicker{color:var(--red)}
+.vet-guidance-card>strong{display:block;font-size:13px;line-height:1.35}
+.vet-guidance-instruction{font-size:13px;line-height:1.5;margin:6px 0;font-weight:760;color:var(--ink)}
+.vet-guidance-reason{font-size:11px;line-height:1.45;margin:0;color:var(--muted)}
+.vet-guidance-source{font-size:10px;line-height:1.35;color:var(--muted);margin-top:7px;font-weight:750}
+.vet-guidance-footnote{font-size:10px;line-height:1.45;color:var(--muted);margin:0 2px}
+.journal-vet-guidance>.vet-guidance-stack{margin-top:0}
+.nausea-timing-insight .vet-guidance-card{margin-top:4px}
+.compare-day-detail .vet-guidance-stack{margin-top:12px}
