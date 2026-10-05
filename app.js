@@ -6,19 +6,12 @@ const DOC_STORE = 'documents';
 const RECOVERY_STORE = 'recoverySnapshots';
 const BACKUP_META_KEY = 'rogerCareBackupStatus_v1';
 const PENDING_CLOUD_KEY = 'rogerCarePendingCloud_v1';
-const CLOUD_BASE_KEY = 'rogerCareCloudBase_v1';
 const SUPABASE_URL = 'https://gkotvodoqwdhmdeigrra.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_r-j23v_ip3FsemJ8JNtoog_79reT8ur';
 const SITE_URL = 'https://cornhskr1.github.io/roger-care-mvp/';
 let cloud = null, cloudRevision = null, cloudUpdatedAt = null, cloudAvailable = false;
-let cloudBaseRecord = null;
 let ownerSession = null, ownerCanEdit = false, unpublishedLocal = false, cloudBusy = false;
-let ownerPairCode = null;
-let manualPublishRequired = false;
 let syncMessage = '';
-let syncNeedsAttention = false;
-let syncMergeConflict = '';
-const CARE_TEAM_EDITABLE_FIELDS=['name','phone','address','afterHours','notes'];
 const DEFAULT_VISITS = [
   {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
@@ -165,9 +158,8 @@ async function loadState(){
 
   state = saved ? mergeCanonicalSeed(canonical, saved) : canonical;
   state = migrateState(state);
-  unpublishedLocal=Boolean(saved?._savedAt);
-  try{cloudBaseRecord=JSON.parse(localStorage.getItem(CLOUD_BASE_KEY)||'null');}catch(_){}
-  manualPublishRequired=unpublishedLocal&&!cloudBaseRecord;
+  try{unpublishedLocal=localStorage.getItem(PENDING_CLOUD_KEY)==='1';}catch(_){unpublishedLocal=false;}
+  try{localStorage.removeItem('rogerCareCloudBase_v1');}catch(_){}
   await persist(false);
 }
 
@@ -268,7 +260,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),15);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),16);
   return next;
 }
 
@@ -284,42 +276,86 @@ async function persist(changed=true){
 }
 async function saveChanges(){
   try{
-    if(!ownerCanEdit){toast('Sign in as the owner before editing the shared record.',true);return false;}
+    if(!ownerCanEdit){toast('This device is view-only. Edit Roger Care from the owner device.',true);return false;}
     await persist();
     unpublishedLocal=true;
     try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
-    if(manualPublishRequired&&cloudRevision>0){await reconcileCloud();return true;}
-    if(manualPublishRequired||cloudRevision===0||readBackupMeta().confirmedStateAt!==state._savedAt&&cloudRevision===null){
-      syncMessage='Saved on this device. Tap Publish this device’s record once to share it.';
-      renderSharedStatus();return true;
-    }
-    const ok=await publishCloud(false);
+    syncMessage='Saved on this device. Syncing automatically.';
     renderSharedStatus();
+    setTimeout(()=>publishCloudMirror(),0);
     return true;
+  }catch(_){
+    toast('Could not save on this device. Keep this screen open and create a file backup.',true);
+    return false;
   }
-  catch(_){toast('Could not save on this device. Keep this screen open and export a backup.',true);return false;}
 }
 
 async function connectCloud(){
-  if(!globalThis.supabase?.createClient){syncMessage='Shared record unavailable. This device still has its local copy.';return;}
-  cloud=globalThis.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}});
+  if(!globalThis.supabase?.createClient){
+    cloudAvailable=false;
+    syncMessage='Cloud unavailable. This device still has its local copy.';
+    renderSharedStatus();
+    return;
+  }
+
+  cloud=globalThis.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+    auth:{detectSessionInUrl:true,persistSession:true,autoRefreshToken:true}
+  });
+
   const {data:{session}}=await cloud.auth.getSession();
   ownerSession=session;
-  cloud.auth.onAuthStateChange((_event,next)=>{ownerSession=next;setTimeout(async()=>{await checkOwner();renderSharedStatus();},0);});
-  await readCloud(true);
   await checkOwner();
-  if(unpublishedLocal&&ownerCanEdit&&cloudRevision>0){
-    if(cloudBaseRecord)await publishCloud(false);
-    else await reconcileCloud();
-  }
+  await initializeCloudMode();
+
+  cloud.auth.onAuthStateChange((_event,next)=>{
+    ownerSession=next;
+    setTimeout(async()=>{
+      await checkOwner();
+      await initializeCloudMode();
+      renderAll();
+    },0);
+  });
+
   const retryPending=async()=>{
-    if(!unpublishedLocal||!ownerCanEdit||cloudBusy||syncNeedsAttention)return false;
-    return cloudBaseRecord?await publishCloud(false):await reconcileCloud();
+    if(ownerCanEdit&&unpublishedLocal&&!cloudBusy)await publishCloudMirror();
   };
-  window.addEventListener('online',()=>{syncNeedsAttention=false;retryPending();});
-  window.addEventListener('focus',async()=>{await checkOwner();if(unpublishedLocal){await retryPending();}else{await readCloud(false);renderAll();}});
-  setInterval(()=>{if(document.hidden)return;if(unpublishedLocal){retryPending();}else readCloud(false).then(()=>renderAll());},60000);
+
+  window.addEventListener('online',retryPending);
+  window.addEventListener('focus',async()=>{
+    await checkOwner();
+    if(ownerCanEdit){
+      await readCloudMetadata();
+      if(unpublishedLocal)await publishCloudMirror();
+    }else if(!unpublishedLocal){
+      await readCloudViewer();
+    }
+    renderAll();
+  });
+
+  setInterval(async()=>{
+    if(document.hidden||cloudBusy)return;
+    if(ownerCanEdit){
+      if(unpublishedLocal)await publishCloudMirror();
+    }else if(!unpublishedLocal){
+      await readCloudViewer();
+      renderAll();
+    }
+  },30000);
 }
+
+async function initializeCloudMode(){
+  if(ownerCanEdit){
+    await readCloudMetadata();
+    if(unpublishedLocal)await publishCloudMirror();
+    else syncMessage=cloudAvailable?'Saved & synced.':'Saved on this device. Cloud will retry automatically.';
+  }else if(unpublishedLocal){
+    syncMessage='Saved on this device. Sign in as the owner here to sync this pending change.';
+  }else{
+    await readCloudViewer();
+  }
+  renderSharedStatus();
+}
+
 async function checkOwner(){
   ownerCanEdit=false;
   if(cloud&&ownerSession){
@@ -328,39 +364,103 @@ async function checkOwner(){
   }
   renderSharedStatus();
 }
+
 function cloudRecord(){
   const copy=structuredClone(state);
   if(copy.profile)delete copy.profile.photoDataUrl;
   return copy;
 }
-function rememberCloudBase(record){
-  cloudBaseRecord=structuredClone(record);
-  try{localStorage.setItem(CLOUD_BASE_KEY,JSON.stringify(record));}catch(_){}
-}
-function patchRowId(key,row){
-  if(key==='labs')return row.id||`${row.date}|${row.metric}`;
-  if(key==='importHistory')return row.key;
-  if(key==='recordCorrections')return row.changeId||`${row.collection}|${row.id}|${row.at}`;
-  return row.id;
-}
-function recordPatches(before,after){
-  const patches=[];
-  for(const key of new Set([...Object.keys(before),...Object.keys(after)])){
-    if(key==='_savedAt')continue;
-    const oldValue=before[key]??null,newValue=after[key]??null;
-    if(sameCloudValue(oldValue,newValue))continue;
-    if(Array.isArray(oldValue)&&Array.isArray(newValue)){
-      const oldRows=new Map(oldValue.map(row=>[patchRowId(key,row),row]));
-      const newRows=new Map(newValue.map(row=>[patchRowId(key,row),row]));
-      if(oldRows.has(undefined)||newRows.has(undefined)||oldRows.size!==oldValue.length||newRows.size!==newValue.length)throw new Error('Unidentified or duplicate entries');
-      for(const id of new Set([...oldRows.keys(),...newRows.keys()])){
-        const prior=oldRows.get(id)??null,next=newRows.get(id)??null;
-        if(!sameCloudValue(prior,next))patches.push({key,id,before:prior,after:next});
-      }
-    }else patches.push({key,before:oldValue,after:newValue});
+
+async function readCloudMetadata(){
+  if(!cloud)return false;
+  const {data,error}=await cloud.from('roger_shared_record')
+    .select('revision,updated_at')
+    .eq('id','roger')
+    .single();
+
+  if(error){
+    cloudAvailable=false;
+    syncMessage='Saved on this device. Cloud will retry automatically.';
+    renderSharedStatus();
+    return false;
   }
-  return patches;
+
+  cloudAvailable=true;
+  cloudRevision=Number(data.revision);
+  cloudUpdatedAt=data.updated_at;
+  return true;
 }
+
+async function readCloudViewer(){
+  if(!cloud||cloudBusy)return false;
+  cloudBusy=true;
+  try{
+    const {data,error}=await cloud.from('roger_shared_record')
+      .select('record,revision,updated_at')
+      .eq('id','roger')
+      .single();
+
+    if(error||!data?.record?.profile){
+      cloudAvailable=false;
+      syncMessage='The shared Roger Care record could not be reached.';
+      return false;
+    }
+
+    const photo=state.profile?.photoDataUrl;
+    state=migrateState(data.record);
+    if(photo)state.profile.photoDataUrl=photo;
+    cloudRevision=Number(data.revision);
+    cloudUpdatedAt=data.updated_at;
+    cloudAvailable=true;
+    unpublishedLocal=false;
+    try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
+    await persist(false);
+    syncMessage='Viewing the latest shared record.';
+    return true;
+  }finally{
+    cloudBusy=false;
+    renderSharedStatus();
+  }
+}
+
+async function publishCloudMirror(){
+  if(!cloud||!ownerCanEdit||cloudBusy||!unpublishedLocal)return false;
+  cloudBusy=true;
+  const submitted=cloudRecord();
+  const submittedSavedAt=state._savedAt;
+  let publishAgain=false;
+
+  try{
+    const {data,error}=await cloud.rpc('roger_replace_record',{p_record:submitted});
+    if(error||!data){
+      cloudAvailable=false;
+      syncMessage='Saved on this device. Cloud will retry automatically.';
+      return false;
+    }
+
+    cloudAvailable=true;
+    cloudRevision=Number(data.revision);
+    cloudUpdatedAt=data.updated_at;
+
+    if(state._savedAt===submittedSavedAt){
+      unpublishedLocal=false;
+      try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
+      syncMessage='Saved & synced.';
+    }else{
+      unpublishedLocal=true;
+      try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
+      syncMessage='Saved on this device. Syncing the newest change.';
+      publishAgain=true;
+    }
+
+    return true;
+  }finally{
+    cloudBusy=false;
+    renderSharedStatus();
+    if(publishAgain)setTimeout(()=>publishCloudMirror(),0);
+  }
+}
+
 function parseOwnerSignInLink(input){
   const url=new URL(String(input||'').trim());
   if(url.protocol!=='https:'||url.hostname!==new URL(SUPABASE_URL).hostname||url.pathname!=='/auth/v1/verify')throw new Error('Unexpected sign-in link');
@@ -369,357 +469,42 @@ function parseOwnerSignInLink(input){
   if(!token||!/^[a-zA-Z0-9_-]{32,256}$/.test(token)||!['email','magiclink'].includes(type))throw new Error('Invalid sign-in link');
   return {token_hash:token,type};
 }
-async function readCloud(initial=false){
-  if(!cloud||cloudBusy||unpublishedLocal&&!initial)return;
-  const {data,error}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
-  if(error){cloudAvailable=false;syncMessage='Shared record could not be reached. Local copy is safe on this device.';renderSharedStatus();return;}
-  cloudAvailable=true;cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
-  const localPending=initial&&unpublishedLocal&&
-    (localStorage.getItem(PENDING_CLOUD_KEY)==='1'||String(state._savedAt||'')>String(data.record?._savedAt||''));
-  if(!localPending)rememberCloudBase(data.record);
-  if(data.revision>0&&data.record?.profile){
-    if(localPending){
-      syncMessage='This device has changes waiting to sync.';
-    }else{
-      const photo=state.profile?.photoDataUrl;
-      state=migrateState(data.record);
-      if(photo)state.profile.photoDataUrl=photo;
-      unpublishedLocal=false;
-      manualPublishRequired=false;
-      syncNeedsAttention=false;
-      try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-      await persist(false);
-      syncMessage='Shared record current.';
-    }
-  }else syncMessage=unpublishedLocal?'This device has entries waiting for their first upload.':'Shared record has not been published yet.';
-  renderSharedStatus();
-}
-async function publishCloud(firstUpload){
-  if(!cloud||!ownerCanEdit||cloudRevision===null){syncMessage='Not uploaded. Check the connection and sign-in.';renderSharedStatus();return false;}
-  if(cloudBusy)return false;
-  cloudBusy=true;
-  try{
-    if(!firstUpload&&cloudRevision>0){
-      if(!cloudBaseRecord){syncMessage='Checking the shared record before saving.';return false;}
-      const submitted=cloudRecord();
-      let changes;
-      try{changes=recordPatches(cloudBaseRecord,submitted);}
-      catch(_){syncMessage='Could not safely identify changed entries. Your copy is saved on this device.';return false;}
-      if(changes.length>100){syncNeedsAttention=true;syncMessage='Your changes are safe here, but there are too many pending changes to sync automatically.';return false;}
-      if(changes.some(change=>change.key==='carePlan')){
-        cloudBusy=false;
-        return await reconcileCloud();
-      }
-      const {data,error}=await cloud.rpc('roger_apply_patches',{p_changes:changes});
-      if(error||!data?.record){
-        syncNeedsAttention=true;
-        syncMessage=error?.code==='40001'
-          ? 'Another copy changed online. Your changes are safe here and need one reconciliation pass.'
-          : 'Your changes are safe on this device, but Roger Care could not finish syncing them.';
-        toast('Sync needs attention. Your changes are still safe on this device.',true);return false;
-      }
-      rememberCloudBase(data.record);
-      cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
-      cloudAvailable=true;manualPublishRequired=false;
-      if(state._savedAt!==submitted._savedAt){
-        unpublishedLocal=true;syncMessage='Saved one change online; another change is waiting to sync.';
-        setTimeout(()=>publishCloud(false),0);
-      }else{
-        const photo=state.profile?.photoDataUrl;
-        state=migrateState(data.record);if(photo)state.profile.photoDataUrl=photo;
-        unpublishedLocal=false;syncNeedsAttention=false;syncMessage='Saved to shared record.';
-        await persist(false);
-        try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-        renderAll();
-      }
-      return true;
-    }
-    const {data,error}=await cloud.from('roger_shared_record')
-      .update({record:cloudRecord(),revision:cloudRevision+1})
-      .eq('id','roger').eq('revision',cloudRevision)
-      .select('revision,updated_at').maybeSingle();
-    if(error){
-      syncNeedsAttention=true;
-      syncMessage='Your changes are safe on this device, but Roger Care could not finish syncing them.';
-      toast('Sync needs attention. Your changes are still safe on this device.',true);return false;
-    }
-    if(!data){
-      cloudBusy=false;
-      return await reconcileCloud();
-    }
-    cloudRevision=Number(data.revision);cloudUpdatedAt=data.updated_at;
-    rememberCloudBase(cloudRecord());
-    unpublishedLocal=false;syncNeedsAttention=false;syncMessage='Saved to shared record.';
-    manualPublishRequired=false;
-    try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-    if(firstUpload)toast('Roger’s record is now shared. Your device copy remains.');
-    return true;
-  }finally{cloudBusy=false;renderSharedStatus();}
-}
-function stableCloudValue(value){
-  return JSON.stringify(value,(_key,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(k=>[k,item[k]])):item);
-}
-function sameCloudValue(a,b){return stableCloudValue(a)===stableCloudValue(b);}
-function cloneCloudValue(value){return value===undefined?undefined:structuredClone(value);}
-function plainCloudObject(value){return Boolean(value)&&typeof value==='object'&&!Array.isArray(value);}
-function mergeThreeWayNode(base,local,online){
-  if(sameCloudValue(local,online))return {ok:true,value:cloneCloudValue(local)};
-  if(sameCloudValue(local,base))return {ok:true,value:cloneCloudValue(online)};
-  if(sameCloudValue(online,base))return {ok:true,value:cloneCloudValue(local)};
-  if(plainCloudObject(local)&&plainCloudObject(online)){
-    const merged={},baseObject=plainCloudObject(base)?base:{};
-    for(const key of new Set([...Object.keys(baseObject),...Object.keys(local),...Object.keys(online)])){
-      const result=mergeThreeWayNode(baseObject[key],local[key],online[key]);
-      if(!result.ok)return {ok:false};
-      if(result.value!==undefined)merged[key]=result.value;
-    }
-    return {ok:true,value:merged};
-  }
-  return {ok:false};
-}
-function mergeKeyedCareRows(baseRows=[],localRows=[],onlineRows=[]){
-  const valid=rows=>Array.isArray(rows)&&rows.every(row=>row?.id);
-  if(!valid(baseRows)||!valid(localRows)||!valid(onlineRows))return {ok:false};
-  const base=new Map(baseRows.map(row=>[row.id,row])),local=new Map(localRows.map(row=>[row.id,row])),online=new Map(onlineRows.map(row=>[row.id,row]));
-  const order=[...online.keys(),...local.keys(),...base.keys()].filter((id,index,list)=>list.indexOf(id)===index);
-  const merged=[];
-  for(const id of order){
-    const result=mergeThreeWayNode(base.get(id),local.get(id),online.get(id));
-    if(!result.ok)return {ok:false,conflict:id};
-    if(result.value!==undefined)merged.push(result.value);
-  }
-  return {ok:true,value:merged};
-}
-function normalizeCareTeamField(field,value){
-  const raw=String(value??'').trim();
-  if(field==='phone'){
-    const digits=raw.replace(/\D/g,'');
-    return digits.length===11&&digits.startsWith('1')?digits.slice(1):digits;
-  }
-  if(field==='name'||field==='address')return raw.toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ');
-  if(field==='source'){
-    if(/owner-entered care team update/i.test(raw))return 'owner-entered care team update';
-    return raw.toLowerCase().replace(/\s+/g,' ');
-  }
-  return raw.replace(/\s+/g,' ');
-}
-function careTeamFieldTime(row,field){
-  const value=row?.fieldUpdatedAt?.[field];
-  const time=value?Date.parse(value):NaN;
-  return Number.isFinite(time)?time:0;
-}
-function mergeCareTeamRows(baseRows=[],localRows=[],onlineRows=[]){
-  const baseList=mergeCareTeam(baseRows),localList=mergeCareTeam(localRows),onlineList=mergeCareTeam(onlineRows);
-  const base=new Map(baseList.map(row=>[row.id,row])),local=new Map(localList.map(row=>[row.id,row])),online=new Map(onlineList.map(row=>[row.id,row]));
-  const order=[...online.keys(),...local.keys(),...base.keys()].filter((id,index,list)=>list.indexOf(id)===index);
-  const merged=[];
-  for(const id of order){
-    const b=base.get(id)||{},l=local.get(id)||{},o=online.get(id)||{};
-    const row={};
-    const fields=new Set([...Object.keys(b),...Object.keys(l),...Object.keys(o)]);
-    fields.delete('fieldUpdatedAt');
-    for(const field of fields){
-      const bv=b[field],lv=l[field],ov=o[field];
-      if(sameCloudValue(lv,ov)){row[field]=structuredClone(lv);continue;}
 
-      const bn=normalizeCareTeamField(field,bv),ln=normalizeCareTeamField(field,lv),on=normalizeCareTeamField(field,ov);
-      const lt=careTeamFieldTime(l,field),ot=careTeamFieldTime(o,field);
-
-      if(ln===on){
-        row[field]=ot>=lt?structuredClone(ov):structuredClone(lv);
-        continue;
-      }
-      if(lt||ot){
-        row[field]=lt>ot?structuredClone(lv):structuredClone(ov);
-        continue;
-      }
-      if(ln===bn){row[field]=structuredClone(ov);continue;}
-      if(on===bn){row[field]=structuredClone(lv);continue;}
-      if(field==='source'){
-        row[field]=(ln==='owner-entered care team update'||on==='owner-entered care team update')
-          ? 'Owner-entered care team update'
-          : structuredClone(ov);
-        continue;
-      }
-
-      // Legacy rows predate per-field edit timestamps. For a one-time legacy
-      // disagreement, the current shared record is canonical. Future intentional
-      // edits are timestamped and therefore win normally.
-      row[field]=structuredClone(ov);
-    }
-
-    const fieldUpdatedAt={};
-    for(const field of CARE_TEAM_EDITABLE_FIELDS){
-      const lTime=l?.fieldUpdatedAt?.[field],oTime=o?.fieldUpdatedAt?.[field],bTime=b?.fieldUpdatedAt?.[field];
-      const candidates=[bTime,lTime,oTime].filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b));
-      if(candidates.length)fieldUpdatedAt[field]=candidates.at(-1);
-    }
-    if(Object.keys(fieldUpdatedAt).length)row.fieldUpdatedAt=fieldUpdatedAt;
-    merged.push(row);
-  }
-  return {ok:true,value:merged};
-}
-function mergeCarePlanThreeWay(basePlan={},localPlan={},onlinePlan={}){
-  const base=plainCloudObject(basePlan)?basePlan:{},local=plainCloudObject(localPlan)?localPlan:{},online=plainCloudObject(onlinePlan)?onlinePlan:{};
-  const merged={};
-  for(const key of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(online)])){
-    let result;
-    if(key==='careTeam'){
-      result=mergeCareTeamRows(base[key]||[],local[key]||[],online[key]||[]);
-    }else if(['visits','questions'].includes(key)){
-      result=mergeKeyedCareRows(base[key]||[],local[key]||[],online[key]||[]);
-    }else{
-      result=mergeThreeWayNode(base[key],local[key],online[key]);
-    }
-    if(!result.ok)return {ok:false,conflict:key+(result.conflict?` · ${result.conflict}`:''),detail:result.detail||null};
-    if(result.value!==undefined)merged[key]=result.value;
-  }
-  return {ok:true,value:merged};
-}
-function mergeIndependentChanges(local,online){
-  syncMergeConflict='';
-  const merged=structuredClone(online);
-  for(const key of new Set([...Object.keys(local),...Object.keys(online)])){
-    if(key==='_savedAt')continue;
-    if(key==='schemaVersion'){merged[key]=Math.max(Number(local[key]||0),Number(online[key]||0));continue;}
-    if(key==='journalCoverageThrough'){merged[key]=[local[key],online[key]].filter(Boolean).sort().at(-1);continue;}
-    if(key==='carePlan'){
-      const result=mergeCarePlanThreeWay(cloudBaseRecord?.carePlan||{},local.carePlan||{},online.carePlan||{});
-      if(!result.ok){syncMergeConflict=`Care Plan · ${result.conflict||'unknown field'}`;return null;}
-      merged.carePlan=result.value;continue;
-    }
-    if(key==='profile'){
-      const own={...local.profile},remote={...online.profile};delete own.photoDataUrl;delete remote.photoDataUrl;
-      if(!sameCloudValue(own,remote)){syncMergeConflict='Profile';return null;}
-      merged.profile={...remote,...(local.profile?.photoDataUrl?{photoDataUrl:local.profile.photoDataUrl}:{})};continue;
-    }
-    if(Array.isArray(local[key])&&Array.isArray(online[key])){
-      const rows=structuredClone(online[key]);
-      const rowKey=row=>key==='labs'?(row?.id||`${row?.date}|${row?.metric}`):(row?.id||stableCloudValue(row));
-      const existing=new Map(rows.map((row,i)=>[rowKey(row),i]));
-      for(const row of local[key]){
-        const id=rowKey(row);
-        if(existing.has(id)){
-          const onlineRow=rows[existing.get(id)];
-          if(!sameCloudValue(row,onlineRow)){
-            const correction=(local.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
-              sameCloudValue(change.before,onlineRow)&&sameCloudValue({...onlineRow,...change.after},row));
-            if(correction)rows[existing.get(id)]=structuredClone(row);
-            else {
-              const onlineCorrection=(online.recordCorrections||[]).findLast(change=>change.collection===key&&change.id===id&&
-                sameCloudValue(change.before,row)&&sameCloudValue({...row,...change.after},onlineRow));
-              if(!onlineCorrection){syncMergeConflict=`${key} · ${id}`;return null;}
-            }
-          }
-        }
-        else {existing.set(id,rows.length);rows.push(structuredClone(row));}
-      }
-      if(key==='qualityOfLife'){
-        const byDate=new Map();
-        for(const row of rows){
-          const prior=byDate.get(row.date);
-          if(!prior){byDate.set(row.date,row);continue;}
-          if(Number(prior.score)!==Number(row.score)||prior.notes&&row.notes&&prior.notes!==row.notes){syncMergeConflict=`qualityOfLife · ${row.date||'same date'}`;return null;}
-          if(!prior.notes&&row.notes)byDate.set(row.date,row);
-        }
-        merged[key]=[...byDate.values()];continue;
-      }
-      merged[key]=rows;continue;
-    }
-    if(!sameCloudValue(local[key],online[key])){syncMergeConflict=key;return null;}
-  }
-  merged._savedAt=new Date().toISOString();
-  return merged;
-}
-async function reconcileCloud(){
-  if(!cloud||!ownerCanEdit||cloudBusy)return false;
-  cloudBusy=true;
-  let savedRecord=null,savedRevision=null,savedAt=null;
-  try{
-    const {data:latest,error:readError}=await cloud.from('roger_shared_record').select('record,revision,updated_at').eq('id','roger').single();
-    if(readError||!latest?.record)throw new Error('read');
-    const merged=mergeIndependentChanges(cloudRecord(),latest.record);
-    if(!merged){
-      syncNeedsAttention=true;
-      syncMessage=`Roger Care could not safely combine ${syncMergeConflict||'one section'} yet. Your changes are safe here.`;
-      toast(`Sync needs attention: ${syncMergeConflict||'one section'}. Nothing was overwritten.`,true);return false;
-    }
-    const equivalent=(_record)=>sameCloudValue({..._record,_savedAt:null},{...latest.record,_savedAt:null});
-    if(equivalent(merged)){
-      savedRecord=latest.record;savedRevision=Number(latest.revision);savedAt=latest.updated_at;
-    }else{
-      const {data,error}=await cloud.from('roger_shared_record').update({record:merged,revision:Number(latest.revision)+1})
-        .eq('id','roger').eq('revision',latest.revision).select('revision,updated_at').maybeSingle();
-      if(error||!data)throw new Error('write');
-      savedRecord=merged;savedRevision=Number(data.revision);savedAt=data.updated_at;
-    }
-    const photo=state.profile?.photoDataUrl;
-    state=migrateState(savedRecord);if(photo)state.profile.photoDataUrl=photo;
-    cloudRevision=savedRevision;cloudUpdatedAt=savedAt;cloudAvailable=true;
-    rememberCloudBase(savedRecord);
-    unpublishedLocal=false;manualPublishRequired=false;syncNeedsAttention=false;syncMessage='Saved to shared record.';
-    await persist(false);try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-    try{renderAll();}catch(error){console.error('Shared record saved; display refresh failed',error);}
-    toast('Your change is now shared.');return true;
-  }catch(_){
-    if(savedRecord){
-      cloudRevision=savedRevision;cloudUpdatedAt=savedAt;unpublishedLocal=false;manualPublishRequired=false;syncNeedsAttention=false;
-      syncMessage='Shared record updated. Refresh to update this screen.';
-      try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
-      return true;
-    }
-    syncNeedsAttention=true;
-    syncMessage='Your changes are safe on this device, but Roger Care could not finish syncing them.';
-    toast('Sync needs attention. Your changes are still safe on this device.',true);return false;
-  }finally{cloudBusy=false;renderSharedStatus();}
-}
 function renderSharedStatus(){
-  const status=q('#sharedStatus'),controls=q('#sharedControls');if(!status||!controls||!state)return;
-  const synced=cloudAvailable&&!unpublishedLocal&&cloudRevision>0;
-  const title=syncNeedsAttention?'Sync needs attention':synced?'Saved & synced':'Saved on this device';
-  const message=syncNeedsAttention
-    ? 'Your latest changes are safe here. Roger Care will keep retrying automatically; you can also try again now.'
-    : synced
-      ? 'Your latest changes are available on the shared Roger Care record.'
-      : cloudAvailable
-        ? 'Your latest changes are safe here. Roger Care will sync them automatically.'
-        : 'Your latest changes are safe here. Roger Care will sync when the connection is available.';
-  status.className=`shared-status ${syncNeedsAttention?'needs-attention':synced?'is-synced':'is-local'}`;
-  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&synced?`<small>Last synced: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
+  const status=q('#sharedStatus'),controls=q('#sharedControls');
+  if(!status||!controls||!state)return;
+
+  const synced=ownerCanEdit&&cloudAvailable&&!unpublishedLocal&&cloudRevision>0;
+  const viewer=!ownerCanEdit&&!unpublishedLocal;
+  const title=ownerCanEdit
+    ? (synced?'Saved & synced':'Saved on this device')
+    : (viewer?'View-only':'Saved on this device');
+  const message=ownerCanEdit
+    ? (synced
+        ? 'Your phone is the master Roger Care record. The cloud mirror is current.'
+        : 'Your latest changes are safe here. Roger Care will keep syncing automatically.')
+    : (viewer
+        ? 'This device shows the latest shared Roger Care record and cannot edit it.'
+        : 'A pending local change is safe here. Sign in as the owner on this device to sync it.');
+
+  status.className=`shared-status ${synced?'is-synced':'is-local'}`;
+  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
 
   controls.innerHTML=ownerCanEdit
-    ? `<div class="sync-summary ${syncNeedsAttention?'needs-attention':synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${syncNeedsAttention?'<button id="publishLocal" class="primary-button" type="button">Try sync again</button>':''}${synced&&cloudUpdatedAt?`<p class="field-help">Last synced ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Device & sign-in</summary><p class="field-help">You normally do not need anything here. Use this only to connect another browser or Home Screen installation.</p><button id="createOwnerPair" class="secondary-button" type="button">Connect another device</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for another device</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Open Roger Care on the other device, paste this one-time sign-in, and connect.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
-    : `<strong>${ownerSession?'Signed in; owner access is pending':'Connect this device'}</strong><p>${ownerSession?'Your changes remain safe on this device while access is checked.':'Connect this installation once so new entries can sync automatically.'}</p>${!ownerSession?'<form id="ownerPairPaste"><label class="field"><span>Paste one-time sign-in from another signed-in Roger Care device</span><input type="password" name="code" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Connect this device</button></form><details><summary>Use an email link instead</summary><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
+    ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
+    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
 
-  if(ownerPairCode&&q('#ownerPairCode'))q('#ownerPairCode').value=ownerPairCode;
-  q('#createOwnerPair')?.addEventListener('click',async event=>{
-    const button=event.currentTarget;button.disabled=true;
-    const {data,error}=await cloud.functions.invoke('roger-pair',{body:{}});
-    button.disabled=false;
-    if(error||data?.kind!=='roger-owner-pair-v1'||!data.token_hash)return toast('Could not create a one-time sign-in right now.',true);
-    ownerPairCode=JSON.stringify(data);renderSharedStatus();toast('One-time sign-in ready.');
-  });
-  q('#copyOwnerPair')?.addEventListener('click',async()=>{
-    try{await navigator.clipboard.writeText(ownerPairCode);toast('Copied. Paste it on the other device.');}
-    catch(_){toast('Could not copy. Press and hold the sign-in field and choose Copy.',true);}
-  });
-  q('#ownerPairPaste')?.addEventListener('submit',async event=>{
-    event.preventDefault();const input=event.currentTarget.elements.code;
-    let payload;try{payload=JSON.parse(input.value);}catch(_){}
-    input.value='';
-    if(payload?.kind!=='roger-owner-pair-v1'||!payload.token_hash||payload.type!=='magiclink')return toast('That one-time sign-in is not valid.',true);
-    const {error}=await cloud.auth.verifyOtp({token_hash:payload.token_hash,type:payload.type});
-    if(error)return toast('That sign-in has already been used or expired. Create a new one on the signed-in device.',true);
-    const {data:{session}}=await cloud.auth.getSession();ownerSession=session;await checkOwner();renderAll();
-    try{await navigator.clipboard.writeText('');}catch(_){}
-    toast(ownerCanEdit?'Connected. New changes will sync automatically.':'Signed in, but owner access is still pending.');
-  });
   q('#ownerLogin')?.addEventListener('submit',async event=>{
-    event.preventDefault();const email=event.currentTarget.elements.email.value.trim();
+    event.preventDefault();
+    const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
     const emailLimit=error&&(error.status===429||error.code==='over_email_send_rate_limit');
-    toast(error?(emailLimit?'Email limit reached. Wait an hour after the last email, then request one new link.':'Sign-in email could not be sent. Please try again later.'):'Copy the unused sign-in link from the email and paste it here.',Boolean(error));
+    toast(error
+      ? (emailLimit?'Email limit reached. Wait an hour after the last email, then request one new link.':'Sign-in email could not be sent. Please try again later.')
+      : 'Copy the unused sign-in link from the email and paste it here.',
+      Boolean(error));
   });
+
   q('#ownerLinkPaste')?.addEventListener('submit',async event=>{
     event.preventDefault();
     const input=event.currentTarget.elements.link;
@@ -730,17 +515,21 @@ function renderSharedStatus(){
     const {error}=await cloud.auth.verifyOtp(credentials);
     if(error)return toast('That link could not be used. Request a fresh one and copy it without opening it.',true);
     const {data:{session}}=await cloud.auth.getSession();
-    ownerSession=session;await checkOwner();renderAll();
-    toast(ownerCanEdit?'Connected. New changes will sync automatically.':'Signed in, but owner access is still pending.');
+    ownerSession=session;
+    await checkOwner();
+    await initializeCloudMode();
+    renderAll();
+    toast(ownerCanEdit?'Owner device connected. Changes will sync automatically.':'Signed in, but this account does not have owner access.');
   });
-  q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
-  q('#publishLocal')?.addEventListener('click',async event=>{
-    const button=event.currentTarget,oldText=button.textContent;
-    button.disabled=true;button.textContent='Syncing…';
-    const ok=cloudRevision>0?await reconcileCloud():await publishCloud(true);
-    if(ok)renderAll();
-    else{button.disabled=false;button.textContent=oldText;}
+
+  q('#signOutOwner')?.addEventListener('click',async()=>{
+    await cloud.auth.signOut();
+    ownerSession=null;
+    ownerCanEdit=false;
+    if(!unpublishedLocal)await readCloudViewer();
+    renderAll();
   });
+
   for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
   }
@@ -1014,7 +803,7 @@ function recordCorrection(collection,id,after){
 
 function bindForms(){
   document.addEventListener('submit',event=>{
-    if(['ownerLogin','ownerLinkPaste','ownerPairPaste'].includes(event.target.id)||ownerCanEdit)return;
+    if(['ownerLogin','ownerLinkPaste'].includes(event.target.id)||ownerCanEdit)return;
     event.preventDefault();event.stopImmediatePropagation();
     toast('Only Roger’s owner can change this record. Sign in first.',true);
   },true);
@@ -1141,24 +930,15 @@ function bindForms(){
   q('#careTeamForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const current=mergeCareTeam(state.carePlan?.careTeam||[]);
-    const now=new Date().toISOString();
-    state.carePlan.careTeam=current.map(contact=>{
-      const next={
-        ...contact,
-        name:String(fd.get(`${contact.id}-name`)||'').trim(),
-        phone:String(fd.get(`${contact.id}-phone`)||'').trim(),
-        address:String(fd.get(`${contact.id}-address`)||'').trim(),
-        afterHours:String(fd.get(`${contact.id}-afterHours`)||'').trim(),
-        notes:String(fd.get(`${contact.id}-notes`)||'').trim(),
-        source:'Owner-entered care team update'
-      };
-      const fieldUpdatedAt={...(contact.fieldUpdatedAt||{})};
-      for(const field of CARE_TEAM_EDITABLE_FIELDS){
-        if(!sameCloudValue(contact[field]??'',next[field]??''))fieldUpdatedAt[field]=now;
-      }
-      if(Object.keys(fieldUpdatedAt).length)next.fieldUpdatedAt=fieldUpdatedAt;
-      return next;
-    });
+    state.carePlan.careTeam=current.map(contact=>({
+      ...contact,
+      name:String(fd.get(`${contact.id}-name`)||'').trim(),
+      phone:String(fd.get(`${contact.id}-phone`)||'').trim(),
+      address:String(fd.get(`${contact.id}-address`)||'').trim(),
+      afterHours:String(fd.get(`${contact.id}-afterHours`)||'').trim(),
+      notes:String(fd.get(`${contact.id}-notes`)||'').trim(),
+      source:'Owner-entered care team update'
+    }));
     if(!await saveChanges())return;renderCareTeam();toast('Care team & emergency plan saved');
   });
 
@@ -2432,7 +2212,11 @@ function bindExports(){
       }):null;
       if(!window.confirm(`Restore this backup? It will replace the app's current entries${hasDocuments?' and uploaded documents':''} on this device.`))return;
       if(restored)await replaceDocuments(restored);
-      state=migrateState(incoming);await persist();unpublishedLocal=true;manualPublishRequired=true;syncMessage='Backup restored on this device. Confirm a fresh backup before publishing.';await loadDocuments();renderAll();
+      state=migrateState(incoming);await persist();unpublishedLocal=true;
+      try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
+      syncMessage='Backup restored on this device. Syncing automatically.';
+      await loadDocuments();renderAll();
+      if(ownerCanEdit)setTimeout(()=>publishCloudMirror(),0);
       toast(hasDocuments?'Complete backup restored':'Older backup restored; existing device documents kept');
     }catch(_){toast('That backup could not be imported',true);}
     finally{event.target.value='';}

@@ -91,3 +91,19 @@ https://cornhskr1.github.io/roger-care-mvp/
 ## Care Snapshot workflow
 
 The Care Snapshot can now be generated for **Since last treatment**, **Since last visit**, **Last 7 days**, or a **Custom** date range. The selected period drives the on-screen preview, PDF, print view, and phone share action so the owner can use the same concise update before an appointment, during a call, or when sending information to the care team. Range selection is local UI state only and does not alter Roger's synchronized clinical record.
+
+
+## Single-writer cloud mirror
+
+Roger Care uses a deliberately simple synchronization model:
+
+- the authenticated owner installation is the **only editor**
+- owner changes save locally first
+- the owner installation replaces the complete cloud mirror after each local save
+- failed uploads remain pending locally and retry automatically on reconnect, focus, and periodic checks
+- view-only installations read the cloud mirror and never write it
+- the owner installation never pulls the cloud mirror over its local master during normal startup
+- cloud revision numbers are informational only; they are not used for merge/conflict resolution
+- the legacy patch/reconciliation RPC is not available to authenticated clients
+
+There is intentionally no record merge engine and no normal manual sync workflow. If the owner phone loses its local record, restoration from cloud/file backup is a recovery task rather than routine synchronization.
