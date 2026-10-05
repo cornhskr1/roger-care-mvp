@@ -1897,13 +1897,29 @@ function renderAlignedComparison(treatments){
   const W=790,H=keys.length===2?424:255,L=130,R=26,top=83,laneH=115,gap=76;
   const x=offset=>L+(W-L-R)*offset/13;
   const colors=['#512888','#237a91','#9d6180','#577794','#8b7b44','#4c816b','#994b57','#68779c'];
-  let svg=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
+  const nauseaMode=keys.includes('nausea')||keys.includes('cerenia');
+  const nauseaPattern=nauseaMode?nauseaTimingPattern():null;
+  let svg='';
+  if(nauseaPattern?.eventCount){
+    const step=(W-L-R)/13;
+    const fullLeft=Math.max(L,x(nauseaPattern.observedStart)-step/2),fullRight=Math.min(W-R,x(nauseaPattern.observedEnd)+step/2);
+    const coreLeft=Math.max(L,x(nauseaPattern.coreStart)-step/2),coreRight=Math.min(W-R,x(nauseaPattern.coreEnd)+step/2);
+    if(fullRight>fullLeft)svg+=`<rect x="${fullLeft}" y="61" width="${fullRight-fullLeft}" height="${H-96}" rx="5" fill="#e9c56d" opacity=".16"><title>Roger's prior recorded nausea range: day +${nauseaPattern.observedStart} to +${nauseaPattern.observedEnd}</title></rect>`;
+    if(coreRight>coreLeft)svg+=`<rect x="${coreLeft}" y="61" width="${coreRight-coreLeft}" height="${H-96}" rx="5" fill="#d9a63e" opacity=".13"><title>Most recorded timing: day +${nauseaPattern.coreStart} to +${nauseaPattern.coreEnd}</title></rect>`;
+    if(nauseaPattern.todayOffset>=0&&nauseaPattern.todayOffset<=13){
+      const xx=x(nauseaPattern.todayOffset);
+      svg+=`<line x1="${xx}" x2="${xx}" y1="61" y2="${H-35}" stroke="#9b6a20" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${xx+4}" y="58" font-size="10" font-weight="800" fill="#8a6421">Today · +${nauseaPattern.todayOffset}</text>`;
+    }
+  }
+  svg+=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
   for(let offset=0;offset<=13;offset++){
     svg+=`<line x1="${x(offset)}" x2="${x(offset)}" y1="67" y2="${H-35}" stroke="#edf0f4"/><text x="${x(offset)}" y="${H-12}" font-size="11" text-anchor="middle" fill="#707181">${offset}</text>`;
   }
   plotted.forEach(({t,days},i)=>days.forEach(({offset,row})=>{
     const cx=x(offset),color=colors[i%colors.length];
     if(row.labs.some(l=>l.metric==='Neutrophils'))svg+=`<circle cx="${cx}" cy="28" r="4" fill="#b44f5c"><title>Cycle #${t.number}, day ${offset}: CBC on ${esc(fmtDate(row.date))}</title></circle>`;
+    if(row.observations.some(isNauseaAssociatedObservation))svg+=`<circle cx="${cx}" cy="52" r="4.5" fill="#c98a2d" stroke="#fff" stroke-width="1.2"><title>Cycle #${t.number}, day ${offset}: nausea-associated observation</title></circle>`;
+    if(row.medications.some(m=>m.medicationId==='med-cerenia'&&m.status==='given'))svg+=`<polygon points="${cx},34 ${cx+5},39 ${cx},44 ${cx-5},39" fill="#197c91" stroke="#fff" stroke-width="1"><title>Cycle #${t.number}, day ${offset}: Cerenia given</title></polygon>`;
     const events=comparisonEventsForDate(row.date,row);
     if(events.length)svg+=`<rect x="${cx-3}" y="42" width="6" height="6" fill="${color}"><title>Cycle #${t.number}, day ${offset}: ${esc(events.join('; '))}</title></rect>`;
   }));
@@ -1921,7 +1937,7 @@ function renderAlignedComparison(treatments){
     });
   });
   const legend=chosen.map((t,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>Chemo #${t.number} · ${fmtDate(t.date).replace(', 2026','')}</span>`).join('');
-  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}</div><p class="field-help">Red dots: CBC · small squares: medication or food context. Tap a plotted point for the dated note.</p>`;
+  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Roger nausea range</span><span><i class="trend-nausea-observed"></i>Observed nausea</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div><p class="field-help">Red dots: CBC · amber dots: nausea-associated observations · teal diamonds: Cerenia · small squares: other medication or food context. Tap a plotted point for the dated note.</p>`;
   if(!all.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=all.at(-1)?.date||null;
   renderComparisonDetail();
 }
