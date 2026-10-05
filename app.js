@@ -89,6 +89,32 @@ const VOMIT_FLAG_LABELS={
   bright_red_blood:'bright-red blood in vomit',
   coffee_ground_like:'dark material resembling coffee grounds'
 };
+const VET_GUIDANCE_ON_FILE={
+  cerenia:{
+    id:'ksu-cerenia-2026-10-02',
+    title:'Cerenia / maropitant',
+    instruction:'Give 1 tablet by mouth every 24 hours as needed for chemotherapy-associated nausea or vomiting.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'medication'
+  },
+  metronidazole:{
+    id:'ksu-metronidazole-2026-10-02',
+    title:'Metronidazole',
+    instruction:'Give 1 tablet by mouth every 12 hours as needed for chemotherapy-associated diarrhea. Administer with food.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'medication'
+  },
+  prednisoneBleed:{
+    id:'ksu-prednisone-bleed-2026-10-02',
+    title:'Prednisone safety instruction',
+    instruction:'Discontinue prednisone and contact a veterinarian if Roger develops dark, tarry stool or vomit that resembles coffee grounds.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'urgent'
+  }
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
