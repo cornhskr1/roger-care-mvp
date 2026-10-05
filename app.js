@@ -25,6 +25,15 @@ const DEFAULT_VISITS = [
   {id:'chemo-8',label:'Vinblastine #8',date:'2026-11-13',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'restaging',label:'Final restaging',date:null,source:'Owner reported TBD, 10/3/2026'}
 ];
+const DEFAULT_CARE_TEAM = [
+  {id:'ksu',kind:'specialty',role:'Oncology / specialty hospital',name:'K-State Veterinary Health Center',phone:'785-532-5690',address:'1800 Denison Ave, Manhattan, KS 66506-5600',afterHours:'Veterinary Health Center emergency and critical care is available 24/7.',notes:'Small Animal Desk',source:'K-State Veterinary Health Center website, checked 10/4/2026'},
+  {id:'optimum',kind:'primary',role:'Primary veterinary clinic',name:'Optimum Veterinary Medical Group',phone:'402-466-1383',address:'8531 Lexington Ave, Lincoln, NE 68505',afterHours:'Call the clinic for urgent or emergency needs during clinic hours.',notes:'',source:'Optimum Veterinary Medical Group website, checked 10/4/2026'},
+  {id:'emergency',kind:'emergency',role:'Preferred emergency hospital',name:'',phone:'',address:'',afterHours:'',notes:'',source:''}
+];
+function mergeCareTeam(rows=[]){
+  const byId=new Map((Array.isArray(rows)?rows:[]).filter(row=>row?.id).map(row=>[row.id,row]));
+  return DEFAULT_CARE_TEAM.map(base=>({...base,...(byId.get(base.id)||{})}));
+}
 
 const els = {};
 let state = null;
@@ -126,7 +135,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','careTeamQuick','careTeamFields','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -193,6 +202,7 @@ function mergeCanonicalSeed(canonical, saved){
       const prior=savedPlan.visits?.find(v=>v.id===visit.id);
       return savedSchemaVersion>=7&&prior?{...visit,date:prior.date||null,source:prior.source||visit.source}:visit;
     })
+    careTeam:mergeCareTeam(savedPlan.careTeam||canonical.carePlan?.careTeam||[]),
   };
   merged.recordCorrections = migratedSaved.recordCorrections||[];
   merged._savedAt = migratedSaved._savedAt||null;
@@ -228,8 +238,9 @@ function migrateState(input){
   next.medicationAdministrations = Array.isArray(next.medicationAdministrations) ? next.medicationAdministrations : [];
   next.medicationPurchases = Array.isArray(next.medicationPurchases) ? next.medicationPurchases : [];
   next.recordCorrections = Array.isArray(next.recordCorrections) ? next.recordCorrections : [];
-  next.carePlan = next.carePlan||{visits:structuredClone(DEFAULT_VISITS),vetCallInstructions:'',vetCallSource:''};
+  next.carePlan = next.carePlan||{visits:structuredClone(DEFAULT_VISITS),vetCallInstructions:'',vetCallSource:'',careTeam:structuredClone(DEFAULT_CARE_TEAM)};
   if(!Array.isArray(next.carePlan.visits)||!next.carePlan.visits.length)next.carePlan.visits=structuredClone(DEFAULT_VISITS);
+  next.carePlan.careTeam=mergeCareTeam(next.carePlan.careTeam);
 
   const combinedIndex = next.costs.findIndex(c => c.id === 'cost-0918' || c.category === 'treatment_restaging');
   if (combinedIndex >= 0) {
@@ -246,7 +257,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),11);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),12);
   return next;
 }
 
@@ -569,7 +580,7 @@ function renderSharedStatus(){
     if(cloudRevision===0&&!appEntries.length)return toast('Your app journal entries are missing from this browser. Import their backup first.',true);
     const ok=cloudRevision>0?(cloudBaseRecord?await publishCloud(false):await reconcileCloud()):await publishCloud(true);if(ok)renderAll();
   });
-  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#wellbeingForm button[type=submit]']){
+  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
   }
   qa('[data-edit-observation],[data-edit-medication],[data-edit-cost]').forEach(node=>node.disabled=!ownerCanEdit);
@@ -879,6 +890,21 @@ function bindForms(){
     if(!await saveChanges())return; renderAll(); els.medicationDialog.close(); event.currentTarget.reset(); toast(editId?'Medication record corrected':'Medication administration saved');
   });
 
+  q('#careTeamForm').addEventListener('submit',async event=>{
+    event.preventDefault();const fd=new FormData(event.currentTarget);
+    const current=mergeCareTeam(state.carePlan?.careTeam||[]);
+    state.carePlan.careTeam=current.map(contact=>({
+      ...contact,
+      name:String(fd.get(`${contact.id}-name`)||'').trim(),
+      phone:String(fd.get(`${contact.id}-phone`)||'').trim(),
+      address:String(fd.get(`${contact.id}-address`)||'').trim(),
+      afterHours:String(fd.get(`${contact.id}-afterHours`)||'').trim(),
+      notes:String(fd.get(`${contact.id}-notes`)||'').trim(),
+      source:'Owner-entered care team update'
+    }));
+    if(!await saveChanges())return;renderCareTeam();toast('Care team & emergency plan saved');
+  });
+
   q('#carePlanForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const instructions=String(fd.get('vetCallInstructions')||'').trim(),source=String(fd.get('vetCallSource')||'').trim();
@@ -1035,7 +1061,7 @@ function bindRefreshControl(){
 }
 
 function renderAll(){
-  renderProfile(); renderHome(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
+  renderProfile(); renderHome(); renderCareTeam(); renderClinicalReview(); renderUpcomingCare(); renderTreatmentOverlay(); renderJournal(); renderWellbeing(); renderMedications(); renderTimeline(); renderCosts(); renderProfileDetails(); renderDocuments(); renderBackupStatus(); renderSharedStatus();
 }
 function renderWellbeing(){
   const rows=[...(state.qualityOfLife||[])].sort((a,b)=>b.date.localeCompare(a.date));
@@ -1053,6 +1079,24 @@ function renderBackupStatus(){
   if(home)home.innerHTML=`<strong>${current?'Backup up to date':'Backup needed'}</strong><span>${esc(message)}</span><button type="button" data-open-backup>${current?'View backup':'Back up now'}</button>`;
   if(more)more.innerHTML=`<strong>${current?'Backup up to date':'Backup needed'}</strong><p>${esc(message)}</p>${recoveredFromSnapshot?'<p>Local recovery copy was used at startup. Export a complete file now.</p>':''}`;
   q('#confirmBackupSaved').hidden=!backupPreparedAt;
+}
+
+function phoneHref(value){const clean=String(value||'').replace(/[^\d+]/g,'');return clean?`tel:${clean}`:'';}
+function directionsHref(address){return address?`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`:'';}
+function renderCareTeam(){
+  const plan=state.carePlan||{};
+  const team=mergeCareTeam(plan.careTeam||[]);
+  const emergency=team.find(contact=>contact.kind==='emergency');
+  const emergencyReady=Boolean(emergency?.name&&emergency?.phone&&emergency?.address);
+  const contactCard=contact=>{
+    const displayName=contact.name||(contact.kind==='emergency'?'Add emergency hospital':'Provider not set');
+    const phone=phoneHref(contact.phone),directions=directionsHref(contact.address);
+    const actions=[phone?`<a class="care-action ${contact.kind==='emergency'?'primary':''}" href="${esc(phone)}">Call</a>`:'',directions?`<a class="care-action" href="${esc(directions)}" target="_blank" rel="noopener">Directions</a>`:''].filter(Boolean).join('');
+    const meta=[contact.phone,contact.address,contact.afterHours].filter(Boolean).map(esc).join(' · ');
+    return `<article class="care-contact ${contact.kind==='emergency'?'emergency':''}"><div class="care-contact-head"><div><div class="care-contact-role">${esc(contact.role)}</div><div class="care-contact-name">${esc(displayName)}</div></div>${contact.kind==='emergency'&&!contact.name?'<span class="chip warn">not set</span>':''}</div><div class="care-contact-meta">${meta||'Contact details not saved yet.'}</div>${actions?`<div class="care-contact-actions">${actions}</div>`:''}</article>`;
+  };
+  if(els.careTeamQuick)els.careTeamQuick.innerHTML=`<div class="emergency-plan-status ${emergencyReady?'':'incomplete'}"><div><strong>${emergencyReady?'Emergency plan ready':'Emergency plan incomplete'}</strong><span>${emergencyReady?`Preferred emergency hospital: ${esc(emergency.name)}.`:'Choose the emergency hospital you would use after hours and save its phone number and address before you need them.'}</span></div></div><div class="care-team-list">${team.map(contactCard).join('')}</div>`;
+  if(els.careTeamFields)els.careTeamFields.innerHTML=team.map(contact=>`<section class="care-team-edit-card ${contact.kind==='emergency'?'emergency':''}"><div class="care-team-edit-head"><div><div class="care-team-edit-title">${esc(contact.name||(contact.kind==='emergency'?'Emergency hospital':'Provider'))}</div><div class="care-team-edit-role">${esc(contact.role)}</div></div>${contact.kind==='emergency'?`<span class="chip ${emergencyReady?'info':'warn'}">${emergencyReady?'plan ready':'complete this'}</span>`:''}</div><div class="care-team-edit-grid"><label class="field"><span>Provider name</span><input name="${esc(contact.id)}-name" value="${esc(contact.name||'')}" placeholder="${contact.kind==='emergency'?'Emergency hospital name':'Provider name'}"></label><label class="field"><span>Phone</span><input name="${esc(contact.id)}-phone" type="tel" value="${esc(contact.phone||'')}" placeholder="Phone number"></label><label class="field wide"><span>Address</span><input name="${esc(contact.id)}-address" value="${esc(contact.address||'')}" placeholder="Street address, city, state"></label><label class="field wide"><span>After-hours / call instructions</span><input name="${esc(contact.id)}-afterHours" value="${esc(contact.afterHours||'')}" placeholder="Who to call or where to go after hours"></label><label class="field wide"><span>Notes</span><input name="${esc(contact.id)}-notes" value="${esc(contact.notes||'')}" placeholder="Department, doctor, entrance, parking, etc."></label></div></section>`).join('');
 }
 
 function renderUpcomingCare(){
