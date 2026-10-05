@@ -496,6 +496,6 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .nausea-timing-insight p{margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}
 .nausea-timing-insight .timing-now{color:var(--ink);font-weight:800}
 .trend-legend .trend-nausea-window{background:#e9c56d;border-radius:3px;opacity:.55}
-.trend-legend .trend-nausea-observed{background:#c98a2d;border-radius:3px}
+.trend-legend .trend-nausea-observed{background:#c98a2d;border-radius:50%}
 .trend-legend .trend-cerenia{background:#197c91;transform:rotate(45deg);border-radius:2px}
-.trend-legend .trend-today{background:transparent;border-left:2px dashed #9b6a20;border-radius:0;width:8px}
+.trend-legend .trend-today{background:transparent;border-left:3px dashed #9b6a20;border-radius:0;width:8px}
