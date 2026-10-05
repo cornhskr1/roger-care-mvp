@@ -403,15 +403,17 @@ async function publishCloud(firstUpload){
       let changes;
       try{changes=recordPatches(cloudBaseRecord,submitted);}
       catch(_){syncMessage='Could not safely identify changed entries. Your copy is saved on this device.';return false;}
-      if(changes.length>100){syncMessage='Too many changes for one save. Your copy is saved on this device.';return false;}
+      if(changes.length>100){syncNeedsAttention=true;syncMessage='Your changes are safe here, but there are too many pending changes to sync automatically.';return false;}
+      if(changes.some(change=>change.key==='carePlan')){
+        cloudBusy=false;
+        return await reconcileCloud();
+      }
       const {data,error}=await cloud.rpc('roger_apply_patches',{p_changes:changes});
       if(error||!data?.record){
-        if(error?.code==='40001'){
-          cloudBusy=false;
-          return await reconcileCloud();
-        }
         syncNeedsAttention=true;
-        syncMessage='Your changes are safe on this device, but Roger Care could not finish syncing them.';
+        syncMessage=error?.code==='40001'
+          ? 'Another copy changed online. Your changes are safe here and need one reconciliation pass.'
+          : 'Your changes are safe on this device, but Roger Care could not finish syncing them.';
         toast('Sync needs attention. Your changes are still safe on this device.',true);return false;
       }
       rememberCloudBase(data.record);
@@ -599,7 +601,7 @@ function renderSharedStatus(){
   const synced=cloudAvailable&&!unpublishedLocal&&cloudRevision>0;
   const title=syncNeedsAttention?'Sync needs attention':synced?'Saved & synced':'Saved on this device';
   const message=syncNeedsAttention
-    ? 'Your latest changes are safe here. Another copy changed online or the sync could not finish.'
+    ? 'Your latest changes are safe here. Roger Care needs one reconciliation pass before they can be shared.'
     : synced
       ? 'Your latest changes are available on the shared Roger Care record.'
       : cloudAvailable
@@ -655,10 +657,12 @@ function renderSharedStatus(){
     toast(ownerCanEdit?'Connected. New changes will sync automatically.':'Signed in, but owner access is still pending.');
   });
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
-  q('#publishLocal')?.addEventListener('click',async()=>{
-    syncNeedsAttention=false;
-    const ok=cloudRevision>0?(cloudBaseRecord?await publishCloud(false):await reconcileCloud()):await publishCloud(true);
+  q('#publishLocal')?.addEventListener('click',async event=>{
+    const button=event.currentTarget,oldText=button.textContent;
+    button.disabled=true;button.textContent='Syncing…';
+    const ok=cloudRevision>0?await reconcileCloud():await publishCloud(true);
     if(ok)renderAll();
+    else{button.disabled=false;button.textContent=oldText;}
   });
   for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
