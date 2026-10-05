@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=40">
+  <link rel="stylesheet" href="styles.css?v=41">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -184,9 +184,10 @@
           </div>
           <div id="compareCyclePicker" class="compare-cycle-picker" hidden></div>
           <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
+          <div id="nauseaTimingInsight" class="nausea-timing-insight" hidden></div>
           <div id="journalTrend"></div>
           <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
-          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. An ALP result reported as &gt;2,000 is plotted at 2,000 as a lower bound. These patterns show timing, not cause.</p>
+          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. When nausea is shown, shaded bands reflect Roger’s own recorded post-chemo timing; teal diamonds mark recorded Cerenia doses. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. An ALP result reported as &gt;2,000 is plotted at 2,000 as a lower bound. These patterns show timing, not cause.</p>
         </section>
 
         <section class="card">
@@ -580,6 +581,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=57" defer></script>
+  <script src="app.js?v=58" defer></script>
 </body>
 </html>
