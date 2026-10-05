@@ -89,6 +89,32 @@ const VOMIT_FLAG_LABELS={
   bright_red_blood:'bright-red blood in vomit',
   coffee_ground_like:'dark material resembling coffee grounds'
 };
+const VET_GUIDANCE_ON_FILE={
+  cerenia:{
+    id:'ksu-cerenia-2026-10-02',
+    title:'Cerenia / maropitant',
+    instruction:'Give 1 tablet by mouth every 24 hours as needed for chemotherapy-associated nausea or vomiting.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'medication'
+  },
+  metronidazole:{
+    id:'ksu-metronidazole-2026-10-02',
+    title:'Metronidazole',
+    instruction:'Give 1 tablet by mouth every 12 hours as needed for chemotherapy-associated diarrhea. Administer with food.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'medication'
+  },
+  prednisoneBleed:{
+    id:'ksu-prednisone-bleed-2026-10-02',
+    title:'Prednisone safety instruction',
+    instruction:'Discontinue prednisone and contact a veterinarian if Roger develops dark, tarry stool or vomit that resembles coffee grounds.',
+    source:'K-State VHC Oncology discharge',
+    sourceDate:'2026-10-02',
+    kind:'urgent'
+  }
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -782,6 +808,7 @@ function renderSafetyPrompt(){
   const vomiting=Number(form.elements.namedItem('vomiting')?.value||0);
   if(details)details.hidden=!(vomiting>0||qa('input[name="vomitFlags"]:checked').length);
   if(vomiting<=0){qa('input[name="vomitFlags"]').forEach(box=>{box.checked=false;});if(q('#vomitNoneObserved'))q('#vomitNoneObserved').checked=false;}
+  renderJournalVetGuidance();
   const signal=journalSafetySignals();
   if(!signal.tier){root.hidden=true;root.className='safety-prompt';root.innerHTML='';return;}
   const urgent=signal.tier==='urgent';
@@ -1760,7 +1787,72 @@ function renderNauseaTimingInsight(){
   const latest=pattern.latestCurrent
     ? `Latest nausea-associated observation: ${fmtDate(pattern.latestCurrent.date)} (day +${pattern.latestCurrentOffset}) · ${nauseaObservationLabel(pattern.latestCurrent)}.`
     : `No nausea-associated observation is recorded yet after chemo #${pattern.latest.number}.`;
-  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded. This is a timing aid from Roger's history, not a recommendation to give medication; follow his veterinary instructions for Cerenia use.</p>`;
+  const guidance=pattern.latestCurrent?guidanceForObservation(pattern.latestCurrent):[];
+  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded.</p>${guidanceCardsHtml(guidance)}`;
+}
+function observationHasDiarrhea(o){
+  const stools=(o?.stoolEvents||[]).filter(row=>row.status==='observed');
+  if(stools.some(stoolIsLoose))return true;
+  const text=[o?.stool,o?.gi,o?.notes,o?.rawEntry].filter(Boolean).join(' ');
+  return /diarrhea|watery stool|liquid stool/i.test(text);
+}
+function observationHasKsuBleedWarning(o){
+  return observationHasStoolFlag(o,'black_tarry')||
+    (o?.vomitFlags||[]).includes('coffee_ground_like')||
+    /dark[, ]+tarry stool|coffee[- ]?ground/i.test([o?.stool,o?.gi,o?.notes,o?.rawEntry].filter(Boolean).join(' '));
+}
+function guidanceForObservation(o){
+  if(!o)return [];
+  const items=[];
+  if(observationHasKsuBleedWarning(o)){
+    items.push({...VET_GUIDANCE_ON_FILE.prednisoneBleed,reason:'You recorded a black/tarry stool or coffee-ground-like vomit finding.'});
+    return items;
+  }
+  if(isNauseaAssociatedObservation(o)||Number(o.vomiting)>0){
+    const detail=isNauseaAssociatedObservation(o)?nauseaObservationLabel(o):`${Number(o.vomiting)} vomiting episode${Number(o.vomiting)===1?'':'s'} recorded`;
+    items.push({...VET_GUIDANCE_ON_FILE.cerenia,reason:`Matched observation: ${detail}.`});
+  }
+  if(observationHasDiarrhea(o)){
+    items.push({...VET_GUIDANCE_ON_FILE.metronidazole,reason:'Matched observation: diarrhea / loose or watery stool.'});
+  }
+  return items;
+}
+function guidanceForObservations(observations=[]){
+  const map=new Map();
+  for(const observation of observations){
+    for(const item of guidanceForObservation(observation)){
+      if(!map.has(item.id))map.set(item.id,item);
+    }
+  }
+  return [...map.values()];
+}
+function guidanceCardsHtml(items=[]){
+  if(!items.length)return '';
+  return `<section class="vet-guidance-stack">${items.map(item=>`<article class="vet-guidance-card ${item.kind==='urgent'?'urgent':''}"><div class="section-kicker">VETERINARY GUIDANCE ON FILE</div><strong>${esc(item.title)}</strong><p class="vet-guidance-instruction">${esc(item.instruction)}</p><p class="vet-guidance-reason">${esc(item.reason||'Shown because it matches the observation you recorded.')}</p><div class="vet-guidance-source">${esc(item.source)} · ${fmtDate(item.sourceDate)}</div></article>`).join('')}<p class="vet-guidance-footnote">Roger Care is matching your observation to veterinary instructions already on file. It is not creating a new medication or treatment recommendation.</p></section>`;
+}
+function journalGuidanceDraft(){
+  const form=q('#journalForm');
+  if(!form)return null;
+  const nauseaSigns=qa('input[name="nauseaSigns"]:checked').map(box=>box.value);
+  const nauseaOther=String(form.elements.namedItem('nauseaOther')?.value||'').trim();
+  const vomitingRaw=form.elements.namedItem('vomiting')?.value;
+  return {
+    nausea:nauseaSigns.length||nauseaOther?1:0,
+    nauseaSigns,
+    nauseaOther,
+    vomiting:vomitingRaw===''||vomitingRaw==null?null:Number(vomitingRaw),
+    vomitFlags:qa('input[name="vomitFlags"]:checked').map(box=>box.value),
+    stoolEvents:collectStoolRows(),
+    gi:String(form.elements.namedItem('gi')?.value||''),
+    notes:''
+  };
+}
+function renderJournalVetGuidance(){
+  const root=q('#journalVetGuidance');
+  if(!root)return;
+  const items=guidanceForObservation(journalGuidanceDraft());
+  root.hidden=!items.length;
+  root.innerHTML=items.length?guidanceCardsHtml(items):'';
 }
 function comparisonRange(rows){
   if(!rows.length)return null;
@@ -1809,7 +1901,8 @@ function renderComparisonDetail(){
   const notes=day.observations.map(o=>`<div class="compare-note"><strong>${o.rawEntry?'Original owner journal':'App entry'}:</strong> ${esc(o.notes||'No further note')}${o.recordClarification?`<br><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}`:''}</div>`).join('');
   const labs=day.labs.map(l=>`<div class="compare-note">${esc(l.metric)}: ${esc(l.displayValue||l.value)} ${esc(l.unit)} · ${esc(l.source)}</div>`).join('');
   const events=comparisonEventsForDate(date,day);
-  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a],day))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b],day))}</strong></span>`:''}</div>${notes}${day.qualityOfLife.map(x=>`<div class="compare-note">Weekly wellbeing: ${x.score}/10${x.notes?' · '+esc(x.notes):''} · owner check-in</div>`).join('')}${labs}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}${events.length?`<div class="compare-note"><strong>Other events:</strong> ${esc(events.join(' · '))}</div>`:''}`;
+  const guidance=guidanceForObservations(day.observations);
+  target.innerHTML=`<strong>${fmtDate(date)}</strong><div class="compare-detail-values"><span>${esc(COMPARE_METRICS[a].label)}: <strong>${esc(comparisonValue(a,day.values[a],day))}</strong></span>${b!=='none'?`<span>${esc(COMPARE_METRICS[b].label)}: <strong>${esc(comparisonValue(b,day.values[b],day))}</strong></span>`:''}</div>${notes}${day.qualityOfLife.map(x=>`<div class="compare-note">Weekly wellbeing: ${x.score}/10${x.notes?' · '+esc(x.notes):''} · owner check-in</div>`).join('')}${labs}${day.treatments.map(t=>`<div class="compare-note">Vinblastine #${t.number} · ${esc(t.source)}</div>`).join('')}${events.length?`<div class="compare-note"><strong>Other events:</strong> ${esc(events.join(' · '))}</div>`:''}${guidanceCardsHtml(guidance)}`;
 }
 function renderJournalTrend(){
   if(!els.journalTrend)return;
