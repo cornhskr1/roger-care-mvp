@@ -1823,8 +1823,13 @@ function renderJournalTrend(){
   renderNauseaTimingInsight();
   q('#compareCyclePicker').innerHTML=treatments.map(t=>`<button class="compare-cycle ${comparison.cycles.has(t.number)?'active':''}" type="button" data-compare-cycle="${t.number}" aria-pressed="${comparison.cycles.has(t.number)}">#${t.number}<small>${fmtDate(t.date).replace(', 2026','')}</small></button>`).join('');
   if(comparison.view==='aligned'){renderAlignedComparison(treatments);return;}
-  const rows=comparisonRows(),range=comparisonRange(rows);
+  const rows=comparisonRows();let range=comparisonRange(rows);
   if(!range||range.error){els.journalTrend.innerHTML=`<p class="empty-state">${range?.error||'Add a dated journal entry to start comparing.'}</p>`;q('#compareDayDetail').innerHTML='';return;}
+  const nauseaRequested=comparison.primary==='nausea'||comparison.secondary==='nausea'||comparison.primary==='cerenia'||comparison.secondary==='cerenia';
+  if(nauseaRequested&&comparison.range!=='custom'&&todayIso()>range.to){
+    const allowToday=comparison.range!=='cycles'||[...(state.treatments||[])].filter(t=>comparison.cycles.has(t.number)).some(t=>inCycleWindow(todayIso(),cycleWindowFor(t,[...(state.treatments||[])].sort((a,b)=>a.number-b.number))));
+    if(allowToday)range={...range,to:todayIso()};
+  }
   const visible=rows.filter(r=>range.contains(r.date));
   if(!visible.length){els.journalTrend.innerHTML='<p class="empty-state">No recorded values in this range.</p>';q('#compareDayDetail').innerHTML='';return;}
   const keys=[comparison.primary,...(comparison.secondary==='none'?[]:[comparison.secondary])];
