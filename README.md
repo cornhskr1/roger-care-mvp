@@ -87,3 +87,7 @@ https://cornhskr1.github.io/roger-care-mvp/
 - New purchases can be entered through Costs → + Cost → Medication. Choose an existing bill when its total already includes that purchase.
 - Purchase quantities and line totals were reconciled from K-State invoices 149569 (8/4), 150910 (8/14), 154654 (9/11), and 157866 (10/2). Cerenia: 23 × 60 mg tablets for $237.64, with 11 tablets documented given through 10/2.
 - Canonical refresh preserves owner-entered administrations and purchases.
+
+## Care Snapshot workflow
+
+The Care Snapshot can now be generated for **Since last treatment**, **Since last visit**, **Last 7 days**, or a **Custom** date range. The selected period drives the on-screen preview, PDF, print view, and phone share action so the owner can use the same concise update before an appointment, during a call, or when sending information to the care team. Range selection is local UI state only and does not alter Roger's synchronized clinical record.
