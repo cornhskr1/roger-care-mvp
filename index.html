@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=36">
+  <link rel="stylesheet" href="styles.css?v=37">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -329,14 +329,25 @@
           <div class="card-head">
             <div>
               <div class="section-kicker">CARE SNAPSHOT</div>
-              <h2>How has Roger been doing?</h2>
+              <h2>Tell my care team what happened</h2>
             </div>
           </div>
-          <p class="body-copy">Starts with a natural owner-style summary of what has mattered at home since Roger's latest treatment, followed by structured detail and the clinical record.</p>
+          <p class="body-copy">Choose the period you want to talk about. Roger Care will turn the observations, medications, labs, weight, and saved questions from that period into a concise update.</p>
+          <div class="snapshot-range-picker" aria-label="Care Snapshot time period">
+            <button type="button" class="snapshot-range-button active" data-snapshot-range="treatment">Since last treatment</button>
+            <button type="button" class="snapshot-range-button" data-snapshot-range="visit">Since last visit</button>
+            <button type="button" class="snapshot-range-button" data-snapshot-range="7days">Last 7 days</button>
+            <button type="button" class="snapshot-range-button" data-snapshot-range="custom">Custom</button>
+          </div>
+          <div id="careSnapshotCustomRange" class="snapshot-custom-range" hidden>
+            <label class="field"><span>From</span><input id="careSnapshotFrom" type="date"></label>
+            <label class="field"><span>Through</span><input id="careSnapshotTo" type="date"></label>
+          </div>
           <div id="careSnapshotPreview" class="care-snapshot-preview"></div>
-          <div class="button-stack">
-            <button id="downloadCareSummary" class="primary-button" type="button">Download Care Snapshot (PDF)</button>
-            <button id="printCareSummary" class="secondary-button" type="button">Print complete record</button>
+          <div class="snapshot-share-actions">
+            <button id="shareCareSummary" class="primary-button" type="button">Share Care Snapshot</button>
+            <button id="downloadCareSummary" class="secondary-button" type="button">Download PDF</button>
+            <button id="printCareSummary" class="text-button" type="button">Print complete record</button>
           </div>
         </section>
 
@@ -560,6 +571,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=49" defer></script>
+  <script src="app.js?v=50" defer></script>
 </body>
 </html>
