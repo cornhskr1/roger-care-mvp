@@ -1461,7 +1461,6 @@ function observationChips(o){
 }
 
 const COMPARE_METRICS={
-const COMPARE_METRICS={
   energy:{label:'Energy level',min:0,max:4,ticks:[0,1,2,3,4],names:['Very low','Low','Slightly reduced','Normal','High'],unit:'',kind:'owner'},
   nausea:{label:'Nausea observations',min:0,max:3,ticks:[0,1,2,3],names:['None observed','Behaviors observed','Legacy moderate','Legacy severe'],unit:'',kind:'owner'},
   stoolCount:{label:'Bowel movements',min:0,ticks:[0,2,4,6],unit:'',kind:'owner'},
