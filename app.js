@@ -137,7 +137,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','careSnapshotPreview','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','careSnapshotPreview','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','nauseaTimingInsight','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -1666,7 +1666,10 @@ function comparisonRows(){
     const scores=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy.map(s=>s.score)];
     const energy=entries.map(o=>energyLevel(o.energy)).filter(v=>v!==null);
     const rogerThings=entries.map(o=>rogerThingsLevel(o.rogerThings)).filter(v=>v!==null);
-    const nausea=entries.map(o=>o.nausea).filter(v=>v!==null&&v!==undefined&&v!=='').map(Number);
+    const nausea=entries.map(o=>{
+      if(o.nausea!==null&&o.nausea!==undefined&&o.nausea!=='')return Number(o.nausea);
+      return isNauseaAssociatedObservation(o)?1:null;
+    }).filter(v=>v!==null&&Number.isFinite(v));
     const labFor=metric=>{const lab=d.labs.filter(l=>l.metric===metric).at(-1);return lab?Number(lab.value):null;};
     const ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     const treatmentWeight=d.treatments.map(t=>Number(t.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
@@ -1684,6 +1687,80 @@ function comparisonRows(){
       weight:ownerWeight??treatmentWeight??null
     }};
   });
+}
+function isNauseaAssociatedObservation(o){
+  if(!o)return false;
+  if(Boolean(o.nauseaNoneObserved)&&!Number(o.nausea)&&!(o.nauseaSigns||[]).length&&!String(o.nauseaOther||'').trim())return false;
+  if(Number(o.nausea)>0)return true;
+  if(Array.isArray(o.nauseaSigns)&&o.nauseaSigns.length)return true;
+  if(String(o.nauseaOther||'').trim())return true;
+  const text=[o.gi,o.notes,o.rawEntry].filter(Boolean).join(' ').toLowerCase();
+  if(/\bno nausea\b|no nausea signs/.test(text))return false;
+  return /nausea|lip lick|repeated swallow|drool|borborygmi|gurgling|stomach noise/.test(text);
+}
+function nauseaObservationLabel(o){
+  const labels=nauseaLabels(o);
+  if(labels.length)return labels.join(', ');
+  const text=[o.gi,o.nauseaOther].filter(Boolean).join(' · ');
+  if(text)return text.replace(/\s+/g,' ').trim();
+  return 'nausea-associated behavior';
+}
+function nauseaTimingPattern(){
+  const treatments=[...(state.treatments||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!treatments.length)return null;
+  const latest=treatments.at(-1);
+  const prior=treatments.slice(0,-1);
+  const offsets=[];
+  const cycleOffsets=[];
+  for(let i=0;i<prior.length;i++){
+    const treatment=prior[i],next=treatments[i+1];
+    const endExclusive=next?.date||addDays(treatment.date,8);
+    const seen=new Set();
+    for(const o of state.observations||[]){
+      if(o.date<treatment.date||o.date>=endExclusive||!isNauseaAssociatedObservation(o))continue;
+      const offset=daysBetween(treatment.date,o.date);
+      if(offset<0||offset>7)continue;
+      seen.add(offset);offsets.push(offset);
+    }
+    if(seen.size)cycleOffsets.push({number:treatment.number,offsets:[...seen].sort((a,b)=>a-b)});
+  }
+  if(!offsets.length)return {latest,cycleOffsets,eventCount:0};
+  const sorted=[...offsets].sort((a,b)=>a-b);
+  const qIndex=q=>Math.max(0,Math.min(sorted.length-1,Math.round((sorted.length-1)*q)));
+  const observedStart=sorted[0],observedEnd=sorted.at(-1);
+  const coreStart=sorted[qIndex(.25)],coreEnd=sorted[qIndex(.75)];
+  const current=(state.observations||[])
+    .filter(o=>o.date>=latest.date&&isNauseaAssociatedObservation(o))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const latestCurrent=current.at(-1)||null;
+  const currentCerenia=(state.medicationAdministrations||[])
+    .filter(a=>a.medicationId==='med-cerenia'&&a.status==='given'&&a.date>=latest.date)
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  return {
+    latest,cycleOffsets,eventCount:offsets.length,cycleCount:cycleOffsets.length,
+    observedStart,observedEnd,coreStart,coreEnd,
+    todayOffset:daysBetween(latest.date,todayIso()),
+    latestCurrent,
+    latestCurrentOffset:latestCurrent?daysBetween(latest.date,latestCurrent.date):null,
+    currentCerenia
+  };
+}
+function renderNauseaTimingInsight(){
+  const root=els.nauseaTimingInsight;
+  if(!root)return;
+  const active=comparison.primary==='nausea'||comparison.secondary==='nausea'||comparison.primary==='cerenia'||comparison.secondary==='cerenia';
+  if(!active){root.hidden=true;root.innerHTML='';return;}
+  const pattern=nauseaTimingPattern();
+  root.hidden=false;
+  if(!pattern?.eventCount){
+    root.innerHTML='<div class="section-kicker">NAUSEA TIMING</div><strong>Roger does not have enough prior post-chemo nausea observations yet to establish a personal timing pattern.</strong><p>The chart will build this from his own recorded observations over time.</p>';
+    return;
+  }
+  const today=pattern.todayOffset>=0?`Today is day +${pattern.todayOffset} after chemo #${pattern.latest.number}.`:'';
+  const latest=pattern.latestCurrent
+    ? `Latest nausea-associated observation: ${fmtDate(pattern.latestCurrent.date)} (day +${pattern.latestCurrentOffset}) · ${nauseaObservationLabel(pattern.latestCurrent)}.`
+    : `No nausea-associated observation is recorded yet after chemo #${pattern.latest.number}.`;
+  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded. This is a timing aid from Roger's history, not a recommendation to give medication; follow his veterinary instructions for Cerenia use.</p>`;
 }
 function comparisonRange(rows){
   if(!rows.length)return null;
@@ -1743,6 +1820,7 @@ function renderJournalTrend(){
   q('.compare-range').hidden=comparison.view==='aligned';
   q('#compareCyclePicker').hidden=comparison.view!=='aligned'&&comparison.range!=='cycles';
   q('#compareCustomDates').hidden=comparison.view==='aligned'||comparison.range!=='custom';
+  renderNauseaTimingInsight();
   q('#compareCyclePicker').innerHTML=treatments.map(t=>`<button class="compare-cycle ${comparison.cycles.has(t.number)?'active':''}" type="button" data-compare-cycle="${t.number}" aria-pressed="${comparison.cycles.has(t.number)}">#${t.number}<small>${fmtDate(t.date).replace(', 2026','')}</small></button>`).join('');
   if(comparison.view==='aligned'){renderAlignedComparison(treatments);return;}
   const rows=comparisonRows(),range=comparisonRange(rows);
