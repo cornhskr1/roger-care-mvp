@@ -2338,28 +2338,31 @@ function buildCareSummaryPdf(){
     }
   };
   const heading=value=>{y-=7;if(y<75)page();line(value,13,true,0,19);};
-  const p=state.profile,neut=state.labs.filter(l=>l.metric==='Neutrophils').sort((a,b)=>a.date.localeCompare(b.date));
-  const nadir=neut.reduce((a,b)=>!a||Number(b.value)<Number(a.value)?b:a,null),latest=neut.at(-1),pred=medicationStats('med-prednisone');
-  line(`${p.fullName||p.name} | Veterinary handoff`,18,true,0,27);
+  const p=state.profile,snapshot=careSnapshotData(),plan=state.carePlan||{visits:[]};
+  const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} - ${fmtDate(snapshot.end)}`;
+  line(`${p.fullName||p.name} | CARE SNAPSHOT`,18,true,0,27);
   wrap(`KSU ${p.patientIds?.ksu||'unrecorded'} | Optimum ${p.patientIds?.optimum||'unrecorded'} | ${p.breed} | Prepared ${new Date().toLocaleDateString('en-US')}`,9);
-  heading('Visit snapshot');
+  heading(`How has ${p.name} been doing since chemo #${snapshot.treatment.number}?`);
+  wrap(`${range} | ${snapshot.rows.length} day(s) with owner observations.`,9);
   wrap(`Diagnosis: ${p.diagnosis}. Status: ${p.currentStatus}.`);
-  wrap(`Neutrophils: lowest ${nadir?`${nadir.displayValue||nadir.value} ${nadir.unit} on ${fmtDate(nadir.date)}`:'not recorded'}; latest ${latest?`${latest.displayValue||latest.value} ${latest.unit} on ${fmtDate(latest.date)}`:'not recorded'}.`);
-  wrap(`Prednisone: prescribed 10 mg every 24 hours from Oct 2; owner reports daily administration through ${pred.last?fmtDate(pred.last):'date unrecorded'}. Later doses are not inferred.`);
-  wrap('Amoxicillin: owner reports seven days after the Aug 20 count of 250/uL; dose and frequency unrecorded.');
-  const plan=state.carePlan||{visits:[]};
+  heading('Home observations');
+  wrap(`Appetite: ${snapshot.appetiteText}`,9,false,8);
+  wrap(`Energy: ${snapshot.energyText}`,9,false,8);
+  wrap(`Nausea-associated observations: ${snapshot.nauseaText}`,9,false,8);
+  wrap(`GI / stool: ${snapshot.stoolText}`,9,false,8);
+  wrap(`Vomiting: ${snapshot.vomitingText}`,9,false,8);
+  wrap(`Weight: ${snapshot.weightText}`,9,false,8);
+  heading('Treatment & medication context');
+  wrap(snapshot.clinicalText,9,false,8);
+  wrap(snapshot.medicationText,9,false,8);
+  heading('Questions for care team');
+  if(snapshot.questions.length)snapshot.questions.forEach((question,index)=>wrap(`${index+1}. ${question.text}${question.source?.date?` (from ${fmtDate(question.source.date)} journal entry)`:''}`,9,false,8));
+  else wrap('No open owner questions recorded.',9,false,8);
   heading('Upcoming care');
   for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
-  wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`);
-  const openQuestions=(plan.questions||[]).filter(question=>question.status!=='resolved');
-  heading('Questions for care team');
-  if(openQuestions.length)openQuestions.forEach((question,index)=>wrap(`${index+1}. ${question.text}`,9,false,8));
-  else wrap('No open owner questions recorded.',9,false,8);
-  heading('Recent owner notes');
-  const days=[...new Set(state.observations.map(o=>o.date))].sort().slice(-3).reverse();
-  for(const date of days){const entries=state.observations.filter(o=>o.date===date);for(const o of entries){const note=String(o.notes||'No note');wrap(`${fmtDate(date)} [${o.rawEntry?'original journal':'app entry'}]: ${note.length>150?note.slice(0,147)+'...':note}`,9,false,8);}}
-  line('Owner observations are labeled separately from clinical records.',9,false,0,15);
-  page();line('Treatment history | concise review',16,true,0,25);
+  wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`,9,false,8);
+  line('Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This snapshot supports discussion with the veterinary team; it does not diagnose cause.',9,false,0,15);
+  page();line('Clinical history | concise review',16,true,0,25);
   const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),rows=comparisonRows();
   for(const t of treatments){
     const window=cycleWindowFor(t,treatments);
@@ -2388,7 +2391,7 @@ function buildCareSummaryPdf(){
   pages.forEach((lines,index)=>{
     const pageId=objects.length,contentId=pageId+1;kids.push(`${pageId} 0 R`);
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);
-    const commands=lines.map(item=>`BT /${item.bold?'F2':'F1'} ${item.size} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${clean(item.text)}) Tj ET`).join('\n')+`\nBT /F1 8 Tf 1 0 0 1 45 30 Tm (Roger Oberle | ${index+1} / ${pages.length}) Tj ET`;
+    const commands=lines.map(item=>`BT /${item.bold?'F2':'F1'} ${item.size} Tf 1 0 0 1 ${item.x} ${item.y} Tm (${clean(item.text)}) Tj ET`).join('\n')+`\nBT /F1 8 Tf 1 0 0 1 45 30 Tm (Roger Oberle | Care Snapshot | ${index+1} / ${pages.length}) Tj ET`;
     objects.push(`<< /Length ${commands.length} >>\nstream\n${commands}\nendstream`);
   });
   objects[2]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
@@ -2400,7 +2403,7 @@ function buildCareSummaryPdf(){
   return pdf;
 }
 function buildCareSummaryHtml(){
-  const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]};
+  const p=state.profile,t=latestTreatment(),plan=state.carePlan||{visits:[]},snapshot=careSnapshotData();
   const rows=state.treatments.map(x=>`<tr><td>${fmtDate(x.date)}</td><td>#${x.number}</td><td>${x.doseMg} mg</td><td>${x.doseMgM2}</td><td>${x.weightLb} lb</td><td>${esc(x.doseReason)}</td></tr>`).join('');
   const labs=state.labs.filter(x=>['Neutrophils','Hematocrit','Platelets','ALT','ALP'].includes(x.metric)).sort((a,b)=>a.date.localeCompare(b.date)).map(x=>`<tr><td>${fmtDate(x.date)}</td><td>${esc(x.metric)}</td><td>${esc(x.displayValue||x.value)} ${esc(x.unit)}</td><td>${esc(x.context)}</td><td>${esc(x.source)}</td></tr>`).join('');
   const obs=[...state.observations].sort((a,b)=>a.date.localeCompare(b.date));
@@ -2421,14 +2424,14 @@ function buildCareSummaryHtml(){
     const changed=Object.entries(c.after||{}).filter(([key,value])=>key!=='id'&&JSON.stringify(value)!==JSON.stringify(c.before?.[key])).map(([key,value])=>`${key}: ${JSON.stringify(c.before?.[key]??'')} → ${JSON.stringify(value)}`).join('; ');
     return `<li>${esc(c.at?.slice(0,10)||'Date unknown')} · ${esc(c.collection)} · ${esc(c.id)}: ${esc(changed||'No field differences')}</li>`;
   }).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} vet handoff</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
-  <section class="snapshot"><h1>${esc(p.fullName||p.name)} · vet handoff</h1><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
-  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}. Source-backed restaging on 9/18 found no metastatic involvement in the supplied K-State record.</p>
-  <div class="grid"><div><h2>Key bloodwork</h2><p><strong>Neutrophil nadir:</strong> ${nadir?`${esc(nadir.displayValue||nadir.value)} ${esc(nadir.unit)} on ${fmtDate(nadir.date)}`:'Not recorded'} (250/µL on 8/20).<br><strong>Latest:</strong> ${latest?`${esc(latest.displayValue||latest.value)} ${esc(latest.unit)} on ${fmtDate(latest.date)}`:'Not recorded'}.</p><p>Chemo #3 was delayed one week after the 9/3 count of 1.79 K/µL.</p></div>
-  <div><h2>Medication now / recently</h2><p><strong>Prednisone:</strong> prescribed 10 mg every 24 hours from 10/2; owner-confirmed daily administration through ${pred.last?fmtDate(pred.last):'date unknown'} (${pred.given.length} days total). Do not infer subsequent doses.</p><p><strong>Amoxicillin:</strong> seven-day owner-reported course 8/20–8/26 after neutrophils 250/µL; dose and frequency not recorded.</p><p><strong>Metronidazole:</strong> ${esc(medicationEvents||'No administrations logged')}.</p></div></div>
-  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} Care Snapshot</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.snapshot-item{border:1px solid #ddd;border-radius:9px;padding:10px}.snapshot-item strong{display:block;margin-bottom:4px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
+  <section class="snapshot"><h1>${esc(p.fullName||p.name)} · Care Snapshot</h1><p><strong>Since chemo #${snapshot.treatment.number}:</strong> ${fmtDate(snapshot.start)}${snapshot.end!==snapshot.start?`–${fmtDate(snapshot.end)}`:''} · Prepared ${new Date().toLocaleDateString('en-US')}</p><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
+  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}</p>
+  <h2>How has ${esc(p.name)} been doing?</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
+  <h2>Treatment & medication context</h2><p>${esc(snapshot.clinicalText)}</p><p>${esc(snapshot.medicationText)}</p>
   <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
-  <h2>Recent owner observations</h2><ul>${recentObs}</ul><p class="small">Owner observations and medication use are owner reported. Dates without a confirmed visit or dose remain pending; this handoff is a record for discussion with the care team.</p></section>
+  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  <p class="small">Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This Care Snapshot supports discussion with the veterinary team and does not diagnose cause.</p></section>
   <h2>Medication courses</h2><table><thead><tr><th>Medication</th><th>Reported dates</th><th>Dose / frequency</th><th>Basis</th></tr></thead><tbody>${courseRows}</tbody></table>
   <h2>PRN / visit medications</h2><table><thead><tr><th>Medication</th><th>Logged use</th><th>Last given</th><th>Prescription on file</th></tr></thead><tbody>${prnRows}</tbody></table>
   <h2>Clinical course</h2><table><thead><tr><th>Date</th><th>Treatment</th><th>Dose</th><th>mg/m²</th><th>Weight</th><th>Dose context</th></tr></thead><tbody>${rows}</tbody></table>
