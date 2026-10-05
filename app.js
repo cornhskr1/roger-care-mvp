@@ -268,7 +268,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),14);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),15);
   return next;
 }
 
