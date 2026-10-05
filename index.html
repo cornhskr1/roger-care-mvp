@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=32">
+  <link rel="stylesheet" href="styles.css?v=33">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -435,6 +435,16 @@
         <p id="nauseaLegacyHint" class="field-help nausea-legacy" hidden></p>
       </fieldset>
       <label class="field"><span>Vomiting</span><input name="vomiting" type="number" inputmode="numeric" min="0" max="20" placeholder="Not logged"></label>
+      <fieldset class="vomit-fieldset">
+        <legend>If Roger vomited, what did you actually see?</legend>
+        <p class="field-help">Only choose findings you directly observed. These options are here because some appearances deserve faster veterinary attention.</p>
+        <div class="vomit-choice-grid">
+          <label class="vomit-choice"><input type="checkbox" name="vomitFlags" value="bright_red_blood"><span><strong>Bright-red blood</strong><small>Fresh red blood visible in the vomit.</small></span></label>
+          <label class="vomit-choice"><input type="checkbox" name="vomitFlags" value="coffee_ground_like"><span><strong>Dark material like coffee grounds</strong><small>Dark brown/black granular material resembling wet coffee grounds.</small></span></label>
+        </div>
+        <label class="vomit-choice vomit-none"><input id="vomitNoneObserved" type="checkbox" name="vomitNoneObserved" value="1"><span><strong>Neither of these observed</strong><small>Use this only when you specifically checked.</small></span></label>
+      </fieldset>
+      <div id="safetyPrompt" class="safety-prompt" aria-live="assertive" hidden></div>
       <fieldset class="stool-fieldset"><legend>Bowel movements</legend><p class="field-help">Add one row for each stool, including extra trips. Leave a score blank if you could not assess it.</p><div id="stoolRows" class="stool-rows"></div><button id="addStoolRow" class="secondary-button" type="button">+ Another bowel movement</button></fieldset>
       <label class="field"><span>Pain / discomfort</span><select name="pain"><option value="">Not logged</option><option value="0">None noticed</option><option value="1">Mild</option><option value="2">Moderate</option><option value="3">Severe</option></select></label>
       <div class="form-grid two">
@@ -533,6 +543,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=45" defer></script>
+  <script src="app.js?v=46" defer></script>
 </body>
 </html>
