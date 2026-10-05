@@ -62,6 +62,24 @@ const ENERGY_LEVEL_LABELS={
   low:'clearly below normal',
   'very low':'very low'
 };
+const STOOL_CONSISTENCY_LABELS={
+  hard_dry:'hard / dry',
+  formed_firm:'formed / firm',
+  soft_formed:'soft but still formed',
+  very_soft:'very soft / loses shape',
+  unformed:'unformed / mushy',
+  watery:'watery / liquid'
+};
+const STOOL_FLAG_LABELS={
+  bright_red_blood:'bright-red blood',
+  black_tarry:'black / tarry appearance',
+  mucus:'mucus',
+  straining:'straining',
+  urgency:'urgency',
+  unusual_color:'unusual color',
+  large_volume:'larger volume than usual',
+  small_frequent:'small / frequent stools'
+};
 let comparisonCyclesReady=false;
 let journalShowAll = false;
 let recoveredFromSnapshot = false;
@@ -228,7 +246,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),10);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),11);
   return next;
 }
 
@@ -695,11 +713,16 @@ function todayAppEntry(){
 
 function addStoolRow(row={}){
   const wrap=document.createElement('div');wrap.className='stool-input-row';
-  wrap.innerHTML=`<div class="stool-input-main"><label class="field"><span>When</span><select data-stool-period><option>AM</option><option>PM</option><option>Before bed</option><option>Overnight</option><option>Other</option></select></label><label class="field"><span>Time (optional)</span><input data-stool-time type="time"></label><label class="field"><span>Score (1–8)</span><input data-stool-score type="number" min="1" max="8" step="1" inputmode="numeric"></label></div><div class="stool-input-detail"><label class="field"><span>Notes (blood, urgency, volume…)</span><input data-stool-notes placeholder="Optional detail"></label><label class="field stool-status"><span>Status</span><select data-stool-status><option value="observed">Observed</option><option value="not observed">Not observed</option><option value="none">No stool</option></select></label><button class="text-button" type="button" data-remove-stool aria-label="Remove bowel movement">Remove</button></div>`;
+  const consistencyOptions=Object.entries(STOOL_CONSISTENCY_LABELS).map(([value,label])=>`<option value="${value}">${label}</option>`).join('');
+  const flagChoices=Object.entries(STOOL_FLAG_LABELS).map(([value,label])=>`<label class="stool-flag-choice"><input type="checkbox" data-stool-flag value="${value}"><span>${label}</span></label>`).join('');
+  wrap.innerHTML=`<div class="stool-input-main"><label class="field"><span>When</span><select data-stool-period><option>AM</option><option>PM</option><option>Before bed</option><option>Overnight</option><option>Other</option></select></label><label class="field"><span>Time (optional)</span><input data-stool-time type="time"></label><label class="field"><span>Roger's existing score (1–8, optional)</span><input data-stool-score type="number" min="1" max="8" step="1" inputmode="numeric"></label></div><label class="field stool-consistency-field"><span>What did the consistency look like?</span><select data-stool-consistency><option value="">Not logged</option>${consistencyOptions}</select></label><div class="stool-consistency-help">Describe what you saw. The existing 1–8 score stays available so Roger's historical trend remains comparable.</div><div class="stool-flags"><div class="stool-flags-label">Anything else you observed?</div><div class="stool-flag-grid">${flagChoices}</div></div><div class="stool-input-detail"><label class="field"><span>Other detail</span><input data-stool-notes placeholder="Color, amount, timing, anything unusual…"></label><label class="field stool-status"><span>Status</span><select data-stool-status><option value="observed">Observed</option><option value="not observed">Not observed</option><option value="none">No stool</option></select></label><button class="text-button" type="button" data-remove-stool aria-label="Remove bowel movement">Remove</button></div>`;
   q('#stoolRows').append(wrap);
   wrap.querySelector('[data-stool-period]').value=['AM','PM','Before bed','Overnight'].includes(row.period)?row.period:row.period?'Other':'AM';
   wrap.querySelector('[data-stool-time]').value=row.time||'';
   wrap.querySelector('[data-stool-score]').value=row.score??'';
+  wrap.querySelector('[data-stool-consistency]').value=row.consistency||'';
+  const flags=Array.isArray(row.flags)?row.flags:[];
+  wrap.querySelectorAll('[data-stool-flag]').forEach(box=>{box.checked=flags.includes(box.value);});
   wrap.querySelector('[data-stool-notes]').value=row.notes||'';
   wrap.querySelector('[data-stool-status]').add(new Option('Not recorded','not recorded'),2);
   wrap.querySelector('[data-stool-status]').value=row.status||'observed';
@@ -710,10 +733,29 @@ function collectStoolRows(){
     const period=el.querySelector('[data-stool-period]').value;
     const time=el.querySelector('[data-stool-time]').value;
     const scoreText=el.querySelector('[data-stool-score]').value;
+    const consistency=el.querySelector('[data-stool-consistency]').value;
+    const flags=[...el.querySelectorAll('[data-stool-flag]:checked')].map(box=>box.value).filter(value=>STOOL_FLAG_LABELS[value]);
     const notes=el.querySelector('[data-stool-notes]').value.trim();
     const status=el.querySelector('[data-stool-status]').value;
-    return {period,time:time||null,score:status==='observed'&&scoreText!==''?Number(scoreText):null,status,notes};
-  }).filter(x=>x.status!=='observed'||x.score!==null||x.time||x.notes);
+    return {period,time:time||null,score:status==='observed'&&scoreText!==''?Number(scoreText):null,status,consistency:status==='observed'?consistency:'',flags:status==='observed'?flags:[],notes};
+  }).filter(x=>x.status!=='observed'||x.score!==null||x.time||x.consistency||x.flags.length||x.notes);
+}
+
+function stoolFlagLabels(row){
+  return (Array.isArray(row?.flags)?row.flags:[]).map(value=>STOOL_FLAG_LABELS[value]||value);
+}
+function stoolHasFlag(row,flag){return Array.isArray(row?.flags)&&row.flags.includes(flag);}
+function observationHasStoolFlag(o,flag){return (o.stoolEvents||[]).some(row=>row.status==='observed'&&stoolHasFlag(row,flag));}
+function stoolIsLoose(row){
+  return ['very_soft','unformed','watery'].includes(row?.consistency)||Number(row?.score)>=6||/diarrhea|loose|watery|liquid|unformed|mushy/i.test(String(row?.notes||''));
+}
+function stoolEventSummary(row){
+  const parts=[];
+  if(row.score!==null&&row.score!==undefined&&row.score!=='')parts.push(`score ${row.score}`);
+  if(row.consistency)parts.push(STOOL_CONSISTENCY_LABELS[row.consistency]||row.consistency);
+  const flags=stoolFlagLabels(row);if(flags.length)parts.push(flags.join(', '));
+  if(row.notes)parts.push(row.notes);
+  return parts.join(' · ')||'observed';
 }
 
 function recordCorrection(collection,id,after){
@@ -1082,7 +1124,7 @@ function renderJournalBrief(treatment){
   const last=rows.at(-1),reduced=rows.filter(r=>r.values.energy!==null&&r.values.energy<3),energyKnown=rows.filter(r=>r.values.energy!==null);
   const appetiteKnown=rows.filter(r=>r.observations.some(appetiteIsKnown)),appetiteReduced=rows.filter(r=>r.observations.some(appetiteIsReduced));
   const nausea=rows.filter(r=>r.values.nausea>0),loose=rows.filter(r=>r.values.looseStool===1);
-  const bloody=rows.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(v=>/\bblood\b/i.test(String(v||'')))));
+  const bloody=rows.filter(r=>r.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(v=>/\bblood\b/i.test(String(v||'')))));
   const scores=rows.map(r=>r.values.stoolScore).filter(v=>v!==null);
   const sentences=[`${rows.length} of ${daysBetween(treatment.date,last.date)+1} days logged since chemo #${treatment.number} (${fmtDate(treatment.date)}–${fmtDate(last.date)}).`];
   if(energyKnown.length)sentences.push(`Energy was reduced or low on ${reduced.length} of ${energyKnown.length} days with an energy entry${last.values.energy===3&&reduced.length?' and was recorded as normal on the latest day':''}.`);
@@ -1107,7 +1149,7 @@ function renderClinicalReview(){
     const lowest=postCounts.length?postCounts.reduce((a,b)=>Number(a.value)<=Number(b.value)?a:b):null;
     const preCounts=state.labs.filter(l=>l.metric==='Neutrophils'&&l.date<=t.date&&daysBetween(l.date,t.date)<=2).sort((a,b)=>b.date.localeCompare(a.date));
     const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,appetiteReduced=days.filter(r=>r.observations.some(appetiteIsReduced)).length,loose=days.filter(r=>r.values.looseStool===1).length;
-    const blood=days.filter(r=>r.observations.some(o=>[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
+    const blood=days.filter(r=>r.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
     const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given');
     const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&courseRecordedEnd(c)>=window.start&&c.status?.includes('owner-confirmed'));
     const medSummary=[...courses.map(c=>`${medicationName(c.medicationId)} course reported through ${fmtDate(courseRecordedEnd(c))}`),...[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} dated administration(s)`) ].join('; ');
@@ -1175,7 +1217,7 @@ function compactObservation(o){
   if(o.vomiting)parts.push(`${o.vomiting} vomit`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scored=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
-  if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}`);
+  if(stools.length){const flagged=stools.find(s=>stoolFlagLabels(s).length)||stools.find(s=>s.consistency)||stools.at(-1);parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scored.length?', highest '+Math.max(...scored):''}${flagged?'; '+stoolEventSummary(flagged):''}`);}
   else if(o.stool)parts.push(`stool ${o.stool}`);
   return parts.join(', ') || (o.notes||'').slice(0,60);
 }
@@ -1425,9 +1467,12 @@ function symptomSeverity(o){
   let s=0;
   s=Math.max(s,Number(o.nausea)||0,Number(o.pain)||0);
   if(Number(o.vomiting)>0) s=Math.max(s,2);
-  const scores=(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
+  const observedStools=(o.stoolEvents||[]).filter(row=>row.status==='observed');
+  const scores=observedStools.map(row=>Number(row.score)).filter(n=>Number.isFinite(n)&&n>0);
   const stool=scores.length?Math.max(...scores):parseFloat(o.stool);
   if(Number.isFinite(stool) && stool>=6) s=Math.max(s,2);
+  if(observedStools.some(stoolIsLoose))s=Math.max(s,2);
+  if(observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry'))s=Math.max(s,2);
   if(appetiteIsRefused(o))s=Math.max(s,2);
   else if(appetiteIsReduced(o))s=Math.max(s,1);
   if(/low|reduced/i.test(o.energy||'')) s=Math.max(s,1);
@@ -1454,7 +1499,7 @@ function renderJournal(){
     entries.sort((a,b)=>Number(Boolean(b.rawEntry))-Number(Boolean(a.rawEntry)));
     const sources=entries.map(o=>{
       const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
-      const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${s.score==null?'unscored':esc(s.score)}${s.notes&&(/blood|urgenc|diarrhea/i.test(s.notes))?' · '+esc(s.notes):''}`).join(' · ')}</div>`:'';
+      const stoolLine=stools.length?`<div class="journal-stool-line"><strong>${stools.length} bowel movement${stools.length===1?'':'s'}</strong> · ${stools.map(s=>`${esc(s.period||'Other')}${s.time?' '+esc(s.time):''}: ${esc(stoolEventSummary(s))}`).join(' · ')}</div>`:'';
       return `<div class="journal-source"><div class="row-between"><div class="item-meta"><strong>${o.rawEntry?'Original owner journal':'App entry'}</strong>${o.weightLb?` · ${esc(o.weightLb)} lb`:''}</div><button class="text-button" type="button" data-edit-observation="${esc(o.id)}">${o.rawEntry?'Correct':'Edit entry'}</button></div><div class="chip-row">${observationChips(o)}</div>${stoolLine}<div class="item-copy">${esc(o.notes)}</div>${o.recordClarification?`<div class="record-clarification"><strong>Confirmed correction:</strong> ${esc(o.recordClarification)}</div>`:''}${o.medications?.length?`<div class="item-meta journal-med-line"><strong>Medication noted:</strong> ${esc(o.medications.join(', '))}</div>`:''}${o.rawEntry?`<details class="original-entry"><summary>Full original entry</summary><pre>${esc(o.rawEntry)}</pre></details>`:''}</div>`;
     }).join('');
     const severity=entries.reduce((a,b)=>symptomSeverity(a)>symptomSeverity(b)?a:b);
@@ -1535,7 +1580,7 @@ function comparisonRows(){
       nausea:nausea.length?Math.max(...nausea):null,
       stoolCount:stools.length+legacy.length||((entries.some(o=>o.stoolEvents?.some(s=>s.status==='none')))?0:null),
       stoolScore:scores.length?Math.max(...scores):null,
-      looseStool:/diarrhea/i.test(entries.map(o=>`${o.gi||''} ${o.notes||''}`).join(' '))||scores.some(s=>s>=6)?1:scores.length?0:null,
+      looseStool:/diarrhea/i.test(entries.map(o=>`${o.gi||''} ${o.notes||''}`).join(' '))||stools.some(stoolIsLoose)||scores.some(s=>s>=6)?1:(scores.length||stools.some(s=>s.consistency))?0:null,
       cerenia:d.medications.filter(a=>a.medicationId==='med-cerenia'&&a.status==='given').length,
       neutrophils:labFor('Neutrophils'),
       hematocrit:labFor('Hematocrit'),platelets:labFor('Platelets'),alt:labFor('ALT'),alp:labFor('ALP'),
