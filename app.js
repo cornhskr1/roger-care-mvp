@@ -808,6 +808,7 @@ function renderSafetyPrompt(){
   const vomiting=Number(form.elements.namedItem('vomiting')?.value||0);
   if(details)details.hidden=!(vomiting>0||qa('input[name="vomitFlags"]:checked').length);
   if(vomiting<=0){qa('input[name="vomitFlags"]').forEach(box=>{box.checked=false;});if(q('#vomitNoneObserved'))q('#vomitNoneObserved').checked=false;}
+  renderJournalVetGuidance();
   const signal=journalSafetySignals();
   if(!signal.tier){root.hidden=true;root.className='safety-prompt';root.innerHTML='';return;}
   const urgent=signal.tier==='urgent';
