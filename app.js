@@ -201,7 +201,7 @@ function mergeCanonicalSeed(canonical, saved){
     visits:canonical.carePlan.visits.map(visit=>{
       const prior=savedPlan.visits?.find(v=>v.id===visit.id);
       return savedSchemaVersion>=7&&prior?{...visit,date:prior.date||null,source:prior.source||visit.source}:visit;
-    })
+    }),
     careTeam:mergeCareTeam(savedPlan.careTeam||canonical.carePlan?.careTeam||[]),
   };
   merged.recordCorrections = migratedSaved.recordCorrections||[];
