@@ -2296,10 +2296,13 @@ function latestCareActivityDate(){
   ].filter(Boolean).sort().at(-1)||todayIso();
 }
 function latestCareVisit(end=latestCareActivityDate()){
+  const labDates=[...new Set((state.labs||[]).filter(row=>row.date<=end).map(row=>row.date))];
   const visits=[
     ...(state.treatments||[]).filter(row=>row.date<=end).map(row=>({date:row.date,label:`Chemo #${row.number} treatment`,kind:'treatment'})),
-    ...(state.labs||[]).filter(row=>row.date<=end).map(row=>({date:row.date,label:'CBC / lab visit',kind:'lab'}))
-  ].sort((a,b)=>a.date.localeCompare(b.date)||(a.kind==='treatment'?1:-1));
+    ...labDates.map(date=>({date,label:'CBC / lab visit',kind:'lab'}))
+  ];
+  const priority={lab:0,treatment:1};
+  visits.sort((a,b)=>a.date.localeCompare(b.date)||(priority[a.kind]-priority[b.kind]));
   return visits.at(-1)||null;
 }
 function resolveCareSnapshotRange(){
@@ -2323,7 +2326,7 @@ function resolveCareSnapshotRange(){
 function careSnapshotData(){
   const range=resolveCareSnapshotRange();
   const {start,end}=range;
-  const treatment=[...(state.treatments||[])].filter(row=>row.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||latestTreatment();
+  const treatment=[...(state.treatments||[])].filter(row=>row.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||null;
   const rows=comparisonRows().filter(row=>row.date>=start&&row.date<=end&&row.observations.length);
   const observations=(state.observations||[]).filter(o=>o.date>=start&&o.date<=end);
   const appetiteRows=rows.filter(row=>row.observations.some(appetiteIsKnown));
@@ -2372,8 +2375,13 @@ function careSnapshotData(){
   medicationParts.push(`Cerenia: ${cerenia.given.length} recorded dose${cerenia.given.length===1?'':'s'}`);
   for(const med of supportiveCounts.filter(item=>item.name!=='Cerenia'&&item.name!=='Prednisone'))medicationParts.push(`${med.name}: ${med.count} recorded administration${med.count===1?'':'s'}`);
   const medicationText=medicationParts.join('. ')+'.';
-  const treatmentInRange=treatment.date>=start&&treatment.date<=end;
-  const clinicalText=`${treatmentInRange?`Chemo #${treatment.number}: ${treatment.doseMg} mg vinblastine (${treatment.doseMgM2} mg/m²) on ${fmtDate(treatment.date)}.`:`Most recent vinblastine before or during this period was chemo #${treatment.number} on ${fmtDate(treatment.date)} (${treatment.doseMg} mg; ${treatment.doseMgM2} mg/m²).`}${latestNeut?` Latest stored neutrophils as of the end of this period: ${latestNeut.displayValue||latestNeut.value} ${latestNeut.unit} on ${fmtDate(latestNeut.date)}.`:''}`;
+  const treatmentInRange=Boolean(treatment&&treatment.date>=start&&treatment.date<=end);
+  const clinicalParts=[];
+  if(treatment)clinicalParts.push(treatmentInRange
+    ? `Chemo #${treatment.number}: ${treatment.doseMg} mg vinblastine (${treatment.doseMgM2} mg/m²) on ${fmtDate(treatment.date)}.`
+    : `Most recent vinblastine before this period was chemo #${treatment.number} on ${fmtDate(treatment.date)} (${treatment.doseMg} mg; ${treatment.doseMgM2} mg/m²).`);
+  if(latestNeut)clinicalParts.push(`Latest stored neutrophils as of the end of this period: ${latestNeut.displayValue||latestNeut.value} ${latestNeut.unit} on ${fmtDate(latestNeut.date)}.`);
+  const clinicalText=clinicalParts.join(' ')||'No vinblastine treatment or neutrophil result is recorded by the end of this period.';
   return {
     range,treatment,start,end,rows,observations,
     appetiteRows,appetiteReduced,minAppetite,
