@@ -18,8 +18,7 @@ let manualPublishRequired = false;
 let syncMessage = '';
 let syncNeedsAttention = false;
 let syncMergeConflict = '';
-let syncConflictDetail = null;
-const syncFieldResolutions = new Map();
+const CARE_TEAM_EDITABLE_FIELDS=['name','phone','address','afterHours','notes'];
 const DEFAULT_VISITS = [
   {id:'cbc-6',label:'CBC before chemo #6',date:'2026-10-15',source:'Owner-reported appointment schedule, 10/3/2026'},
   {id:'chemo-6',label:'Vinblastine #6',date:'2026-10-16',source:'Owner-reported appointment schedule, 10/3/2026'},
@@ -269,7 +268,7 @@ function migrateState(input){
       }
     );
   }
-  next.schemaVersion = Math.max(Number(next.schemaVersion||0),14);
+  next.schemaVersion = Math.max(Number(next.schemaVersion||0),15);
   return next;
 }
 
@@ -504,6 +503,11 @@ function normalizeCareTeamField(field,value){
   }
   return raw.replace(/\s+/g,' ');
 }
+function careTeamFieldTime(row,field){
+  const value=row?.fieldUpdatedAt?.[field];
+  const time=value?Date.parse(value):NaN;
+  return Number.isFinite(time)?time:0;
+}
 function mergeCareTeamRows(baseRows=[],localRows=[],onlineRows=[]){
   const baseList=mergeCareTeam(baseRows),localList=mergeCareTeam(localRows),onlineList=mergeCareTeam(onlineRows);
   const base=new Map(baseList.map(row=>[row.id,row])),local=new Map(localList.map(row=>[row.id,row])),online=new Map(onlineList.map(row=>[row.id,row]));
@@ -512,34 +516,45 @@ function mergeCareTeamRows(baseRows=[],localRows=[],onlineRows=[]){
   for(const id of order){
     const b=base.get(id)||{},l=local.get(id)||{},o=online.get(id)||{};
     const row={};
-    for(const field of new Set([...Object.keys(b),...Object.keys(l),...Object.keys(o)])){
+    const fields=new Set([...Object.keys(b),...Object.keys(l),...Object.keys(o)]);
+    fields.delete('fieldUpdatedAt');
+    for(const field of fields){
       const bv=b[field],lv=l[field],ov=o[field];
       if(sameCloudValue(lv,ov)){row[field]=structuredClone(lv);continue;}
+
       const bn=normalizeCareTeamField(field,bv),ln=normalizeCareTeamField(field,lv),on=normalizeCareTeamField(field,ov);
-      if(ln===on){row[field]=structuredClone(ov);continue;}
+      const lt=careTeamFieldTime(l,field),ot=careTeamFieldTime(o,field);
+
+      if(ln===on){
+        row[field]=ot>=lt?structuredClone(ov):structuredClone(lv);
+        continue;
+      }
+      if(lt||ot){
+        row[field]=lt>ot?structuredClone(lv):structuredClone(ov);
+        continue;
+      }
       if(ln===bn){row[field]=structuredClone(ov);continue;}
       if(on===bn){row[field]=structuredClone(lv);continue;}
-      if(field==='source'&&(ln==='owner-entered care team update'||on==='owner-entered care team update')){
-        row[field]='Owner-entered care team update';continue;
+      if(field==='source'){
+        row[field]=(ln==='owner-entered care team update'||on==='owner-entered care team update')
+          ? 'Owner-entered care team update'
+          : structuredClone(ov);
+        continue;
       }
-      const resolutionKey=`careTeam.${id}.${field}`;
-      const resolution=syncFieldResolutions.get(resolutionKey);
-      if(resolution==='local'){row[field]=structuredClone(lv);continue;}
-      if(resolution==='online'){row[field]=structuredClone(ov);continue;}
-      return {
-        ok:false,
-        conflict:`${id}.${field}`,
-        detail:{
-          kind:'careTeamField',
-          key:resolutionKey,
-          providerId:id,
-          providerName:o.name||l.name||b.name||id,
-          field,
-          localValue:lv??'',
-          onlineValue:ov??''
-        }
-      };
+
+      // Legacy rows predate per-field edit timestamps. For a one-time legacy
+      // disagreement, the current shared record is canonical. Future intentional
+      // edits are timestamped and therefore win normally.
+      row[field]=structuredClone(ov);
     }
+
+    const fieldUpdatedAt={};
+    for(const field of CARE_TEAM_EDITABLE_FIELDS){
+      const lTime=l?.fieldUpdatedAt?.[field],oTime=o?.fieldUpdatedAt?.[field],bTime=b?.fieldUpdatedAt?.[field];
+      const candidates=[bTime,lTime,oTime].filter(Boolean).sort((a,b)=>Date.parse(a)-Date.parse(b));
+      if(candidates.length)fieldUpdatedAt[field]=candidates.at(-1);
+    }
+    if(Object.keys(fieldUpdatedAt).length)row.fieldUpdatedAt=fieldUpdatedAt;
     merged.push(row);
   }
   return {ok:true,value:merged};
@@ -563,7 +578,6 @@ function mergeCarePlanThreeWay(basePlan={},localPlan={},onlinePlan={}){
 }
 function mergeIndependentChanges(local,online){
   syncMergeConflict='';
-  syncConflictDetail=null;
   const merged=structuredClone(online);
   for(const key of new Set([...Object.keys(local),...Object.keys(online)])){
     if(key==='_savedAt')continue;
@@ -571,11 +585,7 @@ function mergeIndependentChanges(local,online){
     if(key==='journalCoverageThrough'){merged[key]=[local[key],online[key]].filter(Boolean).sort().at(-1);continue;}
     if(key==='carePlan'){
       const result=mergeCarePlanThreeWay(cloudBaseRecord?.carePlan||{},local.carePlan||{},online.carePlan||{});
-      if(!result.ok){
-        syncMergeConflict=`Care Plan · ${result.conflict||'unknown field'}`;
-        syncConflictDetail=result.detail||null;
-        return null;
-      }
+      if(!result.ok){syncMergeConflict=`Care Plan · ${result.conflict||'unknown field'}`;return null;}
       merged.carePlan=result.value;continue;
     }
     if(key==='profile'){
@@ -648,7 +658,6 @@ async function reconcileCloud(){
     cloudRevision=savedRevision;cloudUpdatedAt=savedAt;cloudAvailable=true;
     rememberCloudBase(savedRecord);
     unpublishedLocal=false;manualPublishRequired=false;syncNeedsAttention=false;syncMessage='Saved to shared record.';
-    syncConflictDetail=null;syncFieldResolutions.clear();
     await persist(false);try{localStorage.removeItem(PENDING_CLOUD_KEY);}catch(_){}
     try{renderAll();}catch(error){console.error('Shared record saved; display refresh failed',error);}
     toast('Your change is now shared.');return true;
@@ -669,7 +678,7 @@ function renderSharedStatus(){
   const synced=cloudAvailable&&!unpublishedLocal&&cloudRevision>0;
   const title=syncNeedsAttention?'Sync needs attention':synced?'Saved & synced':'Saved on this device';
   const message=syncNeedsAttention
-    ? 'Your latest changes are safe here. Roger Care needs one reconciliation pass before they can be shared.'
+    ? 'Your latest changes are safe here. Roger Care will keep retrying automatically; you can also try again now.'
     : synced
       ? 'Your latest changes are available on the shared Roger Care record.'
       : cloudAvailable
@@ -678,11 +687,8 @@ function renderSharedStatus(){
   status.className=`shared-status ${syncNeedsAttention?'needs-attention':synced?'is-synced':'is-local'}`;
   status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&synced?`<small>Last synced: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
 
-  const conflictResolver=syncNeedsAttention&&syncConflictDetail?.kind==='careTeamField'
-    ? `<div class="sync-conflict-resolver"><strong>Choose which value to keep</strong><p>${esc(syncConflictDetail.providerName)} · ${esc(syncConflictDetail.field)}</p><div class="sync-conflict-values"><div><span>This device</span><strong>${esc(String(syncConflictDetail.localValue||'Blank'))}</strong><button type="button" class="secondary-button" data-sync-resolution="local">Use this device</button></div><div><span>Shared record</span><strong>${esc(String(syncConflictDetail.onlineValue||'Blank'))}</strong><button type="button" class="secondary-button" data-sync-resolution="online">Use shared</button></div></div><p class="field-help">Nothing changes until you choose one. Other non-conflicting changes will continue syncing normally.</p></div>`
-    : '';
   controls.innerHTML=ownerCanEdit
-    ? `<div class="sync-summary ${syncNeedsAttention?'needs-attention':synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${conflictResolver}${syncNeedsAttention&&!syncConflictDetail?'<button id="publishLocal" class="primary-button" type="button">Try sync again</button>':''}${synced&&cloudUpdatedAt?`<p class="field-help">Last synced ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Device & sign-in</summary><p class="field-help">You normally do not need anything here. Use this only to connect another browser or Home Screen installation.</p><button id="createOwnerPair" class="secondary-button" type="button">Connect another device</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for another device</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Open Roger Care on the other device, paste this one-time sign-in, and connect.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
+    ? `<div class="sync-summary ${syncNeedsAttention?'needs-attention':synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${syncNeedsAttention?'<button id="publishLocal" class="primary-button" type="button">Try sync again</button>':''}${synced&&cloudUpdatedAt?`<p class="field-help">Last synced ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Device & sign-in</summary><p class="field-help">You normally do not need anything here. Use this only to connect another browser or Home Screen installation.</p><button id="createOwnerPair" class="secondary-button" type="button">Connect another device</button>${ownerPairCode?'<label class="field"><span>One-time sign-in for another device</span><input id="ownerPairCode" type="password" readonly autocomplete="off"></label><button id="copyOwnerPair" class="secondary-button" type="button">Copy sign-in</button><p class="field-help">Open Roger Care on the other device, paste this one-time sign-in, and connect.</p>':''}<button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
     : `<strong>${ownerSession?'Signed in; owner access is pending':'Connect this device'}</strong><p>${ownerSession?'Your changes remain safe on this device while access is checked.':'Connect this installation once so new entries can sync automatically.'}</p>${!ownerSession?'<form id="ownerPairPaste"><label class="field"><span>Paste one-time sign-in from another signed-in Roger Care device</span><input type="password" name="code" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Connect this device</button></form><details><summary>Use an email link instead</summary><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>':'<button id="signOutOwner" class="text-button" type="button">Sign out</button>'}`;
 
   if(ownerPairCode&&q('#ownerPairCode'))q('#ownerPairCode').value=ownerPairCode;
@@ -728,15 +734,6 @@ function renderSharedStatus(){
     toast(ownerCanEdit?'Connected. New changes will sync automatically.':'Signed in, but owner access is still pending.');
   });
   q('#signOutOwner')?.addEventListener('click',async()=>{await cloud.auth.signOut();ownerSession=null;ownerCanEdit=false;renderSharedStatus();});
-  qa('[data-sync-resolution]').forEach(button=>button.addEventListener('click',async event=>{
-    const choice=event.currentTarget.dataset.syncResolution;
-    if(!syncConflictDetail?.key||!['local','online'].includes(choice))return;
-    syncFieldResolutions.set(syncConflictDetail.key,choice);
-    const label=choice==='local'?'this device':'the shared record';
-    toast(`Using ${label} for ${syncConflictDetail.providerName} ${syncConflictDetail.field}.`);
-    const ok=await reconcileCloud();
-    if(ok)renderAll();
-  }));
   q('#publishLocal')?.addEventListener('click',async event=>{
     const button=event.currentTarget,oldText=button.textContent;
     button.disabled=true;button.textContent='Syncing…';
@@ -1144,15 +1141,24 @@ function bindForms(){
   q('#careTeamForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget);
     const current=mergeCareTeam(state.carePlan?.careTeam||[]);
-    state.carePlan.careTeam=current.map(contact=>({
-      ...contact,
-      name:String(fd.get(`${contact.id}-name`)||'').trim(),
-      phone:String(fd.get(`${contact.id}-phone`)||'').trim(),
-      address:String(fd.get(`${contact.id}-address`)||'').trim(),
-      afterHours:String(fd.get(`${contact.id}-afterHours`)||'').trim(),
-      notes:String(fd.get(`${contact.id}-notes`)||'').trim(),
-      source:'Owner-entered care team update'
-    }));
+    const now=new Date().toISOString();
+    state.carePlan.careTeam=current.map(contact=>{
+      const next={
+        ...contact,
+        name:String(fd.get(`${contact.id}-name`)||'').trim(),
+        phone:String(fd.get(`${contact.id}-phone`)||'').trim(),
+        address:String(fd.get(`${contact.id}-address`)||'').trim(),
+        afterHours:String(fd.get(`${contact.id}-afterHours`)||'').trim(),
+        notes:String(fd.get(`${contact.id}-notes`)||'').trim(),
+        source:'Owner-entered care team update'
+      };
+      const fieldUpdatedAt={...(contact.fieldUpdatedAt||{})};
+      for(const field of CARE_TEAM_EDITABLE_FIELDS){
+        if(!sameCloudValue(contact[field]??'',next[field]??''))fieldUpdatedAt[field]=now;
+      }
+      if(Object.keys(fieldUpdatedAt).length)next.fieldUpdatedAt=fieldUpdatedAt;
+      return next;
+    });
     if(!await saveChanges())return;renderCareTeam();toast('Care team & emergency plan saved');
   });
 

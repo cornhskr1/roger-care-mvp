@@ -487,14 +487,3 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .sync-advanced[open] summary{margin-bottom:8px}
 .sync-advanced button{margin:5px 7px 5px 0}
 
-
-/* Explicit sync conflict resolution */
-.sync-conflict-resolver{margin-top:12px;padding:12px;border:1px solid #dfc483;border-radius:12px;background:#fffdf7}
-.sync-conflict-resolver>strong{display:block;font-size:14px}
-.sync-conflict-resolver>p{margin:4px 0 10px}
-.sync-conflict-values{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.sync-conflict-values>div{display:grid;gap:7px;border:1px solid var(--line);border-radius:11px;padding:10px;background:#fff}
-.sync-conflict-values span{font-size:10px;font-weight:850;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.sync-conflict-values strong{font-size:13px;line-height:1.35;overflow-wrap:anywhere}
-.sync-conflict-values .secondary-button{width:100%;min-height:40px}
-@media(max-width:520px){.sync-conflict-values{grid-template-columns:1fr}}
