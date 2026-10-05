@@ -813,7 +813,7 @@ function bindForms(){
     const obs = {
       id: uid('obs'), date: fd.get('date'), appetite,appetitePercent,appetiteBehaviors,appetiteOther,energy,energyBaselineLevel,energyBehaviors,energyOther,
       nausea,nauseaSigns,nauseaOther,nauseaNoneObserved, vomiting:fd.get('vomiting')===''?null:Number(fd.get('vomiting')),
-      stool:stoolEvents.map(s=>`${s.period}${s.time?' '+s.time:''}: ${s.status==='observed'?(s.score??'unscored'):s.status}${s.notes?' ('+s.notes+')':''}`).join(' | '),stoolEvents,
+      stool:stoolEvents.map(s=>`${s.period}${s.time?' '+s.time:''}: ${s.status==='observed'?stoolEventSummary(s):s.status}`).join(' | '),stoolEvents,
       hydration: fd.get('hydration'), urination: fd.get('urination'), pain:fd.get('pain')===''?null:Number(fd.get('pain')),
       mood:fd.get('mood'),play:fd.get('play'),sleep:fd.get('sleep'),rogerThings:fd.get('rogerThings'),gi:fd.get('gi'),
       medications: String(fd.get('medications') || '').split(',').map(x=>x.trim()).filter(Boolean),
@@ -1132,7 +1132,7 @@ function renderJournalBrief(treatment){
   const symptoms=[];
   if(nausea.length)symptoms.push(`nausea signs on ${nausea.length} day${nausea.length===1?'':'s'}`);
   if(loose.length)symptoms.push(`loose stool or diarrhea on ${loose.length} day${loose.length===1?'':'s'}`);
-  if(bloody.length)symptoms.push(`blood mentioned on ${bloody.length} day${bloody.length===1?'':'s'}`);
+  if(bloody.length)symptoms.push(`blood or black/tarry appearance on ${bloody.length} day${bloody.length===1?'':'s'}`);
   if(symptoms.length)sentences.push(`Journaled: ${symptoms.join('; ')}.`);
   else if(scores.length)sentences.push(`Highest recorded stool score: ${Math.max(...scores)}. Symptoms without entries are unknown.`);
   const note=rows.slice().reverse().flatMap(r=>r.observations.filter(o=>!o.rawEntry&&String(o.notes||'').trim().length>45).map(o=>({date:o.date,text:o.notes}))).at(0);
@@ -1157,7 +1157,7 @@ function renderClinicalReview(){
     return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
       <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
       <div><strong>After dose</strong><span>Lowest measured neutrophils: ${esc(lowestText)}</span></div>
-      <div><strong>Home observations</strong><span>${days.length} day(s) logged · appetite below normal ${appetiteReduced} · nausea ${nausea} · loose stool/diarrhea ${loose} · blood mentioned ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
+      <div><strong>Home observations</strong><span>${days.length} day(s) logged · appetite below normal ${appetiteReduced} · nausea ${nausea} · loose stool/diarrhea ${loose} · blood or black/tarry stool ${blood}. Blank symptom days are not assumed symptom-free.</span></div>
       <div><strong>Medication context</strong><span>${esc(medSummary||'No medication use recorded in this period')}</span></div>
       <div class="review-wide"><strong>Next recorded decision</strong><span>${next?`${fmtDate(next.date)} · ${esc(next.doseReason||'Reason not recorded')}`:'Next dose is scheduled; no decision recorded yet.'}</span></div>
     </div></details>`;
@@ -1458,7 +1458,7 @@ function symptomSummary(o){
   if(Number(o.vomiting)>0) parts.push(`${o.vomiting} vomiting event${Number(o.vomiting)===1?'':'s'}`);
   const stools=(o.stoolEvents||[]).filter(s=>s.status==='observed');
   const scores=stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0);
-  if(stools.length)parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scores.length?', highest '+Math.max(...scores):''}`);
+  if(stools.length){const flagged=stools.find(s=>stoolFlagLabels(s).length)||stools.find(s=>s.consistency)||stools.at(-1);parts.push(`${stools.length} stool${stools.length===1?'':'s'}${scores.length?', highest '+Math.max(...scores):''}${flagged?'; '+stoolEventSummary(flagged):''}`);}
   else if(o.stool)parts.push(`stool ${o.stool}`);
   return `${fmtDate(o.date).replace(', 2026','')} · ${parts.join(', ')||o.notes.slice(0,80)}`;
 }
@@ -1525,7 +1525,7 @@ const COMPARE_METRICS={
   nausea:{label:'Nausea observations',min:0,max:3,ticks:[0,1,2,3],names:['None observed','Behaviors observed','Legacy moderate','Legacy severe'],unit:'',kind:'owner'},
   stoolCount:{label:'Bowel movements',min:0,ticks:[0,2,4,6],unit:'',kind:'owner'},
   stoolScore:{label:'Highest stool score',min:1,max:8,ticks:[1,4,6,8],unit:'',kind:'owner'},
-  looseStool:{label:'Loose stool / diarrhea',min:0,max:1,ticks:[0,1],names:['No score ≥6','Score ≥6 / noted'],unit:'',kind:'owner'},
+  looseStool:{label:'Loose stool / diarrhea',min:0,max:1,ticks:[0,1],names:['Not observed','Loose/unformed/watery'],unit:'',kind:'owner'},
   rogerThings:{label:'Roger things',min:0,max:2,ticks:[0,1,2],names:['None','Reduced','Yes'],unit:'',kind:'owner'},
   qol:{label:'Weekly wellbeing',min:0,max:10,ticks:[0,5,10],unit:'/10',kind:'owner'},
   cerenia:{label:'Cerenia doses logged',min:0,ticks:[0,1,2],unit:'',kind:'medication'},
