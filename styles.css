@@ -487,3 +487,15 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .sync-advanced[open] summary{margin-bottom:8px}
 .sync-advanced button{margin:5px 7px 5px 0}
 
+
+
+/* Roger-specific nausea timing */
+.nausea-timing-insight{margin:10px 0 8px;padding:12px 13px;border:1px solid #dfc483;border-radius:14px;background:linear-gradient(145deg,#fffaf0,#fff)}
+.nausea-timing-insight .section-kicker{color:#8a6421}
+.nausea-timing-insight strong{display:block;font-size:14px;line-height:1.35}
+.nausea-timing-insight p{margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}
+.nausea-timing-insight .timing-now{color:var(--ink);font-weight:800}
+.trend-legend .trend-nausea-window{background:#e9c56d;border-radius:3px;opacity:.55}
+.trend-legend .trend-nausea-observed{background:#c98a2d;border-radius:3px}
+.trend-legend .trend-cerenia{background:#197c91;transform:rotate(45deg);border-radius:2px}
+.trend-legend .trend-today{background:transparent;border-left:2px dashed #9b6a20;border-radius:0;width:8px}

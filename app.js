@@ -137,7 +137,7 @@ async function boot(){
 }
 
 function cacheEls(){
-  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','careSnapshotPreview','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
+  ['statusHero','metricStrip','latestObservation','journalBrief','upcomingCare','nextVisitQuestions','careTeamQuick','careTeamFields','careSnapshotPreview','clinicalCourse','cycleClinicalReview','homeCostSummary','openItems','journalSummary','journalEntries','journalTrend','nauseaTimingInsight','timelineEntries','costSummary','estimateComparison','costEntries','profileDetails','documentList','profilePhoto','profileInitial','petName','patientIds','petSubtitle','careModeButton','journalDialog','medicationDialog','costDialog','medicationSummary','medicationHistory'].forEach(id => els[id] = q(`#${id}`));
 }
 
 async function loadState(){
@@ -1666,7 +1666,10 @@ function comparisonRows(){
     const scores=[...stools.map(s=>Number(s.score)).filter(n=>Number.isFinite(n)&&n>0),...legacy.map(s=>s.score)];
     const energy=entries.map(o=>energyLevel(o.energy)).filter(v=>v!==null);
     const rogerThings=entries.map(o=>rogerThingsLevel(o.rogerThings)).filter(v=>v!==null);
-    const nausea=entries.map(o=>o.nausea).filter(v=>v!==null&&v!==undefined&&v!=='').map(Number);
+    const nausea=entries.map(o=>{
+      if(o.nausea!==null&&o.nausea!==undefined&&o.nausea!=='')return Number(o.nausea);
+      return isNauseaAssociatedObservation(o)?1:null;
+    }).filter(v=>v!==null&&Number.isFinite(v));
     const labFor=metric=>{const lab=d.labs.filter(l=>l.metric===metric).at(-1);return lab?Number(lab.value):null;};
     const ownerWeight=entries.map(o=>Number(o.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
     const treatmentWeight=d.treatments.map(t=>Number(t.weightLb)).filter(n=>Number.isFinite(n)&&n>0).at(-1);
@@ -1684,6 +1687,80 @@ function comparisonRows(){
       weight:ownerWeight??treatmentWeight??null
     }};
   });
+}
+function isNauseaAssociatedObservation(o){
+  if(!o)return false;
+  if(Boolean(o.nauseaNoneObserved)&&!Number(o.nausea)&&!(o.nauseaSigns||[]).length&&!String(o.nauseaOther||'').trim())return false;
+  if(Number(o.nausea)>0)return true;
+  if(Array.isArray(o.nauseaSigns)&&o.nauseaSigns.length)return true;
+  if(String(o.nauseaOther||'').trim())return true;
+  const text=[o.gi,o.notes,o.rawEntry].filter(Boolean).join(' ').toLowerCase();
+  if(/\bno nausea\b|no nausea signs/.test(text))return false;
+  return /nausea|lip lick|repeated swallow|drool|borborygmi|gurgling|stomach noise/.test(text);
+}
+function nauseaObservationLabel(o){
+  const labels=nauseaLabels(o);
+  if(labels.length)return labels.join(', ');
+  const text=[o.gi,o.nauseaOther].filter(Boolean).join(' · ');
+  if(text)return text.replace(/\s+/g,' ').trim();
+  return 'nausea-associated behavior';
+}
+function nauseaTimingPattern(){
+  const treatments=[...(state.treatments||[])].sort((a,b)=>a.date.localeCompare(b.date));
+  if(!treatments.length)return null;
+  const latest=treatments.at(-1);
+  const prior=treatments.slice(0,-1);
+  const offsets=[];
+  const cycleOffsets=[];
+  for(let i=0;i<prior.length;i++){
+    const treatment=prior[i],next=treatments[i+1];
+    const endExclusive=next?.date||addDays(treatment.date,8);
+    const seen=new Set();
+    for(const o of state.observations||[]){
+      if(o.date<treatment.date||o.date>=endExclusive||!isNauseaAssociatedObservation(o))continue;
+      const offset=daysBetween(treatment.date,o.date);
+      if(offset<0||offset>7)continue;
+      seen.add(offset);offsets.push(offset);
+    }
+    if(seen.size)cycleOffsets.push({number:treatment.number,offsets:[...seen].sort((a,b)=>a-b)});
+  }
+  if(!offsets.length)return {latest,cycleOffsets,eventCount:0};
+  const sorted=[...offsets].sort((a,b)=>a-b);
+  const qIndex=q=>Math.max(0,Math.min(sorted.length-1,Math.round((sorted.length-1)*q)));
+  const observedStart=sorted[0],observedEnd=sorted.at(-1);
+  const coreStart=sorted[qIndex(.25)],coreEnd=sorted[qIndex(.75)];
+  const current=(state.observations||[])
+    .filter(o=>o.date>=latest.date&&isNauseaAssociatedObservation(o))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const latestCurrent=current.at(-1)||null;
+  const currentCerenia=(state.medicationAdministrations||[])
+    .filter(a=>a.medicationId==='med-cerenia'&&a.status==='given'&&a.date>=latest.date)
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  return {
+    latest,cycleOffsets,eventCount:offsets.length,cycleCount:cycleOffsets.length,
+    observedStart,observedEnd,coreStart,coreEnd,
+    todayOffset:daysBetween(latest.date,todayIso()),
+    latestCurrent,
+    latestCurrentOffset:latestCurrent?daysBetween(latest.date,latestCurrent.date):null,
+    currentCerenia
+  };
+}
+function renderNauseaTimingInsight(){
+  const root=els.nauseaTimingInsight;
+  if(!root)return;
+  const active=comparison.primary==='nausea'||comparison.secondary==='nausea'||comparison.primary==='cerenia'||comparison.secondary==='cerenia';
+  if(!active){root.hidden=true;root.innerHTML='';return;}
+  const pattern=nauseaTimingPattern();
+  root.hidden=false;
+  if(!pattern?.eventCount){
+    root.innerHTML='<div class="section-kicker">NAUSEA TIMING</div><strong>Roger does not have enough prior post-chemo nausea observations yet to establish a personal timing pattern.</strong><p>The chart will build this from his own recorded observations over time.</p>';
+    return;
+  }
+  const today=pattern.todayOffset>=0?`Today is day +${pattern.todayOffset} after chemo #${pattern.latest.number}.`:'';
+  const latest=pattern.latestCurrent
+    ? `Latest nausea-associated observation: ${fmtDate(pattern.latestCurrent.date)} (day +${pattern.latestCurrentOffset}) · ${nauseaObservationLabel(pattern.latestCurrent)}.`
+    : `No nausea-associated observation is recorded yet after chemo #${pattern.latest.number}.`;
+  root.innerHTML=`<div class="section-kicker">ROGER'S NAUSEA TIMING</div><strong>${esc(today)} Prior first-week observations span day +${pattern.observedStart} through day +${pattern.observedEnd}; most of the recorded timing clusters around day +${pattern.coreStart} through day +${pattern.coreEnd}.</strong><p>${esc(latest)} Light shading shows Roger's full recorded range; darker shading shows the central cluster. Teal diamonds mark Cerenia doses actually recorded. This is a timing aid from Roger's history, not a recommendation to give medication; follow his veterinary instructions for Cerenia use.</p>`;
 }
 function comparisonRange(rows){
   if(!rows.length)return null;
@@ -1743,10 +1820,16 @@ function renderJournalTrend(){
   q('.compare-range').hidden=comparison.view==='aligned';
   q('#compareCyclePicker').hidden=comparison.view!=='aligned'&&comparison.range!=='cycles';
   q('#compareCustomDates').hidden=comparison.view==='aligned'||comparison.range!=='custom';
+  renderNauseaTimingInsight();
   q('#compareCyclePicker').innerHTML=treatments.map(t=>`<button class="compare-cycle ${comparison.cycles.has(t.number)?'active':''}" type="button" data-compare-cycle="${t.number}" aria-pressed="${comparison.cycles.has(t.number)}">#${t.number}<small>${fmtDate(t.date).replace(', 2026','')}</small></button>`).join('');
   if(comparison.view==='aligned'){renderAlignedComparison(treatments);return;}
-  const rows=comparisonRows(),range=comparisonRange(rows);
+  const rows=comparisonRows();let range=comparisonRange(rows);
   if(!range||range.error){els.journalTrend.innerHTML=`<p class="empty-state">${range?.error||'Add a dated journal entry to start comparing.'}</p>`;q('#compareDayDetail').innerHTML='';return;}
+  const nauseaRequested=comparison.primary==='nausea'||comparison.secondary==='nausea'||comparison.primary==='cerenia'||comparison.secondary==='cerenia';
+  if(nauseaRequested&&comparison.range!=='custom'&&todayIso()>range.to){
+    const allowToday=comparison.range!=='cycles'||[...(state.treatments||[])].filter(t=>comparison.cycles.has(t.number)).some(t=>inCycleWindow(todayIso(),cycleWindowFor(t,[...(state.treatments||[])].sort((a,b)=>a.number-b.number))));
+    if(allowToday)range={...range,to:todayIso()};
+  }
   const visible=rows.filter(r=>range.contains(r.date));
   if(!visible.length){els.journalTrend.innerHTML='<p class="empty-state">No recorded values in this range.</p>';q('#compareDayDetail').innerHTML='';return;}
   const keys=[comparison.primary,...(comparison.secondary==='none'?[]:[comparison.secondary])];
@@ -1754,6 +1837,34 @@ function renderJournalTrend(){
   const W=Math.max(740,Math.min(1500,span*16+140)),H=keys.length===2?412:248,L=111,R=24,top=65,laneH=115,gap=64;
   const x=date=>L+(W-L-R)*(dateNumber(date)-dateNumber(range.from))/span;
   let svg='';
+  const nauseaMode=keys.includes('nausea')||keys.includes('cerenia');
+  const nauseaPattern=nauseaMode?nauseaTimingPattern():null;
+  const plotTop=38,plotBottom=H-32,dayWidth=Math.max(5,(W-L-R)/Math.max(1,span));
+  if(nauseaPattern?.eventCount){
+    for(const t of treatments){
+      const fullLeft=Math.max(L,x(addDays(t.date,nauseaPattern.observedStart))-dayWidth/2);
+      const fullRight=Math.min(W-R,x(addDays(t.date,nauseaPattern.observedEnd))+dayWidth/2);
+      if(fullRight>fullLeft)svg+=`<rect x="${fullLeft}" y="${plotTop}" width="${fullRight-fullLeft}" height="${plotBottom-plotTop}" rx="5" fill="#e9c56d" opacity=".16"><title>Roger's recorded nausea-associated range after chemo: day +${nauseaPattern.observedStart} to +${nauseaPattern.observedEnd}</title></rect>`;
+      const coreLeft=Math.max(L,x(addDays(t.date,nauseaPattern.coreStart))-dayWidth/2);
+      const coreRight=Math.min(W-R,x(addDays(t.date,nauseaPattern.coreEnd))+dayWidth/2);
+      if(coreRight>coreLeft)svg+=`<rect x="${coreLeft}" y="${plotTop}" width="${coreRight-coreLeft}" height="${plotBottom-plotTop}" rx="5" fill="#d9a63e" opacity=".13"><title>Most recorded nausea timing: day +${nauseaPattern.coreStart} to +${nauseaPattern.coreEnd}</title></rect>`;
+    }
+    for(const row of visible){
+      if(!row.observations.some(isNauseaAssociatedObservation))continue;
+      const xx=x(row.date);
+      svg+=`<rect x="${xx-dayWidth*.28}" y="${plotTop}" width="${dayWidth*.56}" height="${plotBottom-plotTop}" fill="#c98a2d" opacity=".10"><title>${esc(fmtDate(row.date))} · nausea-associated observation</title></rect>`;
+    }
+    for(const med of state.medicationAdministrations||[]){
+      if(med.medicationId!=='med-cerenia'||med.status!=='given'||med.date<range.from||med.date>range.to)continue;
+      const xx=x(med.date),yy=48;
+      svg+=`<polygon points="${xx},${yy-6} ${xx+6},${yy} ${xx},${yy+6} ${xx-6},${yy}" fill="#197c91" stroke="#fff" stroke-width="1.5"><title>${esc(fmtDate(med.date))} · Cerenia ${esc(med.dose||'dose recorded')}${med.time?' · '+esc(med.time):''}</title></polygon>`;
+    }
+    const today=todayIso();
+    if(today>=range.from&&today<=range.to&&nauseaPattern.todayOffset>=0){
+      const xx=x(today);
+      svg+=`<line x1="${xx}" x2="${xx}" y1="${plotTop}" y2="${plotBottom}" stroke="#9b6a20" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${xx+4}" y="61" font-size="10" font-weight="800" fill="#8a6421">Today · +${nauseaPattern.todayOffset}</text>`;
+    }
+  }
   for(const t of treatments){if(t.date<range.from||t.date>range.to)continue;svg+=`<line x1="${x(t.date)}" x2="${x(t.date)}" y1="38" y2="${H-32}" stroke="#512888" stroke-width="1" opacity=".35"/><text x="${x(t.date)+4}" y="20" font-size="11" font-weight="800" fill="#512888">#${t.number}</text>`;}
   const cbcDates=[...new Set((state.labs||[]).filter(l=>l.metric==='Neutrophils'&&l.date>=range.from&&l.date<=range.to).map(l=>l.date))];
   for(const date of cbcDates)svg+=`<circle cx="${x(date)}" cy="32" r="4" fill="#b44f5c"><title>${esc(fmtDate(date))} · CBC</title></circle>`;
@@ -1773,7 +1884,7 @@ function renderJournalTrend(){
   if(span%tickStep)svg+=`<text x="${x(range.to)}" y="${H-12}" text-anchor="end" font-size="11" fill="#707181">${range.to.slice(5).replace('-','/')}</text>`;
   for(const row of visible){const values=keys.map(key=>`${COMPARE_METRICS[key].label}: ${comparisonValue(key,row.values[key],row)}`).join(' · ');svg+=`<rect x="${x(row.date)-7}" y="40" width="14" height="${H-73}" fill="transparent" role="button" tabindex="0" data-compare-date="${row.date}" aria-label="${esc(fmtDate(row.date))}: ${esc(values)}"><title>${esc(fmtDate(row.date))} · ${esc(values)}. Tap for source notes.</title></rect>`;}
   const label=keys.map(key=>COMPARE_METRICS[key].label).join(' and ');
-  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span></div>`;
+  els.journalTrend.innerHTML=`<div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(label)} over time, with treatment and CBC dates">${svg}</svg></div><div class="trend-legend"><span><i class="trend-owner"></i>Owner track</span><span><i class="trend-chemo"></i>Treatment</span><span><i class="trend-cbc"></i>CBC</span>${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Roger nausea range</span><span><i class="trend-nausea-observed"></i>Observed nausea</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div>`;
   if(!visible.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=visible.at(-1).date;
   renderComparisonDetail();
 }
@@ -1791,13 +1902,29 @@ function renderAlignedComparison(treatments){
   const W=790,H=keys.length===2?424:255,L=130,R=26,top=83,laneH=115,gap=76;
   const x=offset=>L+(W-L-R)*offset/13;
   const colors=['#512888','#237a91','#9d6180','#577794','#8b7b44','#4c816b','#994b57','#68779c'];
-  let svg=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
+  const nauseaMode=keys.includes('nausea')||keys.includes('cerenia');
+  const nauseaPattern=nauseaMode?nauseaTimingPattern():null;
+  let svg='';
+  if(nauseaPattern?.eventCount){
+    const step=(W-L-R)/13;
+    const fullLeft=Math.max(L,x(nauseaPattern.observedStart)-step/2),fullRight=Math.min(W-R,x(nauseaPattern.observedEnd)+step/2);
+    const coreLeft=Math.max(L,x(nauseaPattern.coreStart)-step/2),coreRight=Math.min(W-R,x(nauseaPattern.coreEnd)+step/2);
+    if(fullRight>fullLeft)svg+=`<rect x="${fullLeft}" y="61" width="${fullRight-fullLeft}" height="${H-96}" rx="5" fill="#e9c56d" opacity=".16"><title>Roger's prior recorded nausea range: day +${nauseaPattern.observedStart} to +${nauseaPattern.observedEnd}</title></rect>`;
+    if(coreRight>coreLeft)svg+=`<rect x="${coreLeft}" y="61" width="${coreRight-coreLeft}" height="${H-96}" rx="5" fill="#d9a63e" opacity=".13"><title>Most recorded timing: day +${nauseaPattern.coreStart} to +${nauseaPattern.coreEnd}</title></rect>`;
+    if(nauseaPattern.todayOffset>=0&&nauseaPattern.todayOffset<=13){
+      const xx=x(nauseaPattern.todayOffset);
+      svg+=`<line x1="${xx}" x2="${xx}" y1="61" y2="${H-35}" stroke="#9b6a20" stroke-width="1.5" stroke-dasharray="5 5"/><text x="${xx+4}" y="58" font-size="10" font-weight="800" fill="#8a6421">Today · +${nauseaPattern.todayOffset}</text>`;
+    }
+  }
+  svg+=`<line x1="${x(0)}" x2="${x(0)}" y1="61" y2="${H-35}" stroke="#512888" stroke-width="1.5" opacity=".5"/>`;
   for(let offset=0;offset<=13;offset++){
     svg+=`<line x1="${x(offset)}" x2="${x(offset)}" y1="67" y2="${H-35}" stroke="#edf0f4"/><text x="${x(offset)}" y="${H-12}" font-size="11" text-anchor="middle" fill="#707181">${offset}</text>`;
   }
   plotted.forEach(({t,days},i)=>days.forEach(({offset,row})=>{
     const cx=x(offset),color=colors[i%colors.length];
     if(row.labs.some(l=>l.metric==='Neutrophils'))svg+=`<circle cx="${cx}" cy="28" r="4" fill="#b44f5c"><title>Cycle #${t.number}, day ${offset}: CBC on ${esc(fmtDate(row.date))}</title></circle>`;
+    if(row.observations.some(isNauseaAssociatedObservation))svg+=`<circle cx="${cx}" cy="52" r="4.5" fill="#c98a2d" stroke="#fff" stroke-width="1.2"><title>Cycle #${t.number}, day ${offset}: nausea-associated observation</title></circle>`;
+    if(row.medications.some(m=>m.medicationId==='med-cerenia'&&m.status==='given'))svg+=`<polygon points="${cx},34 ${cx+5},39 ${cx},44 ${cx-5},39" fill="#197c91" stroke="#fff" stroke-width="1"><title>Cycle #${t.number}, day ${offset}: Cerenia given</title></polygon>`;
     const events=comparisonEventsForDate(row.date,row);
     if(events.length)svg+=`<rect x="${cx-3}" y="42" width="6" height="6" fill="${color}"><title>Cycle #${t.number}, day ${offset}: ${esc(events.join('; '))}</title></rect>`;
   }));
@@ -1815,7 +1942,7 @@ function renderAlignedComparison(treatments){
     });
   });
   const legend=chosen.map((t,i)=>`<span><i style="background:${colors[i%colors.length]}"></i>Chemo #${t.number} · ${fmtDate(t.date).replace(', 2026','')}</span>`).join('');
-  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}</div><p class="field-help">Red dots: CBC · small squares: medication or food context. Tap a plotted point for the dated note.</p>`;
+  els.journalTrend.innerHTML=`<p class="field-help">Treatment day 0 is the dose date. Each color is one treatment; a line stops where a value was not recorded or the next treatment began.</p><div class="journal-trend-scroll"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="group" aria-label="${esc(keys.map(k=>COMPARE_METRICS[k].label).join(' and '))} aligned by days after chemotherapy">${svg}</svg></div><div class="trend-legend">${legend}${nauseaPattern?.eventCount?'<span><i class="trend-nausea-window"></i>Roger nausea range</span><span><i class="trend-nausea-observed"></i>Observed nausea</span><span><i class="trend-cerenia"></i>Cerenia</span><span><i class="trend-today"></i>Today</span>':''}</div><p class="field-help">Red dots: CBC · amber dots: nausea-associated observations · teal diamonds: Cerenia · small squares: other medication or food context. Tap a plotted point for the dated note.</p>`;
   if(!all.some(r=>r.date===comparison.selectedDate))comparison.selectedDate=all.at(-1)?.date||null;
   renderComparisonDetail();
 }
