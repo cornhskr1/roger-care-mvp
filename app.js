@@ -2305,12 +2305,19 @@ function bindImport(){
         const amount=Number(fd.get('amountPaid'));
         if(!Number.isFinite(amount)||amount<0||amount>100000)throw Error('Check the amount paid.');
         if(draft.paymentUnconfirmed&&fd.get('paymentConfirmed')!=='yes')throw Error('Confirm payment before adding this amount to owner-paid costs.');
-        const category=draft.paymentUnconfirmed?String(fd.get('category')||'other'):'treatment';
-        if(draft.paymentUnconfirmed&&!['monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
         const existing=invoiceCostMatch(draft);
         const optimum=draft.kind==='optimumInvoice',provider=optimum?'Optimum Veterinary':'K-State Veterinary Health Center',source=`${optimum?'Optimum':'K-State'} invoice #${draft.invoiceNumber}`;
+        let category;
+        if(draft.paymentUnconfirmed){
+          category=String(fd.get('category')||'other');
+          if(!['monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
+        }else if(optimum){
+          category=existing?.category||draft.category||'other';
+        }else{
+          category=existing?.category||'treatment';
+        }
         const id=existing?.id||`cost-${optimum?'optimum':'ksu'}-invoice-${draft.invoiceNumber}`;
-        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amount,category:optimum?category:existing.category,status:'confirmed',source});
+        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amount,category,status:'confirmed',source});
         else state.costs.push({id,date,provider,label:`${optimum?'Optimum':'K-State'} visit · invoice #${draft.invoiceNumber}`,amountPaid:amount,category,status:'confirmed',source});
         state.costs.sort((a,b)=>a.date.localeCompare(b.date));
         if(draft.cereniaQuantity&&draft.cereniaPaid!=null&&!state.medicationPurchases.some(p=>p.costId===id&&p.medicationId==='med-cerenia')){
@@ -2332,7 +2339,17 @@ function invoiceCostMatch(draft){
   const byInvoice=state.costs.find(c=>String(c.source||'').includes(`invoice #${draft.invoiceNumber}`)||c.id===`cost-${optimum?'optimum':'ksu'}-invoice-${draft.invoiceNumber}`);
   if(byInvoice)return byInvoice;
   const sameDay=state.costs.filter(c=>c.date===draft.date&&new RegExp(clinic,'i').test(c.provider||''));
-  if(sameDay.length>1)throw Error(`More than one ${clinic} cost is recorded on this date. Resolve the existing costs before importing this invoice.`);
+  if(sameDay.length>1){
+    const amountMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.amountPaid))<=.01);
+    if(amountMatches.length===1)return amountMatches[0];
+    if(optimum&&draft.invoiceAmount!=null){
+      const invoiceMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.invoiceAmount))<=.01);
+      if(invoiceMatches.length===1)return invoiceMatches[0];
+    }
+    const confirmed=sameDay.filter(c=>c.status==='confirmed');
+    if(confirmed.length===1)return confirmed[0];
+    throw Error(`More than one ${clinic} cost is recorded on this date and none clearly matches this invoice. No changes were made.`);
+  }
   return sameDay[0]||null;
 }
 
