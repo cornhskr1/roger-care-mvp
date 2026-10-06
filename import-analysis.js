@@ -21,9 +21,16 @@
       const invoice=normalized.match(/Invoice Number:\s*(\d+)/i);
       const due=normalized.match(/AMOUNT\s+DUE\s*\$?\s*([\d,]+\.\d{2})/i);
       const balance=normalized.match(/INVOICE\s+BALANCE\s*\$?\s*([\d,]+\.\d{2})/i);
-      if(!invoice||!due||!balance||Math.abs(num(due[1])-num(balance[1]))>.005)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
-      const category=/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
-      return {kind,date,invoiceNumber:invoice[1],amountPaid:num(due[1]),category,paymentUnconfirmed:true,filename,evidence:`Invoice #${invoice[1]} · Amount due $${due[1]} · Invoice balance $${balance[1]}`};
+      const creditCard=normalized.match(/Credit\s+Card\s*\$?\s*([\d,]+\.\d{2})/i);
+      const surcharge=normalized.match(/(\d+(?:\.\d+)?)%\s+surcharge\s+applies\s+to\s+credit\s+card/i);
+      if(!invoice||!due||!balance)throw Error('Optimum invoice number or amount could not be read. No changes were made.');
+      const invoiceAmount=num(due[1]),invoiceBalance=num(balance[1]),paymentAmount=creditCard?num(creditCard[1]):null,surchargeRate=surcharge?num(surcharge[1])/100:null;
+      if(invoiceAmount<0||invoiceBalance<0||invoiceBalance-invoiceAmount>.005)throw Error('Optimum invoice amounts are not internally consistent. No changes were made.');
+      const paidOnInvoice=invoiceBalance<=.005&&paymentAmount!=null&&Math.abs(paymentAmount-invoiceAmount)<=.01;
+      const category=/Dental|mass removal|Surgical Procedure/i.test(normalized)?'mixed_surgery_dental':/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
+      const surchargeText=surchargeRate!=null?` · ${(surchargeRate*100).toFixed(surchargeRate*100%1?1:0)}% credit-card surcharge noted`:'';
+      const paymentText=paymentAmount!=null?` · Credit card ${paymentAmount.toFixed(2)}`:'';
+      return {kind,date,invoiceNumber:invoice[1],amountPaid:invoiceAmount,invoiceAmount,invoiceBalance,paymentAmount,surchargeRate,category,paymentUnconfirmed:!paidOnInvoice,filename,evidence:`Invoice #${invoice[1]} · Amount due ${invoiceAmount.toFixed(2)}${paymentText} · Invoice balance ${invoiceBalance.toFixed(2)}${surchargeText}`};
     }
     if(isLab){
       const values={};
