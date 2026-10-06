@@ -24,11 +24,18 @@
       const card=normalized.match(/Credit\s+Card\s*\$?\s*([\d,]+\.\d{2})/i);
       if(!invoice||!due||!balance)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
       const dueAmount=num(due[1]),balanceAmount=num(balance[1]),cardAmount=card?num(card[1]):null;
-      const paidByCard=cardAmount!=null&&balanceAmount<=.005&&Math.abs(cardAmount-dueAmount)<=.005;
+      const surchargeMention=/3%\s+surcharge\s+applies\s+to\s+credit\s+card\s+purchases/i.test(normalized);
+      const expectedWithSurcharge=Math.round(dueAmount*1.03*100)/100;
+      const paidByCard=cardAmount!=null&&balanceAmount<=.005&&(
+        Math.abs(cardAmount-dueAmount)<=.005||
+        surchargeMention&&Math.abs(cardAmount-expectedWithSurcharge)<=.005
+      );
       const unpaid=Math.abs(balanceAmount-dueAmount)<=.005;
       if(!paidByCard&&!unpaid)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
-      const surchargeRate=/3%\s+surcharge\s+applies\s+to\s+credit\s+card\s+purchases/i.test(normalized)&&paidByCard?.03:null;
-      const amountPaid=surchargeRate?Math.round(dueAmount*(1+surchargeRate)*100)/100:dueAmount;
+      const surchargeRate=surchargeMention&&paidByCard?.03:null;
+      const amountPaid=paidByCard&&surchargeRate
+        ? (Math.abs(cardAmount-expectedWithSurcharge)<=.005?cardAmount:expectedWithSurcharge)
+        : dueAmount;
       const hasDental=/Dental Radiographs|Scaling, Polishing|SANOS Dental/i.test(normalized);
       const hasMassSurgery=/mass removal|STD BIOPSY|Surgical Procedure/i.test(normalized);
       const category=hasDental&&hasMassSurgery?'mixed_surgery_dental':/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
