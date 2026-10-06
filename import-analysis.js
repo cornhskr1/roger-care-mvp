@@ -21,9 +21,21 @@
       const invoice=normalized.match(/Invoice Number:\s*(\d+)/i);
       const due=normalized.match(/AMOUNT\s+DUE\s*\$?\s*([\d,]+\.\d{2})/i);
       const balance=normalized.match(/INVOICE\s+BALANCE\s*\$?\s*([\d,]+\.\d{2})/i);
-      if(!invoice||!due||!balance||Math.abs(num(due[1])-num(balance[1]))>.005)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
-      const category=/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
-      return {kind,date,invoiceNumber:invoice[1],amountPaid:num(due[1]),category,paymentUnconfirmed:true,filename,evidence:`Invoice #${invoice[1]} · Amount due $${due[1]} · Invoice balance $${balance[1]}`};
+      const card=normalized.match(/Credit\s+Card\s*\$?\s*([\d,]+\.\d{2})/i);
+      if(!invoice||!due||!balance)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
+      const dueAmount=num(due[1]),balanceAmount=num(balance[1]),cardAmount=card?num(card[1]):null;
+      const paidByCard=cardAmount!=null&&balanceAmount<=.005&&Math.abs(cardAmount-dueAmount)<=.005;
+      const unpaid=Math.abs(balanceAmount-dueAmount)<=.005;
+      if(!paidByCard&&!unpaid)throw Error('Optimum invoice number and final amount could not be reconciled. No changes were made.');
+      const surchargeRate=/3%\s+surcharge\s+applies\s+to\s+credit\s+card\s+purchases/i.test(normalized)&&paidByCard?.03:null;
+      const amountPaid=surchargeRate?Math.round(dueAmount*(1+surchargeRate)*100)/100:dueAmount;
+      const hasDental=/Dental Radiographs|Scaling, Polishing|SANOS Dental/i.test(normalized);
+      const hasMassSurgery=/mass removal|STD BIOPSY|Surgical Procedure/i.test(normalized);
+      const category=hasDental&&hasMassSurgery?'mixed_surgery_dental':/\bCBC\b|Chem\s*10|Blood Draw/i.test(normalized)?'monitoring':'other';
+      const evidence=paidByCard
+        ?`Invoice #${invoice[1]} · Amount due ${due[1]} · Credit card ${card[1]} · Invoice balance ${balance[1]}${surchargeRate?' · 3% card surcharge noted':''}`
+        :`Invoice #${invoice[1]} · Amount due ${due[1]} · Invoice balance ${balance[1]}`;
+      return {kind,date,invoiceNumber:invoice[1],invoiceAmount:dueAmount,amountPaid,cardPayment:cardAmount,balance:balanceAmount,surchargeRate,category,paymentUnconfirmed:!paidByCard,filename,evidence};
     }
     if(isLab){
       const values={};
