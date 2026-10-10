@@ -514,11 +514,39 @@ function renderSharedStatus(){
         : 'A pending local change is safe here. Sign in as the owner on this device to sync it.');
 
   status.className=`shared-status ${synced?'is-synced':'is-local'}`;
-  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
+  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}${viewer?'<button type="button" class="secondary-button" data-check-cloud>Check for updates</button>':''}`;
 
   controls.innerHTML=ownerCanEdit
-    ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
+    ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><button type="button" class="secondary-button" data-check-cloud>Sync now</button><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
     : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+
+  qa('[data-check-cloud]').forEach(button=>button.addEventListener('click',async()=>{
+    if(cloudBusy)return toast('Cloud sync is already in progress.');
+    if(!cloud)return toast('Cloud is unavailable. Please check your connection and try again.',true);
+    const actionButtons=qa('[data-check-cloud]');
+    actionButtons.forEach(node=>{node.disabled=true;node.textContent='Checking…';});
+    try{
+      if(ownerCanEdit){
+        if(unpublishedLocal){
+          const pushed=await publishCloudMirror();
+          toast(pushed?'Latest changes synced to cloud.':'Could not sync yet. Your changes remain saved on this device.',!pushed);
+        }else{
+          const checked=await readCloudMetadata();
+          toast(checked?'Cloud sync is current.':'Could not check the cloud. Your local record is unchanged.',!checked);
+        }
+      }else if(unpublishedLocal){
+        toast('This device has an unsynced local change. Sign in as owner before refreshing.',true);
+      }else{
+        const received=await readCloudViewer();
+        if(received){renderAll();toast('Latest shared Roger Care record loaded.');}
+        else toast('Could not retrieve the shared record. Existing data was kept.',true);
+      }
+    }catch(_){
+      toast('Cloud update failed. Try again when your connection is available.',true);
+    }finally{
+      qa('[data-check-cloud]').forEach(node=>{node.disabled=false;node.textContent=ownerCanEdit?'Sync now':'Check for updates';});
+    }
+  }));
 
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();
