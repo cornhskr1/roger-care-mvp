@@ -1574,7 +1574,9 @@ function courseRecordedEnd(course){
 // Extend an owner-confirmed course only through consecutive explicitly logged doses.
 function chartCourseEnd(course){
   let end=courseRecordedEnd(course);
-  if(course.medicationId!=='med-prednisone'||!end)return end;
+  // A closed course must never absorb subsequent doses from a different regimen.
+  // Only the currently open course can advance through consecutive logged doses.
+  if(course.medicationId!=='med-prednisone'||course.endDate||!end)return end;
   const given=new Set((state.medicationAdministrations||[])
     .filter(a=>a.medicationId==='med-prednisone'&&a.status==='given').map(a=>a.date));
   while(given.has(addDays(end,1)))end=addDays(end,1);
