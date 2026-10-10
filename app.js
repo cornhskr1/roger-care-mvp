@@ -496,6 +496,18 @@ function parseOwnerSignInLink(input){
   return {token_hash:token,type};
 }
 
+async function refreshSharedViewer(){
+  if(!cloud||ownerCanEdit||unpublishedLocal||cloudBusy)return false;
+  const ok=await readCloudViewer();
+  if(ok){
+    renderAll();
+    toast('Latest Roger Care updates loaded');
+  }else{
+    toast('Could not refresh the shared record right now',true);
+  }
+  return ok;
+}
+
 function renderSharedStatus(){
   const status=q('#sharedStatus'),controls=q('#sharedControls');
   if(!status||!controls||!state)return;
@@ -514,11 +526,14 @@ function renderSharedStatus(){
         : 'A pending local change is safe here. Sign in as the owner on this device to sync it.');
 
   status.className=`shared-status ${synced?'is-synced':'is-local'}`;
-  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
+  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}${viewer?'<button id="refreshSharedHome" class="secondary-button compact" type="button">Refresh latest</button>':''}`;
 
   controls.innerHTML=ownerCanEdit
     ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
-    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p>${viewer?'<button id="refreshSharedRecord" class="secondary-button" type="button">Refresh latest Roger Care</button>':''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+
+  q('#refreshSharedHome')?.addEventListener('click',refreshSharedViewer);
+  q('#refreshSharedRecord')?.addEventListener('click',refreshSharedViewer);
 
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();
@@ -1109,6 +1124,10 @@ function bindRefreshControl(){
     button.disabled = true;
     button.textContent = '…';
     try {
+      if(!ownerCanEdit&&!unpublishedLocal&&cloud){
+        await refreshSharedViewer();
+        return;
+      }
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.getRegistration();
         if (registration) await registration.update();
@@ -1417,9 +1436,32 @@ function renderTreatmentOverlay(){
   });
   laneMeds.forEach((id,row)=>{
     const y=medTop+row*32;
-    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
+    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text>${id==='med-prednisone'? `<text x="8" y="${y+16}" font-size="9" fill="#8a8b98">20 mg thick · 10 mg thin</text>` : ''}<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
+  const prednisoneDaily=[
+    ...reportedCourseDays('med-prednisone',window),
+    ...medications.filter(a=>a.medicationId==='med-prednisone'&&a.status==='given')
+  ].filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const prednisoneRuns=[];
+  for(const dose of prednisoneDaily){
+    const mg=Number.parseFloat(dose.dose);
+    if(!Number.isFinite(mg))continue;
+    const prior=prednisoneRuns.at(-1);
+    if(prior&&prior.mg===mg&&daysBetween(prior.end,dose.date)===1)prior.end=dose.date;
+    else prednisoneRuns.push({start:dose.date,end:dose.date,mg});
+  }
+  if(prednisoneRuns.length&&laneMeds.includes('med-prednisone')){
+    const y=medTop+laneMeds.indexOf('med-prednisone')*32;
+    const dayPx=(W-L-R)/Math.max(1,days);
+    prednisoneRuns.forEach(run=>{
+      const left=Math.max(L,x(run.start)-dayPx*.45),right=Math.min(W-R,x(run.end)+dayPx*.45);
+      const width=run.mg>=20?10:5;
+      const label=`Prednisone · ${run.mg} mg daily · ${fmtDate(run.start)}${run.end!==run.start?'–'+fmtDate(run.end):''} · given`;
+      svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="prednisone" data-start="${run.start}" data-end="${run.end}" data-dose="${run.mg}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="#512888" stroke-width="${width}" opacity=".78" stroke-linecap="round"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+    });
+  }
   courses.forEach((c,i)=>{
+    if(c.medicationId==='med-prednisone')return;
     const left=x(c.startDate<startDate?startDate:c.startDate),right=x(courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c));
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
     const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · reported course`;
@@ -1427,6 +1469,7 @@ function renderTreatmentOverlay(){
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
+    if(a.medicationId==='med-prednisone')return;
     const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
     const offset=same.length>1?(position-(same.length-1)/2)*14:0;
     svg+=hit('medication',i,x(a.date)+offset,medTop+laneMeds.indexOf(a.medicationId)*32,`${fmtDate(a.date)} · ${medicationName(a.medicationId)} ${a.dose} · ${a.status}`,'square',a.medicationId==='med-cerenia'?'#512888':'#667085',a.status==='held');
@@ -1446,6 +1489,12 @@ function renderTreatmentOverlay(){
   root.querySelectorAll('.chart-hit').forEach(node=>{
     const show=()=>{
       const kind=node.dataset.kind,i=Number(node.dataset.index);
+      if(kind==='prednisone'){
+        const start=node.dataset.start,end=node.dataset.end,dose=node.dataset.dose;
+        const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(start));guide.setAttribute('x2',x(start));guide.setAttribute('visibility','visible');
+        detail.innerHTML=`<strong>Prednisone · ${esc(dose)} mg daily</strong>${fmtDate(start)}${end!==start?'–'+fmtDate(end):''} · owner-confirmed given. Thick purple = 20 mg; thin purple = 10 mg.`;
+        return;
+      }
       const point=({blood,treatment:treatments,symptom:symptoms,medication:medications,course:courses})[kind][i];
       const date=kind==='course'?(point.startDate<startDate?startDate:point.startDate):point.date;
       const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(date));guide.setAttribute('x2',x(date));guide.setAttribute('visibility','visible');
@@ -2307,13 +2356,18 @@ function bindImport(){
         if(draft.paymentUnconfirmed&&fd.get('paymentConfirmed')!=='yes')throw Error('Confirm payment before adding this amount to owner-paid costs.');
         const existing=invoiceCostMatch(draft);
         const optimum=draft.kind==='optimumInvoice',provider=optimum?'Optimum Veterinary':'K-State Veterinary Health Center',source=`${optimum?'Optimum':'K-State'} invoice #${draft.invoiceNumber}`;
-        const category=optimum?(existing?.category||String(fd.get('category')||draft.category||'other')):'treatment';
-        if(optimum&&!['mixed_surgery_dental','monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
-        const reconciledExisting=optimum&&existing&&invoiceAmountMatchesCost(draft,existing);
-        const amountToSave=reconciledExisting?Number(existing.amountPaid):amount;
+        let category;
+        if(draft.paymentUnconfirmed){
+          category=String(fd.get('category')||'other');
+          if(!['monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
+        }else if(optimum){
+          category=existing?.category||draft.category||'other';
+        }else{
+          category=existing?.category||'treatment';
+        }
         const id=existing?.id||`cost-${optimum?'optimum':'ksu'}-invoice-${draft.invoiceNumber}`;
-        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amountToSave,category:optimum?category:existing.category,status:'confirmed',source});
-        else state.costs.push({id,date,provider,label:`${optimum?'Optimum':'K-State'} visit · invoice #${draft.invoiceNumber}`,amountPaid:amountToSave,category,status:'confirmed',source});
+        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amount,category,status:'confirmed',source});
+        else state.costs.push({id,date,provider,label:`${optimum?'Optimum':'K-State'} visit · invoice #${draft.invoiceNumber}`,amountPaid:amount,category,status:'confirmed',source});
         state.costs.sort((a,b)=>a.date.localeCompare(b.date));
         if(draft.cereniaQuantity&&draft.cereniaPaid!=null&&!state.medicationPurchases.some(p=>p.costId===id&&p.medicationId==='med-cerenia')){
           state.medicationPurchases.push({id:`purchase-cerenia-invoice-${draft.invoiceNumber}`,medicationId:'med-cerenia',date,quantity:draft.cereniaQuantity,tabletStrengthMg:60,amountPaid:draft.cereniaPaid,costId:id,status:'confirmed',source:`K-State invoice #${draft.invoiceNumber}`});
@@ -2358,10 +2412,15 @@ function invoiceCostMatch(draft){
   if(byInvoice)return byInvoice;
   const sameDay=state.costs.filter(c=>c.date===draft.date&&new RegExp(clinic,'i').test(c.provider||''));
   if(sameDay.length>1){
-    const amountMatches=sameDay.filter(c=>invoiceAmountMatchesCost(draft,c));
+    const amountMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.amountPaid))<=.01);
     if(amountMatches.length===1)return amountMatches[0];
-    if(amountMatches.length>1)throw Error(`More than one ${clinic} cost matches this invoice amount. Resolve the existing costs before importing this invoice.`);
-    throw Error(`More than one ${clinic} cost is recorded on this date, and none matches the invoice amount. Resolve the existing costs before importing this invoice.`);
+    if(optimum&&draft.invoiceAmount!=null){
+      const invoiceMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.invoiceAmount))<=.01);
+      if(invoiceMatches.length===1)return invoiceMatches[0];
+    }
+    const confirmed=sameDay.filter(c=>c.status==='confirmed');
+    if(confirmed.length===1)return confirmed[0];
+    throw Error(`More than one ${clinic} cost is recorded on this date and none clearly matches this invoice. No changes were made.`);
   }
   return sameDay[0]||null;
 }
@@ -2372,15 +2431,12 @@ function renderImportReview(){
   try{match=d.kind==='summary'?state.treatments.find(x=>x.number===d.number):d.kind==='lab'?state.labs.find(x=>x.date===d.date&&x.metric==='Neutrophils'):invoiceCostMatch(d);}
   catch(error){q('#importReview').innerHTML=`<p class="alert">${esc(error.message)}</p>`;return;}
   const current=match?(d.kind==='summary'?`Existing: ${fmtDate(match.date)} · ${match.doseMg} mg · ${match.doseMgM2} mg/m²`:d.kind==='lab'?`Existing neutrophils: ${match.value} K/µL on ${fmtDate(match.date)}`:`Existing: ${fmtDate(match.date)} · ${money(match.amountPaid)}`):'No matching record yet';
-  const invoiceMatch=match&&['invoice','optimumInvoice'].includes(d.kind)&&invoiceAmountMatchesCost(d,match);
-  const surchargeMatch=match&&invoiceSurchargeMatch(d,match);
-  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):invoiceMatch);
-  const reviewAmount=surchargeMatch?Number(match.amountPaid):Number(d.amountPaid);
-  const optimumHelp=d.kind==='optimumInvoice'?(surchargeMatch?(()=>{const fee=Number(match.amountPaid)-Number(d.invoiceAmount??d.amountPaid);return `<p class="field-help">The invoice shows ${money(d.invoiceAmount??d.amountPaid)} due, a credit-card payment, and a ${money(d.invoiceBalance||0)} balance. The existing ${money(match.amountPaid)} cost matches the stated ${Math.round(Number(d.surchargeRate||0)*10000)/100}% card surcharge (${money(fee)}). No duplicate cost will be added.</p>`;})():d.paymentUnconfirmed?`<p class="field-help">This Optimum invoice does not show enough payment evidence to treat the amount as paid automatically. Confirm payment before adding it to owner-paid totals.</p>`:`<p class="field-help">This Optimum invoice shows the amount due as paid and the invoice balance as ${money(d.invoiceBalance||0)}.</p>`):'';
-  const categoryField=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?`<label class="field"><span>Cost category</span><select name="category">${[['mixed_surgery_dental','Surgery + dental day'],['monitoring','Monitoring'],['diagnosis','Diagnosis'],['staging','Initial staging'],['treatment','Treatment'],['restaging','Restaging'],['medication','Medication'],['mixed','Mixed care'],['other','Other']].map(([value,label])=>`<option value="${value}" ${d.category===value?'selected':''}>${label}</option>`).join('')}</select></label>`:'';
-  const paymentConfirm=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?'<label class="import-check"><input type="checkbox" name="paymentConfirmed" value="yes" required> I paid this amount</label>':'';
-  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${surchargeMatch?'Recorded paid amount':d.paymentUnconfirmed?'Invoice amount due':'Invoice amount paid'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${reviewAmount.toFixed(2)}" required></label>${categoryField}${optimumHelp}${paymentConfirm}${d.kind==='invoice'?`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`:''}`;
-  q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · ${d.paymentUnconfirmed?'amount due':'paid cost'}`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already reconcile; saving only links the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
+  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):Number(match.amountPaid)===d.amountPaid);
+  const optimumReconciliation=d.kind==='optimumInvoice'&&!d.paymentUnconfirmed&&d.surchargeRate&&d.invoiceAmount!=null
+    ? `<p class="field-help">Invoice base: ${money(d.invoiceAmount)} · 3% credit-card surcharge: ${money(d.amountPaid-d.invoiceAmount)} · owner-paid total: ${money(d.amountPaid)}.${already?' The existing Roger Care cost already matches, so no duplicate cost will be added.':''}</p>`
+    : '';
+  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${d.paymentUnconfirmed?'Invoice amount due':'Owner-paid total'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${d.amountPaid.toFixed(2)}" required></label>${optimumReconciliation}${d.paymentUnconfirmed?`<label class="field"><span>Cost category</span><select name="category">${[['monitoring','Monitoring'],['diagnosis','Diagnosis'],['staging','Initial staging'],['treatment','Treatment'],['restaging','Restaging'],['medication','Medication'],['mixed','Mixed care'],['other','Other']].map(([value,label])=>`<option value="${value}" ${d.category===value?'selected':''}>${label}</option>`).join('')}</select></label><p class="field-help">This Optimum invoice shows an amount due, not a payment receipt. Confirm you paid it before adding it to owner-paid totals.</p><label class="import-check"><input type="checkbox" name="paymentConfirmed" value="yes" required> I paid this amount</label>`:d.kind==='optimumInvoice'?'':`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`}`;
+  q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · ${d.paymentUnconfirmed?'amount due':'paid cost'}`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already match; saving only records the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
 }
 
 async function readImportPdf(file,kind,panel){
