@@ -1436,7 +1436,7 @@ function renderTreatmentOverlay(){
   });
   laneMeds.forEach((id,row)=>{
     const y=medTop+row*32;
-    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(id==='med-prednisone'?'Prednisone · 20mg thick / 10mg thin':medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
+    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text>${id==='med-prednisone'? `<text x="8" y="${y+16}" font-size="9" fill="#8a8b98">20 mg thick · 10 mg thin</text>` : ''}<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
   const prednisoneDaily=[
     ...reportedCourseDays('med-prednisone',window),
