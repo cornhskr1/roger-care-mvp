@@ -2356,13 +2356,18 @@ function bindImport(){
         if(draft.paymentUnconfirmed&&fd.get('paymentConfirmed')!=='yes')throw Error('Confirm payment before adding this amount to owner-paid costs.');
         const existing=invoiceCostMatch(draft);
         const optimum=draft.kind==='optimumInvoice',provider=optimum?'Optimum Veterinary':'K-State Veterinary Health Center',source=`${optimum?'Optimum':'K-State'} invoice #${draft.invoiceNumber}`;
-        const category=optimum?(existing?.category||String(fd.get('category')||draft.category||'other')):'treatment';
-        if(optimum&&!['mixed_surgery_dental','monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
-        const reconciledExisting=optimum&&existing&&invoiceAmountMatchesCost(draft,existing);
-        const amountToSave=reconciledExisting?Number(existing.amountPaid):amount;
+        let category;
+        if(draft.paymentUnconfirmed){
+          category=String(fd.get('category')||'other');
+          if(!['monitoring','diagnosis','staging','treatment','restaging','medication','mixed','other'].includes(category))throw Error('Check the cost category.');
+        }else if(optimum){
+          category=existing?.category||draft.category||'other';
+        }else{
+          category=existing?.category||'treatment';
+        }
         const id=existing?.id||`cost-${optimum?'optimum':'ksu'}-invoice-${draft.invoiceNumber}`;
-        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amountToSave,category:optimum?category:existing.category,status:'confirmed',source});
-        else state.costs.push({id,date,provider,label:`${optimum?'Optimum':'K-State'} visit · invoice #${draft.invoiceNumber}`,amountPaid:amountToSave,category,status:'confirmed',source});
+        if(existing)recordCorrection('costs',existing.id,{date,amountPaid:amount,category,status:'confirmed',source});
+        else state.costs.push({id,date,provider,label:`${optimum?'Optimum':'K-State'} visit · invoice #${draft.invoiceNumber}`,amountPaid:amount,category,status:'confirmed',source});
         state.costs.sort((a,b)=>a.date.localeCompare(b.date));
         if(draft.cereniaQuantity&&draft.cereniaPaid!=null&&!state.medicationPurchases.some(p=>p.costId===id&&p.medicationId==='med-cerenia')){
           state.medicationPurchases.push({id:`purchase-cerenia-invoice-${draft.invoiceNumber}`,medicationId:'med-cerenia',date,quantity:draft.cereniaQuantity,tabletStrengthMg:60,amountPaid:draft.cereniaPaid,costId:id,status:'confirmed',source:`K-State invoice #${draft.invoiceNumber}`});
@@ -2407,10 +2412,15 @@ function invoiceCostMatch(draft){
   if(byInvoice)return byInvoice;
   const sameDay=state.costs.filter(c=>c.date===draft.date&&new RegExp(clinic,'i').test(c.provider||''));
   if(sameDay.length>1){
-    const amountMatches=sameDay.filter(c=>invoiceAmountMatchesCost(draft,c));
+    const amountMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.amountPaid))<=.01);
     if(amountMatches.length===1)return amountMatches[0];
-    if(amountMatches.length>1)throw Error(`More than one ${clinic} cost matches this invoice amount. Resolve the existing costs before importing this invoice.`);
-    throw Error(`More than one ${clinic} cost is recorded on this date, and none matches the invoice amount. Resolve the existing costs before importing this invoice.`);
+    if(optimum&&draft.invoiceAmount!=null){
+      const invoiceMatches=sameDay.filter(c=>Math.abs(Number(c.amountPaid)-Number(draft.invoiceAmount))<=.01);
+      if(invoiceMatches.length===1)return invoiceMatches[0];
+    }
+    const confirmed=sameDay.filter(c=>c.status==='confirmed');
+    if(confirmed.length===1)return confirmed[0];
+    throw Error(`More than one ${clinic} cost is recorded on this date and none clearly matches this invoice. No changes were made.`);
   }
   return sameDay[0]||null;
 }
@@ -2421,15 +2431,12 @@ function renderImportReview(){
   try{match=d.kind==='summary'?state.treatments.find(x=>x.number===d.number):d.kind==='lab'?state.labs.find(x=>x.date===d.date&&x.metric==='Neutrophils'):invoiceCostMatch(d);}
   catch(error){q('#importReview').innerHTML=`<p class="alert">${esc(error.message)}</p>`;return;}
   const current=match?(d.kind==='summary'?`Existing: ${fmtDate(match.date)} · ${match.doseMg} mg · ${match.doseMgM2} mg/m²`:d.kind==='lab'?`Existing neutrophils: ${match.value} K/µL on ${fmtDate(match.date)}`:`Existing: ${fmtDate(match.date)} · ${money(match.amountPaid)}`):'No matching record yet';
-  const invoiceMatch=match&&['invoice','optimumInvoice'].includes(d.kind)&&invoiceAmountMatchesCost(d,match);
-  const surchargeMatch=match&&invoiceSurchargeMatch(d,match);
-  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):invoiceMatch);
-  const reviewAmount=surchargeMatch?Number(match.amountPaid):Number(d.amountPaid);
-  const optimumHelp=d.kind==='optimumInvoice'?(surchargeMatch?(()=>{const fee=Number(match.amountPaid)-Number(d.invoiceAmount??d.amountPaid);return `<p class="field-help">The invoice shows ${money(d.invoiceAmount??d.amountPaid)} due, a credit-card payment, and a ${money(d.invoiceBalance||0)} balance. The existing ${money(match.amountPaid)} cost matches the stated ${Math.round(Number(d.surchargeRate||0)*10000)/100}% card surcharge (${money(fee)}). No duplicate cost will be added.</p>`;})():d.paymentUnconfirmed?`<p class="field-help">This Optimum invoice does not show enough payment evidence to treat the amount as paid automatically. Confirm payment before adding it to owner-paid totals.</p>`:`<p class="field-help">This Optimum invoice shows the amount due as paid and the invoice balance as ${money(d.invoiceBalance||0)}.</p>`):'';
-  const categoryField=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?`<label class="field"><span>Cost category</span><select name="category">${[['mixed_surgery_dental','Surgery + dental day'],['monitoring','Monitoring'],['diagnosis','Diagnosis'],['staging','Initial staging'],['treatment','Treatment'],['restaging','Restaging'],['medication','Medication'],['mixed','Mixed care'],['other','Other']].map(([value,label])=>`<option value="${value}" ${d.category===value?'selected':''}>${label}</option>`).join('')}</select></label>`:'';
-  const paymentConfirm=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?'<label class="import-check"><input type="checkbox" name="paymentConfirmed" value="yes" required> I paid this amount</label>':'';
-  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${surchargeMatch?'Recorded paid amount':d.paymentUnconfirmed?'Invoice amount due':'Invoice amount paid'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${reviewAmount.toFixed(2)}" required></label>${categoryField}${optimumHelp}${paymentConfirm}${d.kind==='invoice'?`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`:''}`;
-  q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · ${d.paymentUnconfirmed?'amount due':'paid cost'}`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already reconcile; saving only links the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
+  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):Number(match.amountPaid)===d.amountPaid);
+  const optimumReconciliation=d.kind==='optimumInvoice'&&!d.paymentUnconfirmed&&d.surchargeRate&&d.invoiceAmount!=null
+    ? `<p class="field-help">Invoice base: ${money(d.invoiceAmount)} · 3% credit-card surcharge: ${money(d.amountPaid-d.invoiceAmount)} · owner-paid total: ${money(d.amountPaid)}.${already?' The existing Roger Care cost already matches, so no duplicate cost will be added.':''}</p>`
+    : '';
+  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${d.paymentUnconfirmed?'Invoice amount due':'Owner-paid total'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${d.amountPaid.toFixed(2)}" required></label>${optimumReconciliation}${d.paymentUnconfirmed?`<label class="field"><span>Cost category</span><select name="category">${[['monitoring','Monitoring'],['diagnosis','Diagnosis'],['staging','Initial staging'],['treatment','Treatment'],['restaging','Restaging'],['medication','Medication'],['mixed','Mixed care'],['other','Other']].map(([value,label])=>`<option value="${value}" ${d.category===value?'selected':''}>${label}</option>`).join('')}</select></label><p class="field-help">This Optimum invoice shows an amount due, not a payment receipt. Confirm you paid it before adding it to owner-paid totals.</p><label class="import-check"><input type="checkbox" name="paymentConfirmed" value="yes" required> I paid this amount</label>`:d.kind==='optimumInvoice'?'':`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`}`;
+  q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · ${d.paymentUnconfirmed?'amount due':'paid cost'}`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already match; saving only records the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
 }
 
 async function readImportPdf(file,kind,panel){
