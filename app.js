@@ -496,6 +496,18 @@ function parseOwnerSignInLink(input){
   return {token_hash:token,type};
 }
 
+async function refreshSharedViewer(){
+  if(!cloud||ownerCanEdit||unpublishedLocal||cloudBusy)return false;
+  const ok=await readCloudViewer();
+  if(ok){
+    renderAll();
+    toast('Latest Roger Care updates loaded');
+  }else{
+    toast('Could not refresh the shared record right now',true);
+  }
+  return ok;
+}
+
 function renderSharedStatus(){
   const status=q('#sharedStatus'),controls=q('#sharedControls');
   if(!status||!controls||!state)return;
@@ -514,11 +526,14 @@ function renderSharedStatus(){
         : 'A pending local change is safe here. Sign in as the owner on this device to sync it.');
 
   status.className=`shared-status ${synced?'is-synced':'is-local'}`;
-  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}`;
+  status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}${viewer?'<button id="refreshSharedHome" class="secondary-button compact" type="button">Refresh latest</button>':''}`;
 
   controls.innerHTML=ownerCanEdit
     ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
-    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p>${viewer?'<button id="refreshSharedRecord" class="secondary-button" type="button">Refresh latest Roger Care</button>':''}</div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+
+  q('#refreshSharedHome')?.addEventListener('click',refreshSharedViewer);
+  q('#refreshSharedRecord')?.addEventListener('click',refreshSharedViewer);
 
   q('#ownerLogin')?.addEventListener('submit',async event=>{
     event.preventDefault();
@@ -1109,6 +1124,10 @@ function bindRefreshControl(){
     button.disabled = true;
     button.textContent = '…';
     try {
+      if(!ownerCanEdit&&!unpublishedLocal&&cloud){
+        await refreshSharedViewer();
+        return;
+      }
       if ('serviceWorker' in navigator) {
         const registration = await navigator.serviceWorker.getRegistration();
         if (registration) await registration.update();
@@ -1417,9 +1436,32 @@ function renderTreatmentOverlay(){
   });
   laneMeds.forEach((id,row)=>{
     const y=medTop+row*32;
-    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
+    svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(id==='med-prednisone'?'Prednisone · 20mg thick / 10mg thin':medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
+  const prednisoneDaily=[
+    ...reportedCourseDays('med-prednisone',window),
+    ...medications.filter(a=>a.medicationId==='med-prednisone'&&a.status==='given')
+  ].filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date));
+  const prednisoneRuns=[];
+  for(const dose of prednisoneDaily){
+    const mg=Number.parseFloat(dose.dose);
+    if(!Number.isFinite(mg))continue;
+    const prior=prednisoneRuns.at(-1);
+    if(prior&&prior.mg===mg&&daysBetween(prior.end,dose.date)===1)prior.end=dose.date;
+    else prednisoneRuns.push({start:dose.date,end:dose.date,mg});
+  }
+  if(prednisoneRuns.length&&laneMeds.includes('med-prednisone')){
+    const y=medTop+laneMeds.indexOf('med-prednisone')*32;
+    const dayPx=(W-L-R)/Math.max(1,days);
+    prednisoneRuns.forEach(run=>{
+      const left=Math.max(L,x(run.start)-dayPx*.45),right=Math.min(W-R,x(run.end)+dayPx*.45);
+      const width=run.mg>=20?10:5;
+      const label=`Prednisone · ${run.mg} mg daily · ${fmtDate(run.start)}${run.end!==run.start?'–'+fmtDate(run.end):''} · given`;
+      svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="prednisone" data-start="${run.start}" data-end="${run.end}" data-dose="${run.mg}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="#512888" stroke-width="${width}" opacity=".78" stroke-linecap="round"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+    });
+  }
   courses.forEach((c,i)=>{
+    if(c.medicationId==='med-prednisone')return;
     const left=x(c.startDate<startDate?startDate:c.startDate),right=x(courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c));
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
     const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · reported course`;
@@ -1427,6 +1469,7 @@ function renderTreatmentOverlay(){
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
+    if(a.medicationId==='med-prednisone')return;
     const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
     const offset=same.length>1?(position-(same.length-1)/2)*14:0;
     svg+=hit('medication',i,x(a.date)+offset,medTop+laneMeds.indexOf(a.medicationId)*32,`${fmtDate(a.date)} · ${medicationName(a.medicationId)} ${a.dose} · ${a.status}`,'square',a.medicationId==='med-cerenia'?'#512888':'#667085',a.status==='held');
@@ -1446,6 +1489,12 @@ function renderTreatmentOverlay(){
   root.querySelectorAll('.chart-hit').forEach(node=>{
     const show=()=>{
       const kind=node.dataset.kind,i=Number(node.dataset.index);
+      if(kind==='prednisone'){
+        const start=node.dataset.start,end=node.dataset.end,dose=node.dataset.dose;
+        const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(start));guide.setAttribute('x2',x(start));guide.setAttribute('visibility','visible');
+        detail.innerHTML=`<strong>Prednisone · ${esc(dose)} mg daily</strong>${fmtDate(start)}${end!==start?'–'+fmtDate(end):''} · owner-confirmed given. Thick purple = 20 mg; thin purple = 10 mg.`;
+        return;
+      }
       const point=({blood,treatment:treatments,symptom:symptoms,medication:medications,course:courses})[kind][i];
       const date=kind==='course'?(point.startDate<startDate?startDate:point.startDate):point.date;
       const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(date));guide.setAttribute('x2',x(date));guide.setAttribute('visibility','visible');
