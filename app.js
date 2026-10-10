@@ -500,7 +500,8 @@ function renderSharedStatus(){
   const status=q('#sharedStatus'),controls=q('#sharedControls');
   if(!status||!controls||!state)return;
 
-  const synced=ownerCanEdit&&cloudAvailable&&!unpublishedLocal&&cloudRevision>0;
+  const localNewer=Boolean(ownerCanEdit&&state?._savedAt&&cloudUpdatedAt&&Date.parse(state._savedAt)>Date.parse(cloudUpdatedAt)+1000);
+  const synced=ownerCanEdit&&cloudAvailable&&!unpublishedLocal&&!localNewer&&cloudRevision>0;
   const viewer=!ownerCanEdit&&!unpublishedLocal;
   const title=ownerCanEdit
     ? (synced?'Saved & synced':'Saved on this device')
@@ -508,7 +509,7 @@ function renderSharedStatus(){
   const message=ownerCanEdit
     ? (synced
         ? 'Your phone is the master Roger Care record. The cloud mirror is current.'
-        : 'Your latest changes are safe here. Roger Care will keep syncing automatically.')
+        : 'Your phone has changes that may not be in the cloud yet. Tap Sync now to upload them.')
     : (viewer
         ? 'This device shows the latest shared Roger Care record and cannot edit it.'
         : 'A pending local change is safe here. Sign in as the owner on this device to sync it.');
@@ -532,7 +533,18 @@ function renderSharedStatus(){
           toast(pushed?'Latest changes synced to cloud.':'Could not sync yet. Your changes remain saved on this device.',!pushed);
         }else{
           const checked=await readCloudMetadata();
-          toast(checked?'Cloud sync is current.':'Could not check the cloud. Your local record is unchanged.',!checked);
+          if(!checked){
+            toast('Could not check the cloud. Your local record is unchanged.',true);
+          }else if(state._savedAt&&cloudUpdatedAt&&Date.parse(state._savedAt)>Date.parse(cloudUpdatedAt)+1000){
+            // The master local record changed after the cloud mirror was updated.
+            // A manual owner tap explicitly requests an upload of those edits.
+            unpublishedLocal=true;
+            try{localStorage.setItem(PENDING_CLOUD_KEY,'1');}catch(_){}
+            const pushed=await publishCloudMirror();
+            toast(pushed?'Your newer phone entries were uploaded.':'Upload failed. Your phone entries remain saved.',!pushed);
+          }else{
+            toast('Cloud checked; no newer local edits to upload.');
+          }
         }
       }else if(unpublishedLocal){
         toast('This device has an unsynced local change. Sign in as owner before refreshing.',true);
@@ -1396,7 +1408,7 @@ function renderTreatmentOverlay(){
   const blood=state.labs.filter(p=>p.metric===metric&&inView(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
   const symptoms=state.observations.filter(o=>inView(o.date)).map(o=>({...o,severity:symptomSeverity(o)})).filter(o=>o.severity>0);
   const medications=(state.medicationAdministrations||[]).filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-  const courses=(state.medicationCourses||[]).filter(c=>courseRecordedEnd(c)&&c.startDate<=(window?.displayEnd||'9999-12-31')&&courseRecordedEnd(c)>=startDate);
+  const courses=(state.medicationCourses||[]).filter(c=>chartCourseEnd(c)&&c.startDate<=(window?.displayEnd||'9999-12-31')&&chartCourseEnd(c)>=startDate);
   const treatments=selectedCycle?[selectedCycle]:allTreatments;
   const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).concat(courses.map(courseRecordedEnd)).sort().at(-1)||startDate;
   const days=Math.max(1,daysBetween(startDate,endDate));
@@ -1450,27 +1462,30 @@ function renderTreatmentOverlay(){
   courses.forEach((c,i)=>{
     const isPrednisone=c.medicationId==='med-prednisone';
     const courseStart=c.startDate<startDate?startDate:c.startDate;
-    const courseEnd=courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c);
+    const courseEnd=chartCourseEnd(c)>endDate?endDate:chartCourseEnd(c);
     let left=x(courseStart),right=x(courseEnd);
     // Adjacent, owner-confirmed Prednisone courses describe one uninterrupted
     // medication timeline. Join at the day midpoint without inventing a dose.
     if(isPrednisone){
-      const prior=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&courseRecordedEnd(other)===addDays(c.startDate,-1));
-      const next=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&other.startDate===addDays(courseRecordedEnd(c),1));
+      const prior=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&chartCourseEnd(other)===addDays(c.startDate,-1));
+      const next=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&other.startDate===addDays(chartCourseEnd(c),1));
       const halfDay=(W-L-R)/days/2;
       if(prior&&courseStart===c.startDate)left-=halfDay;
-      if(next&&courseEnd===courseRecordedEnd(c))right+=halfDay;
+      if(next&&courseEnd===chartCourseEnd(c))right+=halfDay;
     }
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
     // Stroke weights distinguish documented doses, not medication intensity or effectiveness.
     // Unknown doses retain a neutral weight rather than guessing.
     const doseMg=Number.parseFloat(String(c.dose||'').match(/^\s*(\d+(?:\.\d+)?)\s*mg\b/i)?.[1]||'');
     const courseWeight=isPrednisone?(Number.isFinite(doseMg)?(doseMg>=20?10:doseMg>=10?5:3):6):8;
-    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · ${isPrednisone?'continuous owner-confirmed course':'reported course'}`;
+    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))} · ${isPrednisone?'continuous owner-confirmed course':'reported course'}`;
     svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="${courseWeight}" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
+    // Prednisone is represented by its purple course line when explicitly
+    // recorded doses fall within that supported continuous interval.
+    if(a.medicationId==='med-prednisone'&&a.status==='given'&&courses.some(c=>c.medicationId==='med-prednisone'&&a.date>=c.startDate&&a.date<=chartCourseEnd(c)))return;
     const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
     const offset=same.length>1?(position-(same.length-1)/2)*14:0;
     svg+=hit('medication',i,x(a.date)+offset,medTop+laneMeds.indexOf(a.medicationId)*32,`${fmtDate(a.date)} · ${medicationName(a.medicationId)} ${a.dose} · ${a.status}`,'square',a.medicationId==='med-cerenia'?'#512888':'#667085',a.status==='held');
@@ -1556,6 +1571,16 @@ function courseRecordedEnd(course){
   return course.endDate||course.confirmedThrough||null;
 }
 
+// Extend an owner-confirmed course only through consecutive explicitly logged doses.
+function chartCourseEnd(course){
+  let end=courseRecordedEnd(course);
+  if(course.medicationId!=='med-prednisone'||!end)return end;
+  const given=new Set((state.medicationAdministrations||[])
+    .filter(a=>a.medicationId==='med-prednisone'&&a.status==='given').map(a=>a.date));
+  while(given.has(addDays(end,1)))end=addDays(end,1);
+  return end;
+}
+
 function reportedCourseDays(id,window=null){
   const explicit=new Set((state.medicationAdministrations||[]).filter(a=>a.medicationId===id).map(a=>a.date));
   const days=[];
@@ -1573,7 +1598,7 @@ function renderCycleDetails(treatment,window){
   const labs=state.labs.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||a.metric.localeCompare(b.metric));
   const observations=state.observations.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date));
   const medications=(state.medicationAdministrations||[]).filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-  const courses=(state.medicationCourses||[]).filter(c=>courseRecordedEnd(c)&&c.startDate<=window.displayEnd&&courseRecordedEnd(c)>=window.start);
+  const courses=(state.medicationCourses||[]).filter(c=>chartCourseEnd(c)&&c.startDate<=window.displayEnd&&chartCourseEnd(c)>=window.start);
   const costs=state.costs.filter(x=>inCycleWindow(x.date,window));
   const cyclePaid=costs.reduce((sum,c)=>sum+Number(c.amountPaid||0),0);
 
@@ -1611,7 +1636,7 @@ function renderCycleDetails(treatment,window){
     <div class="cycle-section"><div class="cycle-section-title ksu-title">WHY THIS DOSE</div><div class="item-copy" style="margin-top:0">${esc(treatment.doseReason)}</div></div>
     <div class="cycle-section"><div class="cycle-section-title blood-title">BLOODWORK & CHEMISTRY</div>${labRows}</div>
     <div class="cycle-section"><div class="cycle-section-title owner-title">OWNER-OBSERVED SYMPTOMS</div>${obsRows}</div>
-    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION USE</div>${courses.map(c=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${esc(medicationName(c.medicationId))} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))}</div><div class="cycle-observation-copy">${esc(c.dose||'Dose unrecorded')} · ${esc(c.frequency||'Frequency unrecorded')} · ${esc(c.status)}</div></div>`).join('')}${medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join('')}${!courses.length&&!medications.length?'<div class="empty-state">No medication use recorded in this cycle.</div>':''}</div>
+    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION USE</div>${courses.map(c=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${esc(medicationName(c.medicationId))} · ${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))}</div><div class="cycle-observation-copy">${esc(c.dose||'Dose unrecorded')} · ${esc(c.frequency||'Frequency unrecorded')} · ${esc(c.status)}</div></div>`).join('')}${medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join('')}${!courses.length&&!medications.length?'<div class="empty-state">No medication use recorded in this cycle.</div>':''}</div>
     ${treatment.recordCheck?`<div class="alert"><strong>Record check:</strong> ${esc(treatment.recordCheck)}</div>`:''}
   </section>`;
 }
@@ -2126,7 +2151,7 @@ function renderMedicationLedger(){
     const a=medicationStats(m.id),held=state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length;
     const courseOnly=!a.given.length&&state.medicationCourses.some(c=>c.medicationId===m.id);
     const purchases=a.purchases.map(p=>`<div class="medication-purchase-row"><span>${fmtDate(p.date)} · ${p.quantity} × ${p.tabletStrengthMg} mg<br><small>${esc(p.source)}</small></span><strong>${money(p.amountPaid)}<br><small>${money(p.amountPaid/p.quantity)} / tablet</small></strong></div>`).join('');
-    const courseDays=state.medicationCourses.filter(c=>c.medicationId===m.id&&c.status?.includes('owner-confirmed seven-day')).reduce((n,c)=>n+daysBetween(c.startDate,courseRecordedEnd(c))+1,0);
+    const courseDays=state.medicationCourses.filter(c=>c.medicationId===m.id&&c.status?.includes('owner-confirmed seven-day')).reduce((n,c)=>n+daysBetween(c.startDate,chartCourseEnd(c))+1,0);
     return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${courseOnly?'—':a.tablets}${a.unknown?' + ?':''}</strong><span>${a.reported.length?'tablet equivalents, owner-reported':'tablets documented given'}</span></div><div><strong>${courseDays||a.given.length}</strong><span>${courseDays?'course days reported':a.reported.length?'daily doses reported':'doses logged'}${held?` · ${held} held`:''}</span></div><div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div></div><p class="medication-note">${esc(m.prescribedDose)}${courseDays?' · Seven days after the 8/20 neutrophil result (250/µL); dose, frequency, and tablet count unrecorded.':''}${a.reported.length?` · Owner confirms daily use from ${fmtDate(a.reported[0].date)} through ${fmtDate(a.last)}; ${a.tablets} ${m.tabletStrengthMg} mg tablet equivalents across ${a.given.length} days. Future prescribed days are not counted.`:''}${courseOnly&&!courseDays?' · Use is recorded as a course; individual tablet counts are not itemized.':''}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last&&!a.reported.length?` · Last given ${fmtDate(a.last)}.`:''}</p><div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div></article>`;
   }).join('')}</div>`;
 }
@@ -2153,7 +2178,7 @@ function renderMedications(){
     const courses=(state.medicationCourses||[]).filter(c=>c.medicationId===m.id);
     if(!rows.length&&!courses.length)return '';
     const history=rows.map(a=>`<div class="medication-history-row"><div><strong>${fmtDate(a.date)}${a.time?' · '+esc(a.time):''}</strong> · ${esc(a.dose||'dose not recorded')} <span class="chip ${a.status==='held'?'warn':'info'}">${esc(a.status)}</span>${a.reason?`<div class="item-meta">${esc(a.reason)}</div>`:''}</div><button class="text-button" type="button" data-edit-medication="${esc(a.id)}">Correct</button></div>`).join('');
-    return `<details class="medication-group"><summary><strong>${esc(m.name)}</strong><span>${courses.length?`${courses.length} reported course${courses.length===1?'':'s'} · `:''}${rows.length} dated record${rows.length===1?'':'s'}</span></summary><div class="medication-group-body">${courses.map(c=>`<p class="medication-note">${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · ${esc(c.dose||'Dose unrecorded')} · ${esc(c.status)}</p>`).join('')}${history}</div></details>`;
+    return `<details class="medication-group"><summary><strong>${esc(m.name)}</strong><span>${courses.length?`${courses.length} reported course${courses.length===1?'':'s'} · `:''}${rows.length} dated record${rows.length===1?'':'s'}</span></summary><div class="medication-group-body">${courses.map(c=>`<p class="medication-note">${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))} · ${esc(c.dose||'Dose unrecorded')} · ${esc(c.status)}</p>`).join('')}${history}</div></details>`;
   }).join('');
 }
 
