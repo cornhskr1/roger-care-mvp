@@ -1396,7 +1396,7 @@ function renderTreatmentOverlay(){
   const heading=(label,y,color)=>`<text x="8" y="${y}" font-size="13" font-weight="800" fill="${color}">${esc(label)}</text>`;
   svg+=heading('VINBLASTINE · mg/m²',22,'#512888');
   svg+=heading(`${metric.toUpperCase()} · ${unit}`,140,'#b44f5c');
-  svg+=heading('MEDICATIONS · ▰ reported course  □ given  ▫ held',medTop-24,'#667085');
+  svg+=heading('MEDICATIONS · ━ continuous prednisone  ▰ reported course  □ given  ▫ held',medTop-24,'#667085');
   svg+=heading('OWNER OBSERVATIONS · severity',symptomTop-22,'#5e7895');
   [doseBottom+18,bloodBottom+20,medBottom+8,symptomBottom].forEach(y=>svg+=`<line x1="8" x2="${W-R}" y1="${y}" y2="${y}" stroke="#dedfea"/>`);
   if(treatments.length>1)svg+=`<path d="${treatments.map((t,i)=>`${i?'L':'M'}${x(t.date)},${yDose(t.doseMgM2)}`).join(' ')}" fill="none" stroke="#512888" stroke-width="3"/>`;
@@ -1420,10 +1420,22 @@ function renderTreatmentOverlay(){
     svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
   courses.forEach((c,i)=>{
-    const left=x(c.startDate<startDate?startDate:c.startDate),right=x(courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c));
+    const isPrednisone=c.medicationId==='med-prednisone';
+    const courseStart=c.startDate<startDate?startDate:c.startDate;
+    const courseEnd=courseRecordedEnd(c)>endDate?endDate:courseRecordedEnd(c);
+    let left=x(courseStart),right=x(courseEnd);
+    // Adjacent, owner-confirmed Prednisone courses describe one uninterrupted
+    // medication timeline. Join at the day midpoint without inventing a dose.
+    if(isPrednisone){
+      const prior=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&courseRecordedEnd(other)===addDays(c.startDate,-1));
+      const next=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&other.startDate===addDays(courseRecordedEnd(c),1));
+      const halfDay=(W-L-R)/days/2;
+      if(prior&&courseStart===c.startDate)left-=halfDay;
+      if(next&&courseEnd===courseRecordedEnd(c))right+=halfDay;
+    }
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
-    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · reported course`;
-    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${c.medicationId==='med-prednisone'?'#512888':'#667085'}" stroke-width="8" opacity=".58" stroke-linecap="round"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · ${isPrednisone?'continuous owner-confirmed course':'reported course'}`;
+    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="8" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
