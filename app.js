@@ -1396,7 +1396,7 @@ function renderTreatmentOverlay(){
   const heading=(label,y,color)=>`<text x="8" y="${y}" font-size="13" font-weight="800" fill="${color}">${esc(label)}</text>`;
   svg+=heading('VINBLASTINE · mg/m²',22,'#512888');
   svg+=heading(`${metric.toUpperCase()} · ${unit}`,140,'#b44f5c');
-  svg+=heading('MEDICATIONS · ━ continuous prednisone  ▰ reported course  □ given  ▫ held',medTop-24,'#667085');
+  svg+=heading('MEDICATIONS · ━ prednisone (thicker = higher mg)  ▰ course  □ given  ▫ held',medTop-24,'#667085');
   svg+=heading('OWNER OBSERVATIONS · severity',symptomTop-22,'#5e7895');
   [doseBottom+18,bloodBottom+20,medBottom+8,symptomBottom].forEach(y=>svg+=`<line x1="8" x2="${W-R}" y1="${y}" y2="${y}" stroke="#dedfea"/>`);
   if(treatments.length>1)svg+=`<path d="${treatments.map((t,i)=>`${i?'L':'M'}${x(t.date)},${yDose(t.doseMgM2)}`).join(' ')}" fill="none" stroke="#512888" stroke-width="3"/>`;
@@ -1434,8 +1434,12 @@ function renderTreatmentOverlay(){
       if(next&&courseEnd===courseRecordedEnd(c))right+=halfDay;
     }
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
+    // Stroke weights distinguish documented doses, not medication intensity or effectiveness.
+    // Unknown doses retain a neutral weight rather than guessing.
+    const doseMg=Number.parseFloat(String(c.dose||'').match(/^\s*(\d+(?:\.\d+)?)\s*mg\b/i)?.[1]||'');
+    const courseWeight=isPrednisone?(Number.isFinite(doseMg)?(doseMg>=20?10:doseMg>=10?5:3):6):8;
     const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))} · ${isPrednisone?'continuous owner-confirmed course':'reported course'}`;
-    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="8" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="${courseWeight}" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
