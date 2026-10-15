@@ -8,13 +8,20 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Check JavaScript syntax
         run: node --check app.js
+      - name: Test navigation and care-summary safety
+        run: |
+          node scripts/test-navigation.cjs
+          node scripts/test-care-snapshot.cjs
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('data/seed.json','utf8')); console.log('seed.json OK')"
       - name: Verify required app assets
@@ -25,3 +32,19 @@ jobs:
           test -f manifest.webmanifest
           test -f sw.js
           test -f icons/icon.svg
+      - name: Install isolated browser test tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.62.1
+          npx playwright install --with-deps chromium
+      - name: Check desktop and phone navigation with synthetic records
+        env:
+          QA_SCREENSHOT_DIR: qa-screenshots
+        run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-navigation.cjs --browser
+      - name: Retain synthetic UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roger-care-synthetic-ui
+          path: qa-screenshots/
+          if-no-files-found: ignore
+          retention-days: 7

@@ -107,3 +107,27 @@ Roger Care uses a deliberately simple synchronization model:
 - the legacy patch/reconciliation RPC is not available to authenticated clients
 
 There is intentionally no record merge engine and no normal manual sync workflow. If the owner phone loses its local record, restoration from cloud/file backup is a recovery task rather than routine synchronization.
+
+
+## Focused navigation and owner-language summaries (app shell v61)
+
+- **Home / Today:** daily entry and medication shortcuts, latest observation, Care Snapshot, next scheduled appointment, and care-team calling shortcuts. View-only/sync status and backup access remain visible.
+- **Journal:** Entries opens first; Trends is a separate section.
+- **Medications:** its own bottom-navigation destination, with Log dose at the top. Owner-confirmed daily courses and individual dose logs are distinguished; a missing log is not treated as a missed dose. Costs and purchase detail are under More.
+- **Timeline:** recorded History is newest first, scheduled appointments stay separate, and the treatment Chart and Cycle review have their own sections. Scheduled dates never imply that treatment or bloodwork happened.
+- **More:** a short menu leads to the Care Snapshot, questions, contacts, appointments/instructions, documents, backup/sync, and profile. Browser Back/Forward follows these destinations.
+- **Care Snapshot:** date-specific owner wording separates observed changes, explicitly recorded negatives, and missing observations. Up to three recent owner notes are shown in full with dates and a direct Journal link; the PDF labels its text rendering, with exact original wording retained in Journal and HTML. Prednisone summaries derive supported dates from the existing owner-confirmed course and individual dose records, without changing those records. Gaps, held doses, unknown/different doses, and later regimens do not extend a continuous band at the old dose.
+
+These are presentation and read-only summary changes. Storage keys, record migrations, authentication, the single-writer cloud mirror, uploaded files, and the seed record are unchanged. No new clinical records are embedded in this release.
+
+### Regression checks
+
+Run the dependency-free checks used in CI:
+
+```sh
+node --check app.js
+node scripts/test-navigation.cjs
+node scripts/test-care-snapshot.cjs
+```
+
+The navigation suite also documents optional isolated browser coverage. Synthetic test fixtures never use the live cloud record or owner credentials.
