@@ -1,5 +1,11 @@
 # Changelog
 
+## App shell v62 — Stool context in summaries
+
+- Require stool-specific context before interpreting broad GI or journal descriptions as stool findings.
+- Preserve original notes, structured findings, explicit negatives, and unknowns.
+- Add synthetic regressions for unrelated body descriptions and ambiguous wording.
+
 ## App shell v61 — Focused care navigation
 
 - Put daily logging, Care Snapshot, next appointment, and care contacts on Home.

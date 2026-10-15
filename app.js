@@ -2708,7 +2708,7 @@ function careSnapshotContextOnly(text){
 function careSnapshotUncertainText(text){
   return /\?|\b(?:possible|possibly|maybe|might|could|unsure|uncertain|suspect(?:ed)?)\b/i.test(String(text||''));
 }
-function careSnapshotMentions(text,pattern,{includeUncertain=false}={}){
+function careSnapshotMentions(text,pattern,{includeUncertain=false,stoolContext=false}={}){
   // A comma can continue a negated list ("no blood, black/tarry stool, or
   // diarrhea"), so it must not reset negation. A new sentence or an explicit
   // contrast does. Treat unclear list-like wording conservatively.
@@ -2719,12 +2719,13 @@ function careSnapshotMentions(text,pattern,{includeUncertain=false}={}){
     for(const match of clause.matchAll(matcher)){
       let before=clause.slice(0,match.index);
       if(careSnapshotContextOnly(before))continue;
+      if(stoolContext&&/\b(?:skin|jowls?|eyes?|saliva|drool|medication|medicine|food|meals?|treats?|mouth|gums?|vomit)(?:\s+(?:was|were|is|are|became|looked|seemed))?\s*(?:(?:very|quite|slightly)\s+)?$/i.test(before))continue;
       const after=clause.slice(match.index+match[0].length);
       // An explicit new observation after a comma starts its own statement:
       // "no blood, but stool was watery" or "no blood, stool was watery".
       const comma=before.lastIndexOf(',');
       const tail=comma>=0?before.slice(comma+1):'';
-      if(/^\s*(?:(?:he|she|roger|stools?|vomit|there)\s+(?:was|were|is|are|had|has)|(?:I|we)\s+(?:saw|noticed|observed|recorded))\b/i.test(tail))before=tail;
+      if(comma>=0&&/^\s*(?:(?:he|she|roger|stools?|vomit|there)\s+(?:was|were|is|are|had|has)|(?:I|we)\s+(?:saw|noticed|observed|recorded))\b/i.test(tail+match[0]))before=tail;
       const negated=/\b(?:no|without|denies|negative for)\b[^.;]*$|\bnot\s*(?:seen|observed|present)?\s*$/i.test(before)
         ||/^\s*(?:was |were |is |are )?(?:absent|not (?:seen|observed|present))\b/i.test(after);
       if(!negated)return true;
@@ -2733,10 +2734,35 @@ function careSnapshotMentions(text,pattern,{includeUncertain=false}={}){
   });
 }
 
-function careSnapshotStoolTexts(o){
-  return [o.gi,o.stool,...(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>row.notes),
-    ...String(o.notes||'').split(/[.;!\n]/).filter(text=>/stool|bowel|poop|diarrhea|tarry/i.test(text))].filter(Boolean);
+function careSnapshotStoolSources(o){
+  const dedicated=[o.stool,...(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>row.notes)];
+  const general=[o.gi,o.notes].flatMap(text=>String(text||'').split(/[.;!\n]/))
+    .filter(text=>/\b(?:stools?|bowel movements?|poop|fa?eces|bms?|diarrh(?:ea|oea)|tarry)\b/i.test(text));
+  return [...dedicated.map(text=>({text,stoolSpecific:true})),...general.map(text=>({text,stoolSpecific:false}))].filter(source=>source.text);
 }
+function careSnapshotStoolFindingPattern(kind,stoolSpecific=false){
+  const stool=String.raw`(?:stools?|bowel movements?|poop|feces|faeces|bms?)`;
+  const loose=String.raw`(?:loose|watery|liquid|unformed|mushy)`;
+  const descriptions={loose,blood:String.raw`blood`,bright:String.raw`(?:bright[ -]*red\s+blood|blood\s+(?:was\s+)?bright[ -]*red)`,black:String.raw`(?:black\s*[/,-]?\s*tarry|tarry)`};
+  if(kind==='all')return new RegExp(['loose','blood','bright','black'].map(key=>careSnapshotStoolFindingPattern(key,stoolSpecific).source).join('|'),'i');
+  const description=descriptions[kind];
+  const unrelated=String.raw`(?!\s+(?:(?:in|from|on)\s+(?:the\s+)?)?(?:skin|jowls?|eyes?|saliva|drool|medication|medicine|food|meals?|treats?|mouth|gums?|vomit|nose)\b)`;
+  // General GI/journal prose must link the description directly to stool.
+  // Nearby words such as "formed stool; watery saliva" are not enough.
+  const modifiers=kind==='loose'?String.raw`(?:\s*(?:,|/|and|or)\s*(?:${loose}|soft))*`:'';
+  const before=String.raw`\b${description}${modifiers}\s+${stool}\b`;
+  const qualifiers=kind==='loose'?'very|quite|slightly|soft|and|or':'very|quite|bright red|red|dark|some|traces of|streaks of';
+  const after=String.raw`\b${stool}\b(?:\s+(?:was|were|is|are|became|becomes|looks?|looked|seemed|appeared|had|has|with))?\s*[:=-]?\s*(?:(?:${qualifiers})\s+)*${description}\b${unrelated}`;
+  const inStool=String.raw`\b${description}(?:\s+(?:(?:was|were|is|are)\s+)?(?:mixed|noted|seen|observed|streaks?|spots?|present))?\s+(?:in|on|with|from)\s+(?:the\s+)?${stool}\b`;
+  // Prefer the complete stool phrase even in a dedicated field so that a
+  // trailing negative ("watery stool absent") applies to the whole finding.
+  // Only then allow shorthand, still excluding explicitly unrelated subjects.
+  return new RegExp([...(kind==='loose'?[String.raw`\bdiarrh(?:ea|oea)\b`]:[]),before,after,inStool,...(stoolSpecific?[String.raw`\b${description}\b${unrelated}`]:[])].join('|'),'i');
+}
+function careSnapshotStoolFinding(o,kind,options={}){
+  return careSnapshotStoolSources(o).some(({text,stoolSpecific})=>careSnapshotMentions(text,careSnapshotStoolFindingPattern(kind,stoolSpecific),{...options,stoolContext:true}));
+}
+
 function careSnapshotNauseaValue(o){
   if((o.nauseaSigns||[]).length)return 1;
   if(String(o.nauseaOther||'').trim()){
@@ -2791,24 +2817,25 @@ function careSnapshotData(){
   const nauseaNoneDays=nauseaRows.filter(row=>nauseaValue(row)===0);
   const nauseaDates=nauseaDays.map(row=>row.date);
   const nauseaTop=mostCommonLabels(observations.filter(o=>careSnapshotNauseaValue(o)>0).flatMap(o=>nauseaLabels(o).filter(label=>!careSnapshotContextOnly(label)&&!careSnapshotUncertainText(label))));
-  const stoolPattern=/diarrhea|loose|watery|liquid|unformed|mushy/i;
-  const looseObservation=o=>(o.stoolEvents||[]).filter(s=>s.status==='observed').some(s=>['very_soft','unformed','watery'].includes(s.consistency)||hasNumber(s.score)&&Number(s.score)>=6||careSnapshotMentions(s.notes,stoolPattern))
-    ||(!o.stoolEvents?.length&&Number.parseFloat(o.stool)>=6)||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,stoolPattern));
+  const looseObservation=o=>(o.stoolEvents||[]).filter(s=>s.status==='observed').some(s=>['very_soft','unformed','watery'].includes(s.consistency)||hasNumber(s.score)&&Number(s.score)>=6)
+    ||(!o.stoolEvents?.length&&Number.parseFloat(o.stool)>=6)||careSnapshotStoolFinding(o,'loose');
   const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null||row.observations.some(looseObservation));
   const looseDays=rows.filter(row=>row.observations.some(looseObservation));
   const characterizedStoolDays=stoolRows.filter(row=>row.observations.some(o=>(o.stoolEvents||[]).some(s=>s.status==='observed'&&(hasNumber(s.score)&&Number(s.score)>0||Boolean(s.consistency)))||Number.parseFloat(o.stool)>0));
   const noStoolDays=rows.filter(row=>row.values.stoolCount===0);
-  const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/\bblood\b|black\s*\/?\s*tarry|tarry/i))));
-  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/bright[ -]*red(?:\s+\w+){0,3}\s+blood|blood(?:\s+\w+){0,3}\s+bright[ -]*red/i))));
-  const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/black\s*\/?\s*tarry|tarry/i))));
+  const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolFinding(o,'blood')||careSnapshotStoolFinding(o,'black')));
+  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||careSnapshotStoolFinding(o,'bright')));
+  const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolFinding(o,'black')));
   const noteReviews=[];
   for(const observation of observations){
     const candidates=[
-      ...careSnapshotStoolTexts(observation).map(text=>({text,pattern:/\bblood\b|black\s*\/?\s*tarry|tarry|diarrhea|loose|watery/i})),
+      ...careSnapshotStoolSources(observation).map(({text,stoolSpecific})=>({text,pattern:careSnapshotStoolFindingPattern('all',stoolSpecific),stoolContext:true})),
       ...[observation.gi,observation.notes,observation.nauseaOther].filter(Boolean).map(text=>({text,pattern:/nausea|lip lick|repeated swallow|drool|borborygmi|gurgling|stomach noise/i}))
     ];
-    for(const {text,pattern} of candidates){
-      if(careSnapshotUncertainText(text)&&careSnapshotMentions(text,pattern,{includeUncertain:true})&&!careSnapshotMentions(text,pattern)&&!noteReviews.some(note=>note.date===observation.date&&note.text===text))noteReviews.push({date:observation.date,text});
+    for(const {text,pattern,stoolContext=false} of candidates){
+      for(const fragment of String(text).split(/[.;!\n]/)){
+        if(careSnapshotUncertainText(fragment)&&careSnapshotMentions(fragment,pattern,{includeUncertain:true,stoolContext})&&!careSnapshotMentions(fragment,pattern,{stoolContext})&&!noteReviews.some(note=>note.date===observation.date&&note.text===fragment))noteReviews.push({date:observation.date,text:fragment});
+      }
     }
   }
   const stoolScores=stoolRows.map(row=>row.values.stoolScore).filter(value=>value!==null&&Number.isFinite(Number(value))).map(Number);
