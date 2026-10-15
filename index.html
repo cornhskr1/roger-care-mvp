@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=43">
+  <link rel="stylesheet" href="styles.css?v=44">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -36,11 +36,8 @@
 
     <main id="mainContent">
       <section id="view-home" class="view active" data-view="home">
-        <div id="statusHero" class="status-hero"></div>
-        <div id="metricStrip" class="metric-strip"></div>
+        <div class="page-title-row"><div><div class="section-kicker">ROGER AT A GLANCE</div><h2>Today</h2></div><button class="text-button" data-nav="timeline" type="button">Treatment history</button></div>
         <section id="sharedStatus" class="shared-status" aria-live="polite"></section>
-        <section id="homeBackupStatus" class="backup-banner" aria-live="polite"></section>
-
         <section class="card quick-log-card">
           <div class="card-head">
             <div>
@@ -49,54 +46,78 @@
             </div>
             <button id="openJournalComposer" type="button" class="primary-button compact">Log today</button>
           </div>
+          <button id="homeMedicationButton" type="button" class="secondary-button compact">Log medication</button>
           <div id="latestObservation" class="empty-state"></div>
         </section>
+        <section class="card snapshot-shortcut"><div><div class="section-kicker">READY FOR THE VET</div><h2>Care Snapshot</h2><p class="body-copy">A plain-language update, with the recorded details close at hand.</p></div><button class="primary-button" type="button" data-nav="snapshot">Open Care Snapshot</button><button class="text-button" type="button" data-nav="more/questions">Questions for this visit</button></section>
+        <section class="card"><div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Next appointment</h2></div><button class="text-button" type="button" data-nav="more/plan">All dates & instructions</button></div><div id="homeNextVisit"></div></section>
+        <section class="card home-contacts-card"><div class="card-head"><div><div class="section-kicker">CARE TEAM</div><h2>Call for help</h2></div><button class="text-button" type="button" data-nav="more/contacts">Contacts & directions</button></div><div id="homeCareContacts"></div></section>
+        <section id="homeBackupStatus" class="backup-banner" aria-live="polite"></section>
+      </section>
 
-        <section class="card journal-brief-card owner-only">
+      <section id="view-journal" class="view" data-view="journal"><div class="page-title-row">
+          <div>
+            <div class="section-kicker">OWNER OBSERVATIONS</div>
+            <h2>Daily journal</h2>
+            <p>Fast enough to use every day. Detailed enough to matter later.</p>
+          </div>
+          <button id="journalAddButton" class="primary-button compact" type="button">+ Entry</button>
+        </div>
+        <div class="section-tabs" role="group" aria-label="Journal sections"><button type="button" data-nav="journal/entries" aria-controls="journal-panel-entries" aria-pressed="true">Entries</button><button type="button" data-nav="journal/trends" aria-controls="journal-panel-trends" aria-pressed="false">Trends</button></div><div id="journal-panel-entries" data-journal-panel="entries"><div class="journal-history-head"><h2>Daily entries</h2><button id="journalHistoryToggle" class="secondary-button" type="button">Show all entries</button></div><div id="journalEntries" class="stack"></div></div><div id="journal-panel-trends" data-journal-panel="trends" hidden><div id="journalSummary" class="summary-grid"></div><section class="card journal-brief-card owner-only">
           <div class="card-head"><div><div class="section-kicker">SINCE THE LAST TREATMENT</div><h2>Your journal at a glance</h2></div><button class="text-button" data-nav="journal" type="button">Open journal</button></div>
           <div id="journalBrief" aria-live="polite"></div>
-        </section>
-
-        <section class="card care-team-card">
-          <div class="card-head">
-            <div><div class="section-kicker">CARE TEAM</div><h2>Call the right place fast</h2></div>
-            <button class="text-button" data-nav="more" type="button">Manage</button>
+        </section><section class="card journal-trend-card">
+          <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Compare Roger’s trends</h2></div></div>
+          <div class="compare-metrics">
+            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
+            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
           </div>
-          <div id="careTeamQuick"></div>
-        </section>
-
-        <section class="card question-card">
-          <div class="card-head">
-            <div>
-              <div class="section-kicker">NEXT VISIT</div>
-              <h2>Questions for Roger's care team</h2>
-            </div>
+          <div class="compare-view" role="group" aria-label="Compare by"><button class="compare-view-button active" type="button" data-compare-view="calendar" aria-pressed="true">Calendar dates</button><button class="compare-view-button" type="button" data-compare-view="aligned" aria-pressed="false">Days after chemo</button></div>
+          <div class="compare-range" role="group" aria-label="Date range">
+            <button class="compare-range-button active" type="button" data-compare-range="all" aria-pressed="true">All dates</button>
+            <button class="compare-range-button" type="button" data-compare-range="cycles" aria-pressed="false">Treatment periods</button>
+            <button class="compare-range-button" type="button" data-compare-range="custom" aria-pressed="false">Custom dates</button>
           </div>
-          <p class="body-copy">Capture the question when it occurs to you. Open questions will carry into Roger's visit summary.</p>
-          <form id="questionForm" class="question-form">
-            <label class="field"><span>What do you want to ask?</span><input id="questionInput" name="question" type="text" maxlength="500" placeholder="Does the nausea timing 2–3 days after treatment matter?" required></label>
-            <button class="primary-button compact" type="submit">Add question</button>
-          </form>
-          <div id="questionContext" class="question-context" hidden></div>
-          <div id="nextVisitQuestions" class="question-list"></div>
-        </section>
+          <div id="compareCyclePicker" class="compare-cycle-picker" hidden></div>
+          <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
+          <div id="nauseaTimingInsight" class="nausea-timing-insight" hidden></div>
+          <div id="journalTrend"></div>
+          <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
+          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. When nausea is shown, shaded bands reflect Roger’s own recorded post-chemo timing; teal diamonds mark recorded Cerenia doses. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. An ALP result reported as &gt;2,000 is plotted at 2,000 as a lower bound. These patterns show timing, not cause.</p>
+        </section><section class="card">
+          <div class="card-head"><div><div class="section-kicker">WEEKLY CHECK-IN</div><h2>How much was Roger himself?</h2></div></div>
+          <p class="field-help">A quick impression compared with Roger’s usual self. This is your observation, not a medical score.</p>
+          <form id="wellbeingForm" class="form-grid two"><label class="field"><span>Week ending</span><input name="date" type="date" required></label><label class="field"><span>Overall wellbeing (0–10)</span><input name="score" type="number" min="0" max="10" step="1" inputmode="numeric" required></label><label class="field wide"><span>What felt different? (optional)</span><input name="notes" placeholder="Play, sleep, comfort, his usual Roger things…"></label><button class="secondary-button" type="submit">Save weekly check-in</button></form>
+          <div id="wellbeingHistory" class="stack compact-stack"></div>
+        </section></div></section>
 
-        <section class="card">
-          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Appointments & vet instructions</h2></div></div>
-          <div id="upcomingCare"></div>
-        </section>
-
-        <section class="card">
+      <section id="view-medications" class="view" data-view="medications"><div class="page-title-row"><div><div class="section-kicker">DAILY & AS-NEEDED</div><h2>Medications</h2><p>Log a dose or review what is recorded for each medicine.</p></div></div><section class="card">
           <div class="card-head">
             <div>
-              <div class="section-kicker">CLINICAL COURSE</div>
-              <h2>Dose → bloodwork → medications → observations</h2>
+              <div class="section-kicker">MEDICATION TRACKING</div>
+              <h2>Doses & daily courses</h2>
+              <p class="body-copy">Owner-confirmed courses and individual dose logs are shown separately. A missing log does not mean a dose was missed.</p>
             </div>
+            <button id="medicationAddButton" class="primary-button compact" type="button">Log dose</button>
           </div>
-          <div id="clinicalCourse"></div>
-        </section>
+          <div id="medicationSummary"></div>
+          <div id="medicationHistory" class="stack compact-stack"></div>
+        </section></section>
 
-        <section class="card response-card">
+      <section id="view-timeline" class="view" data-view="timeline"><div class="page-title-row">
+          <div>
+            <div class="section-kicker">LONGITUDINAL RECORD</div>
+            <h2>Treatment timeline</h2>
+            <p>Clinical notes, labs, treatments and owner observations aligned by date.</p>
+          </div>
+        </div>
+        <div class="section-tabs" role="group" aria-label="Timeline sections"><button type="button" data-nav="timeline/history" aria-controls="timeline-panel-history" aria-pressed="true">History</button><button type="button" data-nav="timeline/chart" aria-controls="timeline-panel-chart" aria-pressed="false">Treatment chart</button><button type="button" data-nav="timeline/review" aria-controls="timeline-panel-review" aria-pressed="false">Cycle review</button></div><div id="timeline-panel-history" data-timeline-panel="history"><section id="timelineUpcoming" class="card timeline-upcoming"></section><h2 class="history-heading">Recorded history</h2><div class="segmented" role="group" aria-label="Timeline filter">
+          <button class="segment active" type="button" data-timeline-filter="all">All</button>
+          <button class="segment" type="button" data-timeline-filter="clinical">Clinical</button>
+          <button class="segment" type="button" data-timeline-filter="owner">Owner</button>
+        </div>
+        <div id="timelineEntries" class="timeline"></div>
+      </div><div id="timeline-panel-chart" data-timeline-panel="chart" hidden><div id="metricStrip" class="metric-strip"></div><section class="card response-card">
           <div class="card-head">
             <div>
               <div class="section-kicker">TREATMENT RESPONSE EXPLORER</div>
@@ -129,108 +150,22 @@
           <div id="treatmentMedicationSummary"></div>
           <div id="treatmentWindowDetails" class="treatment-window-details"></div>
           <div class="overlay-method-note">Treatment association window: from the chemo date through the day before the next chemo. This keeps nadir/recovery labs and home observations attached to the cycle that preceded them.</div>
-        </section>
-
-        <section class="card clinical-review-card">
+        </section></div><div id="timeline-panel-review" data-timeline-panel="review" hidden><div id="statusHero" class="status-hero"></div><section class="card clinical-review-card">
           <div class="card-head"><div><div class="section-kicker">FOR THE NEXT ONCOLOGY VISIT</div><h2>What followed each treatment?</h2></div></div>
           <p class="body-copy">Dose and weight, measured counts, what you noticed at home, supportive medication, and the next recorded dose decision. Tap a treatment to review it.</p>
           <div id="cycleClinicalReview"></div>
           <p class="field-help">These are dated records, not a recommendation to give, delay, or change treatment. “Lowest measured” depends on when blood was drawn.</p>
-        </section>
-
-        <section class="card owner-only">
+        </section><details class="card"><summary>Compact clinical course</summary><section class="card">
           <div class="card-head">
             <div>
-              <div class="section-kicker">CARE BURDEN</div>
-              <h2>Owner-paid cost</h2>
-            </div>
-            <button class="text-button" data-nav="costs" type="button">View costs</button>
-          </div>
-          <div id="homeCostSummary"></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <div>
-              <div class="section-kicker">NEXT</div>
-              <h2>Open items</h2>
+              <div class="section-kicker">CLINICAL COURSE</div>
+              <h2>Dose → bloodwork → medications → observations</h2>
             </div>
           </div>
-          <div id="openItems"></div>
-        </section>
-      </section>
+          <div id="clinicalCourse"></div>
+        </section></details></div></section>
 
-      <section id="view-journal" class="view" data-view="journal">
-        <div class="page-title-row">
-          <div>
-            <div class="section-kicker">OWNER OBSERVATIONS</div>
-            <h2>Daily journal</h2>
-            <p>Fast enough to use every day. Detailed enough to matter later.</p>
-          </div>
-          <button id="journalAddButton" class="primary-button compact" type="button">+ Entry</button>
-        </div>
-        <div id="journalSummary" class="summary-grid"></div>
-        <section class="card journal-trend-card">
-          <div class="card-head"><div><div class="section-kicker">DAILY PATTERNS</div><h2>Compare Roger’s trends</h2></div></div>
-          <div class="compare-metrics">
-            <label class="field"><span>Track</span><select id="comparePrimary"><option value="energy">Energy level</option><option value="nausea">Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
-            <label class="field"><span>Compare with</span><select id="compareSecondary"><option value="none">Nothing else</option><option value="energy">Energy level</option><option value="nausea" selected>Nausea signs</option><option value="stoolCount">Bowel movements</option><option value="stoolScore">Highest stool score</option><option value="looseStool">Loose stool / diarrhea</option><option value="rogerThings">Roger things</option><option value="qol">Weekly wellbeing</option><option value="cerenia">Cerenia doses logged</option><option value="neutrophils">Neutrophils</option><option value="hematocrit">Hematocrit</option><option value="platelets">Platelets</option><option value="alt">ALT</option><option value="alp">ALP</option><option value="weight">Weight</option></select></label>
-          </div>
-          <div class="compare-view" role="group" aria-label="Compare by"><button class="compare-view-button active" type="button" data-compare-view="calendar" aria-pressed="true">Calendar dates</button><button class="compare-view-button" type="button" data-compare-view="aligned" aria-pressed="false">Days after chemo</button></div>
-          <div class="compare-range" role="group" aria-label="Date range">
-            <button class="compare-range-button active" type="button" data-compare-range="all" aria-pressed="true">All dates</button>
-            <button class="compare-range-button" type="button" data-compare-range="cycles" aria-pressed="false">Treatment periods</button>
-            <button class="compare-range-button" type="button" data-compare-range="custom" aria-pressed="false">Custom dates</button>
-          </div>
-          <div id="compareCyclePicker" class="compare-cycle-picker" hidden></div>
-          <div id="compareCustomDates" class="compare-custom-dates" hidden><label class="field"><span>From</span><input id="compareFrom" type="date" value="2026-08-14"></label><label class="field"><span>Through</span><input id="compareTo" type="date" value="2026-10-03"></label></div>
-          <div id="nauseaTimingInsight" class="nausea-timing-insight" hidden></div>
-          <div id="journalTrend"></div>
-          <div id="compareDayDetail" class="compare-day-detail" aria-live="polite"></div>
-          <p class="medication-note">Each track has its own labeled scale. Day 0 is chemo day in the aligned view. Dots show recorded values; gaps mean not recorded. When nausea is shown, shaded bands reflect Roger’s own recorded post-chemo timing; teal diamonds mark recorded Cerenia doses. Purple marks treatment; red marks CBC. Loose stool means score 6+ or a note of diarrhea. Mixed energy descriptions use the lower reported level. An ALP result reported as &gt;2,000 is plotted at 2,000 as a lower bound. These patterns show timing, not cause.</p>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><div><div class="section-kicker">WEEKLY CHECK-IN</div><h2>How much was Roger himself?</h2></div></div>
-          <p class="field-help">A quick impression compared with Roger’s usual self. This is your observation, not a medical score.</p>
-          <form id="wellbeingForm" class="form-grid two"><label class="field"><span>Week ending</span><input name="date" type="date" required></label><label class="field"><span>Overall wellbeing (0–10)</span><input name="score" type="number" min="0" max="10" step="1" inputmode="numeric" required></label><label class="field wide"><span>What felt different? (optional)</span><input name="notes" placeholder="Play, sleep, comfort, his usual Roger things…"></label><button class="secondary-button" type="submit">Save weekly check-in</button></form>
-          <div id="wellbeingHistory" class="stack compact-stack"></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <div>
-              <div class="section-kicker">MEDICATION TRACKING</div>
-              <h2>Prescribed vs actually given</h2>
-              <p class="body-copy">Daily courses are summarized; recorded doses and as-needed use remain available by medication.</p>
-            </div>
-            <button id="medicationAddButton" class="primary-button compact" type="button">+ Medication</button>
-          </div>
-          <div id="medicationSummary"></div>
-          <div id="medicationHistory" class="stack compact-stack"></div>
-        </section>
-
-        <div class="journal-history-head"><h2>Daily entries</h2><button id="journalHistoryToggle" class="secondary-button" type="button">Show all entries</button></div>
-        <div id="journalEntries" class="stack"></div>
-      </section>
-
-      <section id="view-timeline" class="view" data-view="timeline">
-        <div class="page-title-row">
-          <div>
-            <div class="section-kicker">LONGITUDINAL RECORD</div>
-            <h2>Treatment timeline</h2>
-            <p>Clinical notes, labs, treatments and owner observations aligned by date.</p>
-          </div>
-        </div>
-        <div class="segmented" role="group" aria-label="Timeline filter">
-          <button class="segment active" type="button" data-timeline-filter="all">All</button>
-          <button class="segment" type="button" data-timeline-filter="clinical">Clinical</button>
-          <button class="segment" type="button" data-timeline-filter="owner">Owner</button>
-        </div>
-        <div id="timelineEntries" class="timeline"></div>
-      </section>
-
-      <section id="view-costs" class="view" data-view="costs">
+      <section id="view-costs" class="view" data-view="costs"><button type="button" class="text-button section-back" data-nav="more">← More</button>
         <div class="page-title-row">
           <div>
             <div class="section-kicker">FAMILY FINANCIAL BURDEN</div>
@@ -255,21 +190,70 @@
           </div>
           <div id="estimateComparison"></div>
         </section>
-        <div id="costEntries" class="stack"></div>
+        <div id="costEntries" class="stack"></div><section class="card owner-only">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CARE BURDEN</div>
+              <h2>Owner-paid cost</h2>
+            </div>
+            <button class="text-button" data-nav="costs" type="button">View costs</button>
+          </div>
+          <div id="homeCostSummary"></div>
+        </section><section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">NEXT</div>
+              <h2>Open items</h2>
+            </div>
+          </div>
+          <div id="openItems"></div>
+        </section>
       </section>
 
-      <section id="view-more" class="view" data-view="more">
-        <div class="page-title-row">
-          <div>
-            <div class="section-kicker">RECORD & SHARING</div>
-            <h2>Documents & exports</h2>
-            <p>Files stay on this device in this MVP unless you export them yourself.</p>
+      <section id="view-more" class="view" data-view="more"><div id="more-panel-menu" data-more-panel="menu"><div class="page-title-row"><div><div class="section-kicker">RECORD & SHARING</div><h2>More</h2><p>Everything else, one place at a time.</p></div></div><div class="destination-menu"><button type="button" data-nav="snapshot"><span><strong>Care Snapshot</strong><small>Preview, download, print or share a visit update</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/questions"><span><strong>Questions for the vet</strong><small>Save questions and mark them asked</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/contacts"><span><strong>Care contacts</strong><small>Call, get directions or update the emergency plan</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/plan"><span><strong>Appointments & instructions</strong><small>Review scheduled dates and the vet’s call guidance</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/documents"><span><strong>Documents</strong><small>Import a record or keep a file on this device</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="costs"><span><strong>Cost of care</strong><small>Care bills, medication purchases and cost context</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/backup"><span><strong>Backup & sync</strong><small>Check sharing, owner sign-in and file backups</small></span><span aria-hidden="true">›</span></button><button type="button" data-nav="more/profile"><span><strong>Roger’s profile</strong><small>Patient IDs, diagnosis and background</small></span><span aria-hidden="true">›</span></button></div><div class="privacy-note"><strong>Sharing:</strong> The historical record and patient IDs are visible to anyone with this link. Once the owner publishes the phone copy, new journal entries, medications, costs, care-plan changes, and corrections appear here too. Photo and uploaded document files stay on the device. Check the status on Home to see whether a change is shared.</div></div><div id="more-panel-questions" data-more-panel="questions" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Questions for the vet</h2></div><section class="card question-card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">NEXT VISIT</div>
+              <h2>Questions for Roger's care team</h2>
+            </div>
           </div>
-        </div>
-
-        <div class="privacy-note"><strong>Sharing:</strong> The historical record and patient IDs are visible to anyone with this link. Once the owner publishes the phone copy, new journal entries, medications, costs, care-plan changes, and corrections appear here too. Photo and uploaded document files stay on the device. Check the status on Home to see whether a change is shared.</div>
-
-        <section class="card">
+          <p class="body-copy">Capture the question when it occurs to you. Open questions will carry into Roger's visit summary.</p>
+          <form id="questionForm" class="question-form">
+            <label class="field"><span>What do you want to ask?</span><input id="questionInput" name="question" type="text" maxlength="500" placeholder="Does the nausea timing 2–3 days after treatment matter?" required></label>
+            <button class="primary-button compact" type="submit">Add question</button>
+          </form>
+          <div id="questionContext" class="question-context" hidden></div>
+          <div id="nextVisitQuestions" class="question-list"></div>
+        </section></div><div id="more-panel-contacts" data-more-panel="contacts" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Care contacts</h2></div><section class="card care-team-card">
+          <div class="card-head">
+            <div><div class="section-kicker">CARE TEAM</div><h2>Call the right place fast</h2></div>
+            <button class="text-button" data-nav="more/contacts" type="button">Manage</button>
+          </div>
+          <div id="careTeamQuick"></div>
+        </section><section class="card">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">CARE TEAM & EMERGENCY PLAN</div>
+              <h2>Who do I call if Roger needs help?</h2>
+            </div>
+          </div>
+          <p class="body-copy">Keep the people and places you may need under stress in one spot. Phone and directions buttons appear on Home as soon as they are saved.</p>
+          <form id="careTeamForm" class="form-stack">
+            <div id="careTeamFields" class="care-team-editor"></div>
+            <button type="submit" class="secondary-button">Save care team & emergency plan</button>
+          </form>
+        </section></div><div id="more-panel-plan" data-more-panel="plan" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Appointments & instructions</h2></div><section class="card">
+          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Appointments & vet instructions</h2></div></div>
+          <div id="upcomingCare"></div>
+        </section><section class="card">
+          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Confirm dates and call instructions</h2></div></div>
+          <form id="carePlanForm" class="form-stack">
+            <div id="carePlanFields" class="form-grid two"></div>
+            <label class="field"><span>When to call the vet (use the vet’s exact instructions)</span><textarea id="vetCallInstructions" name="vetCallInstructions" rows="3" placeholder="Awaiting Roger’s veterinarian’s guidance"></textarea></label>
+            <label class="field"><span>Instruction source / date</span><input id="vetCallSource" name="vetCallSource" type="text" placeholder="K-State discharge instructions, date…"></label>
+            <button type="submit" class="secondary-button">Save care plan</button>
+          </form>
+        </section></div><div id="more-panel-documents" data-more-panel="documents" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Documents</h2></div><section class="card">
           <div class="card-head">
             <div>
               <div class="section-kicker">DOCUMENTS</div>
@@ -283,8 +267,7 @@
             <button class="secondary-button" type="submit">Read PDF and review</button>
           </form>
           <div id="importReview" class="import-review" aria-live="polite"></div>
-        </section>
-        <section class="card">
+        </section><section class="card">
           <div class="card-head"><div><div class="section-kicker">FILE CABINET</div><h2>Keep a copy on this device</h2></div></div>
           <form id="documentForm" class="form-stack">
             <label class="field">
@@ -310,23 +293,32 @@
           </form>
           <div class="privacy-note">Document files are stored on this device and included in a complete backup. They are not part of the shared record yet.</div>
           <div id="documentList" class="stack compact-stack"></div>
-        </section>
-
-        <section class="card">
+        </section></div><div id="more-panel-backup" data-more-panel="backup" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Backup & sync</h2></div><section class="card owner-only sync-card">
           <div class="card-head">
             <div>
-              <div class="section-kicker">CARE TEAM & EMERGENCY PLAN</div>
-              <h2>Who do I call if Roger needs help?</h2>
+              <div class="section-kicker">CLOUD SYNC</div>
+              <h2>Saved across devices</h2>
             </div>
           </div>
-          <p class="body-copy">Keep the people and places you may need under stress in one spot. Phone and directions buttons appear on Home as soon as they are saved.</p>
-          <form id="careTeamForm" class="form-stack">
-            <div id="careTeamFields" class="care-team-editor"></div>
-            <button type="submit" class="secondary-button">Save care team & emergency plan</button>
-          </form>
-        </section>
-
-        <section class="card care-snapshot-card">
+          <section id="sharedControls" class="shared-controls" aria-live="polite"></section>
+        </section><section class="card owner-only">
+          <div class="card-head">
+            <div>
+              <div class="section-kicker">FILE BACKUP</div>
+              <h2>Keep an extra copy</h2>
+            </div>
+          </div>
+          <div id="backupStatus" class="backup-status" aria-live="polite"></div>
+          <div class="button-stack">
+            <button id="exportBackup" class="primary-button" type="button">Create file backup</button>
+            <button id="confirmBackupSaved" class="secondary-button" type="button" hidden>I saved a copy outside this device</button>
+            <label class="secondary-button file-button">Restore file backup<input id="importBackup" type="file" accept="application/json" hidden></label>
+          </div>
+          <p class="medication-note">This is separate from cloud sync. A file backup includes the complete record and uploaded document files that remain on this device.</p>
+        </section></div><div id="more-panel-profile" data-more-panel="profile" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Roger’s profile</h2></div><section class="card">
+          <div class="card-head"><div><div class="section-kicker">PROFILE</div><h2>Roger</h2></div></div>
+          <div id="profileDetails"></div>
+        </section></div></section><section id="view-snapshot" class="view" data-view="snapshot"><div class="page-title-row"><button type="button" class="text-button" data-nav="home">← Today</button><button type="button" class="text-button" data-nav="more/questions">Questions for the vet</button></div><section class="card care-snapshot-card">
           <div class="card-head">
             <div>
               <div class="section-kicker">CARE SNAPSHOT</div>
@@ -350,56 +342,15 @@
             <button id="downloadCareSummary" class="secondary-button" type="button">Download PDF</button>
             <button id="printCareSummary" class="text-button" type="button">Print complete record</button>
           </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Confirm dates and call instructions</h2></div></div>
-          <form id="carePlanForm" class="form-stack">
-            <div id="carePlanFields" class="form-grid two"></div>
-            <label class="field"><span>When to call the vet (use the vet’s exact instructions)</span><textarea id="vetCallInstructions" name="vetCallInstructions" rows="3" placeholder="Awaiting Roger’s veterinarian’s guidance"></textarea></label>
-            <label class="field"><span>Instruction source / date</span><input id="vetCallSource" name="vetCallSource" type="text" placeholder="K-State discharge instructions, date…"></label>
-            <button type="submit" class="secondary-button">Save care plan</button>
-          </form>
-        </section>
-
-        <section class="card owner-only sync-card">
-          <div class="card-head">
-            <div>
-              <div class="section-kicker">CLOUD SYNC</div>
-              <h2>Saved across devices</h2>
-            </div>
-          </div>
-          <section id="sharedControls" class="shared-controls" aria-live="polite"></section>
-        </section>
-
-        <section class="card owner-only">
-          <div class="card-head">
-            <div>
-              <div class="section-kicker">FILE BACKUP</div>
-              <h2>Keep an extra copy</h2>
-            </div>
-          </div>
-          <div id="backupStatus" class="backup-status" aria-live="polite"></div>
-          <div class="button-stack">
-            <button id="exportBackup" class="primary-button" type="button">Create file backup</button>
-            <button id="confirmBackupSaved" class="secondary-button" type="button" hidden>I saved a copy outside this device</button>
-            <label class="secondary-button file-button">Restore file backup<input id="importBackup" type="file" accept="application/json" hidden></label>
-          </div>
-          <p class="medication-note">This is separate from cloud sync. A file backup includes the complete record and uploaded document files that remain on this device.</p>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><div><div class="section-kicker">PROFILE</div><h2>Roger</h2></div></div>
-          <div id="profileDetails"></div>
-        </section>
-      </section>
+        </section></section>
     </main>
 
     <nav class="bottom-nav" aria-label="Primary navigation">
       <button class="nav-item active" type="button" data-nav="home"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2v8.3a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z"/></svg></span><span>Home</span></button>
       <button class="nav-item" type="button" data-nav="journal"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h9a2 2 0 0 1 2 2V20H6a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z"/><path d="M8 8h5M8 12h5M8 16h3"/></svg></span><span>Journal</span></button>
+      <button class="nav-item" type="button" data-nav="medications"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4a5.5 5.5 0 0 1 8 0l4 4a5.5 5.5 0 0 1-8 8l-4-4a5.5 5.5 0 0 1 0-8Z" transform="rotate(45 12 12)"/><path d="m8 8 8 8"/></svg></span><span>Medications</span></button>
       <button class="nav-item" type="button" data-nav="timeline"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v16"/><circle cx="8" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="8" cy="17" r="2"/><path d="M12 7h7M12 12h5M12 17h7"/></svg></span><span>Timeline</span></button>
-      <button class="nav-item" type="button" data-nav="costs"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M14.5 8.5c-.8-.7-1.6-1-2.6-1-1.4 0-2.4.7-2.4 1.8 0 2.8 5.3 1.4 5.3 4.5 0 1.2-1 2.1-2.7 2.1-1.1 0-2.2-.4-3-1.2M12 6v12"/></svg></span><span>Costs</span></button>
+
       <button class="nav-item" type="button" data-nav="more"><span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg></span><span>More</span></button>
     </nav>
   </div>
@@ -582,6 +533,6 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=2" defer></script>
-  <script src="app.js?v=60" defer></script>
+  <script src="app.js?v=61" defer></script>
 </body>
 </html>

@@ -515,3 +515,43 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 .journal-vet-guidance>.vet-guidance-stack{margin-top:0}
 .nausea-timing-insight .vet-guidance-card{margin-top:4px}
 .compare-day-detail .vet-guidance-stack{margin-top:12px}
+
+/* Focused destinations keep daily work ahead of detailed reports. */
+[hidden]{display:none!important}
+.section-tabs{display:flex;gap:4px;padding:4px;margin:10px 0 14px;background:#eeebf3;border-radius:14px}
+.section-tabs button{flex:1;min-width:0;min-height:44px;border:0;border-radius:10px;padding:9px 7px;background:transparent;color:var(--muted);font-weight:800;font-size:13px;cursor:pointer}
+.section-tabs button[aria-pressed="true"]{background:white;color:var(--ksu);box-shadow:0 2px 7px #21133510}
+.destination-menu{display:grid;gap:8px;margin-top:12px}
+.destination-menu button{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px;text-align:left;border:1px solid var(--line);border-radius:15px;background:white;cursor:pointer}
+.destination-menu button strong,.destination-menu button small{display:block}
+.destination-menu button strong{font-size:15px;color:var(--ksu)}
+.destination-menu button small{margin-top:5px;font-size:12px;line-height:1.35;color:var(--muted)}
+.destination-menu button>span:last-child{font-size:26px;color:var(--muted)}
+.section-back{min-height:44px}.snapshot-shortcut{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px 14px;border-color:#d4c5e8;background:linear-gradient(115deg,#fff,#f7f2fc)}
+.snapshot-shortcut .body-copy{margin:6px 0 0}.snapshot-shortcut>.text-button{grid-column:1/-1;justify-self:start}
+.quick-log-card>#homeMedicationButton{margin-top:10px;min-height:42px;font-size:13px}
+.latest-note{margin-top:10px}.latest-note>summary{font-size:13px;cursor:pointer;color:var(--ksu);font-weight:700;min-height:36px;padding:8px 0}
+.next-visit{display:grid;gap:5px;margin-top:14px}.next-visit>strong{font-size:16px}.next-visit>span{font-size:15px;color:var(--ksu);font-weight:750}.next-visit>small{font-size:11px;line-height:1.4;color:var(--muted)}
+.home-contact-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.home-contact-actions .care-action{display:block;text-align:left;white-space:normal;padding:12px;min-height:95px;text-decoration:none}
+.home-contact-actions .care-action span,.home-contact-actions .care-action strong,.home-contact-actions .care-action small{display:block}
+.home-contact-actions .care-action span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.home-contact-actions .care-action strong{font-size:12px;margin:6px 0;line-height:1.3}.home-contact-actions .care-action small{font-size:12px}
+.emergency-plan-warning{margin:12px 0 0;padding:9px 10px;background:var(--gold-soft);border-radius:10px;font-size:12px;line-height:1.4}
+.emergency-plan-warning .text-button{font-size:12px;padding:3px 0;display:block;min-height:32px}
+.home-vet-instructions{border-top:1px solid var(--line);padding-top:12px}
+.history-heading{margin:20px 2px 10px}.timeline-upcoming .care-plan-row small{display:block;color:var(--muted);font-size:10px;line-height:1.3;margin-top:4px}
+.timeline-upcoming .care-plan-row{gap:12px}.timeline-upcoming .care-plan-row>span{white-space:nowrap}
+.past-appointments>summary{font-size:12px;min-height:40px;padding:10px 0;color:var(--muted);cursor:pointer}
+#view-home .shared-status{font-size:12px;margin-top:6px}#view-home .shared-status small{font-size:10px}
+#view-home .shared-status button{min-height:36px;padding:7px 10px;font-size:11px}
+#view-home .backup-banner{font-size:11px;padding:10px;gap:6px}#view-home .backup-banner button{font-size:11px;min-height:36px}
+#journal-panel-entries .journal-history-head{margin-top:0}
+#timeline-panel-review>details>summary{min-height:32px;font-weight:800;color:var(--ksu);cursor:pointer}
+#timeline-panel-review>details>.card{border:0;box-shadow:none;padding:5px 0 0}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a284ce;outline-offset:3px}
+@media(max-width:500px){.snapshot-shortcut{grid-template-columns:1fr}.snapshot-shortcut>.primary-button{width:100%}.snapshot-shortcut>.text-button{justify-self:center}.profile-copy .eyebrow{font-size:8px}.profile-row{grid-template-columns:48px 1fr auto;gap:9px}.avatar-button{width:48px;height:48px;border-radius:16px}.profile-copy h1{font-size:24px}.app-header{padding-bottom:4px}.hero-row{flex-wrap:wrap}.section-tabs button{font-size:12px}.timeline-upcoming .care-plan-row{align-items:flex-start}}
+
+.medication-use-totals{margin:12px 0;border:1px solid var(--line);border-radius:14px;padding:12px}
+.medication-use-totals>summary{cursor:pointer;color:var(--ksu);font-weight:700}
+.medication-use-totals[open]>summary{margin-bottom:12px}

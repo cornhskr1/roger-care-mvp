@@ -596,25 +596,56 @@ function renderSharedStatus(){
     renderAll();
   });
 
-  for(const selector of ['#openJournalComposer','#journalAddButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
+  for(const selector of ['#openJournalComposer','#journalAddButton','#homeMedicationButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
   }
   qa('[data-edit-observation],[data-edit-medication],[data-edit-cost],[data-question-observation],[data-question-status]').forEach(node=>node.disabled=!ownerCanEdit);
 }
 
-function bindNav(){
-  qa('[data-nav]').forEach(btn => btn.addEventListener('click', () => navigate(btn.dataset.nav)));
+// Navigation is URL/UI state only. It never writes the clinical record.
+const VIEW_ROUTES={home:[''],journal:['entries','trends'],medications:[''],timeline:['history','chart','review'],costs:[''],more:['menu','questions','contacts','plan','documents','backup','profile'],snapshot:['']};
+function normalizeRoute(route){
+  const clean=String(route||'').replace(/^#/,'');
+  if(clean==='journal/medications')return 'medications';
+  const [view,section]=clean.split('/');
+  if(!Object.hasOwn(VIEW_ROUTES,view))return 'home';
+  const options=VIEW_ROUTES[view];
+  const panel=options.includes(section)?section:options[0];
+  return view+(panel?'/'+panel:'');
 }
-function navigate(view){
-  qa('.view').forEach(v => v.classList.toggle('active', v.dataset.view === view));
-  qa('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.nav === view));
-  window.scrollTo({top:0,behavior:'smooth'});
+function bindNav(){
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('[data-nav]');
+    if(button&&!button.disabled)navigate(button.dataset.nav);
+  });
+  window.addEventListener('popstate',()=>navigate(location.hash.slice(1),{recordHistory:false}));
+  window.addEventListener('hashchange',()=>navigate(location.hash.slice(1),{recordHistory:false}));
+  navigate(location.hash.slice(1),{recordHistory:false,scroll:false});
+}
+function navigate(route,{recordHistory=true,scroll=true}={}){
+  const normalized=normalizeRoute(route),[view,section]=normalized.split('/');
+  qa('dialog[open]').forEach(dialog=>dialog.close());
+  qa('.view').forEach(v=>v.classList.toggle('active',v.dataset.view===view));
+  qa('.nav-item').forEach(n=>{
+    const active=n.dataset.nav===(['snapshot','costs'].includes(view)?'more':view);
+    n.classList.toggle('active',active);
+    if(active)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');
+  });
+  for(const group of ['journal','timeline','more']){
+    const selected=group===view?section:VIEW_ROUTES[group][0];
+    qa(`[data-${group}-panel]`).forEach(panel=>panel.hidden=panel.dataset[`${group}Panel`]!==selected);
+    qa(`.section-tabs [data-nav^="${group}/"]`).forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.nav===`${group}/${selected}`)));
+  }
+  if(view==='timeline'&&section==='chart'&&state)renderTreatmentOverlay();
+  if(recordHistory&&location.hash!==`#${normalized}`)history.pushState(null,'',`#${normalized}`);
+  if(scroll)window.scrollTo({top:0,behavior:'auto'});
 }
 
 function bindDialogs(){
   q('#openJournalComposer').addEventListener('click', () => openJournalDialog(todayAppEntry()?.id||''));
   q('#journalAddButton').addEventListener('click', () => openJournalDialog());
   q('#medicationAddButton').addEventListener('click', () => openMedicationDialog());
+  q('#homeMedicationButton').addEventListener('click', () => openMedicationDialog());
   q('#addStoolRow').addEventListener('click',()=>addStoolRow());
   q('#stoolRows').addEventListener('click',event=>{if(event.target.closest('[data-remove-stool]')){event.target.closest('.stool-input-row').remove();renderSafetyPrompt();}});
   q('#comparePrimary').addEventListener('change',event=>{comparison.primary=event.target.value;if(comparison.secondary===comparison.primary){comparison.secondary='none';q('#compareSecondary').value='none';}renderJournalTrend();});
@@ -693,7 +724,7 @@ function bindDialogs(){
     const ask=event.target.closest('[data-question-observation]');
     if(ask){
       const row=state.observations.find(o=>o.id===ask.dataset.questionObservation);
-      if(row){questionDraftSource={type:'observation',id:row.id,date:row.date};navigate('home');renderQuestions();const input=q('#questionInput');if(input){input.value=`Ask about ${fmtDate(row.date)}: `;input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
+      if(row){questionDraftSource={type:'observation',id:row.id,date:row.date};navigate('more/questions');renderQuestions();const input=q('#questionInput');if(input){input.value=`Ask about ${fmtDate(row.date)}: `;input.focus();input.setSelectionRange(input.value.length,input.value.length);}}
     }
     const statusButton=event.target.closest('[data-question-status]');
     if(statusButton&&ownerCanEdit){
@@ -1214,12 +1245,17 @@ function renderCareTeam(){
     return `<article class="care-contact ${contact.kind==='emergency'?'emergency':''}"><div class="care-contact-head"><div><div class="care-contact-role">${esc(contact.role)}</div><div class="care-contact-name">${esc(displayName)}</div></div>${contact.kind==='emergency'&&!contact.name?'<span class="chip warn">not set</span>':''}</div><div class="care-contact-meta">${meta||'Contact details not saved yet.'}</div>${actions?`<div class="care-contact-actions">${actions}</div>`:''}</article>`;
   };
   if(els.careTeamQuick)els.careTeamQuick.innerHTML=`<div class="emergency-plan-status ${emergencyReady?'':'incomplete'}"><div><strong>${emergencyReady?'Emergency plan ready':'Emergency plan incomplete'}</strong><span>${emergencyReady?`Preferred emergency hospital: ${esc(emergency.name)}.`:'Choose the emergency hospital you would use after hours and save its phone number and address before you need them.'}</span></div></div><div class="care-team-list">${team.map(contactCard).join('')}</div>`;
+  const homeContacts=q('#homeCareContacts');
+  if(homeContacts)homeContacts.innerHTML=`<div class="home-contact-actions">${team.filter(contact=>phoneHref(contact.phone)).map(contact=>`<a href="${esc(phoneHref(contact.phone))}" class="care-action"><span>${esc(contact.kind==='specialty'?'Oncology':contact.kind==='primary'?'Primary vet':'Emergency')}</span><strong>${esc(contact.name)}</strong><small>${esc(contact.phone)}</small></a>`).join('')}</div>${!emergencyReady?'<p class="emergency-plan-warning">After-hours plan is incomplete. <button type="button" class="text-button" data-nav="more/contacts">Review emergency contacts</button></p>':''}`;
   if(els.careTeamFields)els.careTeamFields.innerHTML=team.map(contact=>`<section class="care-team-edit-card ${contact.kind==='emergency'?'emergency':''}"><div class="care-team-edit-head"><div><div class="care-team-edit-title">${esc(contact.name||(contact.kind==='emergency'?'Emergency hospital':'Provider'))}</div><div class="care-team-edit-role">${esc(contact.role)}</div></div>${contact.kind==='emergency'?`<span class="chip ${emergencyReady?'info':'warn'}">${emergencyReady?'plan ready':'complete this'}</span>`:''}</div><div class="care-team-edit-grid"><label class="field"><span>Provider name</span><input name="${esc(contact.id)}-name" value="${esc(contact.name||'')}" placeholder="${contact.kind==='emergency'?'Emergency hospital name':'Provider name'}"></label><label class="field"><span>Phone</span><input name="${esc(contact.id)}-phone" type="tel" value="${esc(contact.phone||'')}" placeholder="Phone number"></label><label class="field wide"><span>Address</span><input name="${esc(contact.id)}-address" value="${esc(contact.address||'')}" placeholder="Street address, city, state"></label><label class="field wide"><span>After-hours / call instructions</span><input name="${esc(contact.id)}-afterHours" value="${esc(contact.afterHours||'')}" placeholder="Who to call or where to go after hours"></label><label class="field wide"><span>Notes</span><input name="${esc(contact.id)}-notes" value="${esc(contact.notes||'')}" placeholder="Department, doctor, entrance, parking, etc."></label></div></section>`).join('');
 }
 
 function renderUpcomingCare(){
   const plan=state.carePlan||{visits:[]};
   els.upcomingCare.innerHTML=`<div class="care-plan-list">${(plan.visits||[]).map(v=>`<div class="care-plan-row"><strong>${esc(v.label)}</strong><span>${v.date?fmtDate(v.date):'TBD'}</span></div>`).join('')}</div><p class="medication-note"><strong>When to call:</strong> ${plan.vetCallInstructions?esc(plan.vetCallInstructions):'Awaiting Roger’s veterinarian’s instructions.'}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`;
+  const nextVisits=(plan.visits||[]).filter(v=>v.date&&v.date>=todayIso()).sort((a,b)=>a.date.localeCompare(b.date));
+  const next=nextVisits[0],homeVisit=q('#homeNextVisit');
+  if(homeVisit)homeVisit.innerHTML=`${next?`<div class="next-visit"><strong>${esc(next.label)}</strong><span>${next.date===todayIso()?'Today · ':''}${fmtDate(next.date)}</span><small>${esc(next.source||'Source not recorded')}</small></div>`:'<p class="empty-state">No upcoming dated appointment is saved. Check the care plan for dates still to be confirmed.</p>'}${plan.vetCallInstructions?`<p class="medication-note home-vet-instructions"><strong>When to call:</strong> ${esc(plan.vetCallInstructions)}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`:''}`;
   q('#carePlanFields').innerHTML=(plan.visits||[]).map(v=>`<label class="field"><span>${esc(v.label)}</span><input type="date" name="${esc(v.id)}" value="${esc(v.date||'')}"></label>`).join('');
   q('#vetCallInstructions').value=plan.vetCallInstructions||'';
   q('#vetCallSource').value=plan.vetCallSource||'';
@@ -1258,7 +1294,7 @@ function renderHome(){
 
   const obs=latestObservation();
   const coverage=state.journalCoverageThrough;
-  els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest structured owner observation · journal current through ${fmtDate(coverage||obs.date)}</div></div>${severityChip(obs)}</div><div class="item-copy">${esc(obs.notes)}</div>` : 'No observations yet.';
+  els.latestObservation.innerHTML = obs ? `<div class="row-between"><div><div class="item-title">${fmtDate(obs.date)}</div><div class="item-meta">Latest structured owner observation · journal current through ${fmtDate(coverage||obs.date)}</div></div>${severityChip(obs)}</div>${String(obs.notes||'').length>220?`<details class="latest-note"><summary>Read latest note</summary><div class="item-copy">${esc(obs.notes)}</div></details>`:`<div class="item-copy">${esc(obs.notes)}</div>`}<button class="text-button" data-nav="journal" type="button">All journal entries →</button>` : 'No observations yet.';
   renderJournalBrief(t);
 
   els.clinicalCourse.innerHTML = state.treatments.map(tr => {
@@ -1313,8 +1349,8 @@ function renderClinicalReview(){
     const pre=preCounts[0],nausea=days.filter(r=>r.values.nausea>0).length,appetiteReduced=days.filter(r=>r.observations.some(appetiteIsReduced)).length,loose=days.filter(r=>r.values.looseStool===1).length;
     const blood=days.filter(r=>r.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(text=>/\bblood\b/i.test(String(text||''))))).length;
     const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>=window.start&&a.date<window.endExclusive&&a.status==='given');
-    const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&courseRecordedEnd(c)>=window.start&&c.status?.includes('owner-confirmed'));
-    const medSummary=[...courses.map(c=>`${medicationName(c.medicationId)} course reported through ${fmtDate(courseRecordedEnd(c))}`),...[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} dated administration(s)`) ].join('; ');
+    const courses=(state.medicationCourses||[]).filter(c=>c.startDate<window.endExclusive&&(chartCourseEnd(c)>=window.start||medicationCourseDailyDates(c).some(date=>inCycleWindow(date,window)))&&c.status?.includes('owner-confirmed'));
+    const medSummary=[...courses.map(c=>medicationCourseSummary(c,{start:window.start,end:window.displayEnd})),...[...new Set(supportive.map(a=>a.medicationId))].map(id=>`${medicationName(id)} ${new Set(supportive.filter(a=>a.medicationId===id).map(a=>a.date)).size} dated administration(s)`) ].join('; ');
     const lowestText=lowest?`${lowest.displayValue||lowest.value} ${lowest.unit} on day +${daysBetween(t.date,lowest.date)} (${fmtDate(lowest.date)})`:'No post-dose count stored';
     return `<details class="clinical-review-cycle" ${index===0?'open':''}><summary><span><strong>Chemo #${t.number} · ${fmtDate(t.date)}</strong><small>${t.doseMg} mg (${t.doseMgM2} mg/m²) · ${t.weightLb} lb</small></span><span class="review-cue">Review</span></summary><div class="clinical-review-grid">
       <div><strong>Before dose</strong><span>${pre?`Neutrophils ${esc(pre.displayValue||pre.value)} ${esc(pre.unit)} · ${fmtDate(pre.date)}`:'No CBC within two days stored'}</span></div>
@@ -1408,9 +1444,10 @@ function renderTreatmentOverlay(){
   const blood=state.labs.filter(p=>p.metric===metric&&inView(p.date)).sort((a,b)=>a.date.localeCompare(b.date));
   const symptoms=state.observations.filter(o=>inView(o.date)).map(o=>({...o,severity:symptomSeverity(o)})).filter(o=>o.severity>0);
   const medications=(state.medicationAdministrations||[]).filter(a=>inView(a.date)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-  const courses=(state.medicationCourses||[]).filter(c=>chartCourseEnd(c)&&c.startDate<=(window?.displayEnd||'9999-12-31')&&chartCourseEnd(c)>=startDate);
+  const courses=(state.medicationCourses||[]).filter(c=>medicationCourseSpans(c).some(span=>span.start<=(window?.displayEnd||'9999-12-31')&&span.end>=startDate));
+  const courseSegments=courses.flatMap((course,index)=>medicationCourseSpans(course).map(span=>({...span,course,index}))).filter(span=>span.start<=(window?.displayEnd||'9999-12-31')&&span.end>=startDate);
   const treatments=selectedCycle?[selectedCycle]:allTreatments;
-  const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).concat(courses.map(courseRecordedEnd)).sort().at(-1)||startDate;
+  const endDate=window?.displayEnd||[...blood,...symptoms,...medications,...treatments].map(p=>p.date).concat(courseSegments.map(span=>span.end)).sort().at(-1)||startDate;
   const days=Math.max(1,daysBetween(startDate,endDate));
   const laneMeds=[...new Set([...medications.map(a=>a.medicationId),...courses.map(c=>c.medicationId)])].sort((a,b)=>(a==='med-cerenia'?-1:b==='med-cerenia'?1:a.localeCompare(b)));
   const viewport=root.clientWidth||340;
@@ -1429,7 +1466,7 @@ function renderTreatmentOverlay(){
   const hit=(kind,index,cx,cy,label,shape='circle',fill='#5e7895',held=false)=>`<g class="chart-hit" role="button" tabindex="0" data-kind="${kind}" data-index="${index}" aria-label="${esc(label)}"><title>${esc(label)}</title><rect x="${cx-14}" y="${cy-14}" width="28" height="28" fill="transparent"/>${shape==='square'?`<rect x="${cx-6}" y="${cy-6}" width="12" height="12" rx="3" fill="${held?'#fff':fill}" stroke="${held?fill:'#fff'}" stroke-width="2"/>`:`<circle cx="${cx}" cy="${cy}" r="6" fill="${fill}" stroke="#fff" stroke-width="2"/>`}</g>`;
   let svg=`<rect width="${W}" height="${H}" fill="#fff"/>`;
   // Every medication date shares a dashed guide across all four lanes.
-  const guideDates=[...new Set([...medications,...treatments].map(p=>p.date).concat(courses.map(c=>c.startDate).filter(d=>d>=startDate&&d<=endDate)))];
+  const guideDates=[...new Set([...medications,...treatments].map(p=>p.date).concat(courseSegments.map(span=>span.start).filter(d=>d>=startDate&&d<=endDate)))];
   if(selectedCycle)for(let i=0;i<=days;i++)svg+=`<line x1="${x(addDays(startDate,i))}" x2="${x(addDays(startDate,i))}" y1="38" y2="${symptomBottom+5}" stroke="#edf0f5"/>`;
   guideDates.forEach(date=>svg+=`<line data-guide-date="${date}" x1="${x(date)}" x2="${x(date)}" y1="38" y2="${symptomBottom+5}" stroke="#667085" stroke-opacity=".35" stroke-dasharray="4 5"/>`);
   svg+=`<line id="selectedEventGuide" x1="0" x2="0" y1="38" y2="${symptomBottom+5}" stroke="#512888" stroke-width="2" stroke-dasharray="4 5" visibility="hidden"/>`;
@@ -1459,33 +1496,33 @@ function renderTreatmentOverlay(){
     const y=medTop+row*32;
     svg+=`<text x="8" y="${y+4}" font-size="12" fill="#667085">${esc(medicationName(id).split(' / ')[0])}</text><line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#edf0f5"/>`;
   });
-  courses.forEach((c,i)=>{
+  courseSegments.forEach(segment=>{
+    const {course:c,index:i}=segment;
     const isPrednisone=c.medicationId==='med-prednisone';
-    const courseStart=c.startDate<startDate?startDate:c.startDate;
-    const courseEnd=chartCourseEnd(c)>endDate?endDate:chartCourseEnd(c);
+    const courseStart=segment.start<startDate?startDate:segment.start;
+    const courseEnd=segment.end>endDate?endDate:segment.end;
     let left=x(courseStart),right=x(courseEnd);
-    // Adjacent, owner-confirmed Prednisone courses describe one uninterrupted
-    // medication timeline. Join at the day midpoint without inventing a dose.
+    // Adjacent supported dates meet at the day midpoint, including a recorded
+    // dose change. An unsupported/held date always keeps the segments separate.
     if(isPrednisone){
-      const prior=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&chartCourseEnd(other)===addDays(c.startDate,-1));
-      const next=courses.some(other=>other!==c&&other.medicationId==='med-prednisone'&&other.startDate===addDays(chartCourseEnd(c),1));
+      const prior=courseSegments.some(other=>other!==segment&&other.course.medicationId==='med-prednisone'&&other.end===addDays(segment.start,-1));
+      const next=courseSegments.some(other=>other!==segment&&other.course.medicationId==='med-prednisone'&&other.start===addDays(segment.end,1));
       const halfDay=(W-L-R)/days/2;
-      if(prior&&courseStart===c.startDate)left-=halfDay;
-      if(next&&courseEnd===chartCourseEnd(c))right+=halfDay;
+      if(prior&&courseStart===segment.start)left-=halfDay;
+      if(next&&courseEnd===segment.end)right+=halfDay;
     }
     const y=medTop+laneMeds.indexOf(c.medicationId)*32;
-    // Stroke weights distinguish documented doses, not medication intensity or effectiveness.
-    // Unknown doses retain a neutral weight rather than guessing.
+    // Stroke weights distinguish recorded doses, not effectiveness.
     const doseMg=Number.parseFloat(String(c.dose||'').match(/^\s*(\d+(?:\.\d+)?)\s*mg\b/i)?.[1]||'');
     const courseWeight=isPrednisone?(Number.isFinite(doseMg)?(doseMg>=20?10:doseMg>=10?5:3):6):8;
-    const label=`${medicationName(c.medicationId)} · ${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))} · ${isPrednisone?'continuous owner-confirmed course':'reported course'}`;
-    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="${courseWeight}" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
+    const label=`${medicationName(c.medicationId)} · ${fmtDate(courseStart)}–${fmtDate(courseEnd)} · ${c.status?.includes('owner-confirmed daily given')?'supported daily-use dates':'recorded course'}`;
+    svg+=`<g class="chart-hit" role="button" tabindex="0" data-kind="course" data-index="${i}" data-course-start="${courseStart}" aria-label="${esc(label)}"><title>${esc(label)}</title><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="${isPrednisone?'#512888':'#667085'}" stroke-width="${courseWeight}" opacity="${isPrednisone?'1':'.58'}" stroke-linecap="butt"/><line x1="${left}" x2="${Math.max(left+3,right)}" y1="${y}" y2="${y}" stroke="transparent" stroke-width="28"/></g>`;
   });
   if(!medications.length&&!courses.length)svg+=`<text x="8" y="${medTop+4}" font-size="13" fill="#707181">No medication use recorded in this window</text>`;
   medications.forEach((a,i)=>{
     // Prednisone is represented by its purple course line when explicitly
     // recorded doses fall within that supported continuous interval.
-    if(a.medicationId==='med-prednisone'&&a.status==='given'&&courses.some(c=>c.medicationId==='med-prednisone'&&a.date>=c.startDate&&a.date<=chartCourseEnd(c)))return;
+    if(a.medicationId==='med-prednisone'&&a.status==='given'&&courseSegments.some(span=>span.course.medicationId==='med-prednisone'&&a.date>=span.start&&a.date<=span.end))return;
     const same=medications.filter(b=>b.date===a.date&&b.medicationId===a.medicationId),position=same.indexOf(a);
     const offset=same.length>1?(position-(same.length-1)/2)*14:0;
     svg+=hit('medication',i,x(a.date)+offset,medTop+laneMeds.indexOf(a.medicationId)*32,`${fmtDate(a.date)} · ${medicationName(a.medicationId)} ${a.dose} · ${a.status}`,'square',a.medicationId==='med-cerenia'?'#512888':'#667085',a.status==='held');
@@ -1506,10 +1543,10 @@ function renderTreatmentOverlay(){
     const show=()=>{
       const kind=node.dataset.kind,i=Number(node.dataset.index);
       const point=({blood,treatment:treatments,symptom:symptoms,medication:medications,course:courses})[kind][i];
-      const date=kind==='course'?(point.startDate<startDate?startDate:point.startDate):point.date;
+      const date=kind==='course'?node.dataset.courseStart:point.date;
       const guide=root.querySelector('#selectedEventGuide');guide.setAttribute('x1',x(date));guide.setAttribute('x2',x(date));guide.setAttribute('visibility','visible');
       if(kind==='course'){
-        detail.innerHTML=`<strong>${esc(medicationName(point.medicationId))} · ${fmtDate(point.startDate)}–${fmtDate(courseRecordedEnd(point))}</strong>${esc(point.dose||'Dose unrecorded')} · ${esc(point.frequency||'Frequency unrecorded')}. ${esc(point.status)}. ${esc(point.source)}`;
+        detail.innerHTML=`<strong>${esc(medicationCourseSummary(point,{start:startDate,end:endDate}))}</strong>Original course note: ${esc(point.status)}. Source: ${esc(point.source)}. A missing dose log does not mean a dose was missed.`;
         return;
       }
       const when=`${fmtDate(point.date)}${selectedCycle?` · Day +${daysBetween(startDate,point.date)}`:''}`;
@@ -1521,6 +1558,7 @@ function renderTreatmentOverlay(){
     node.addEventListener('click',show);node.addEventListener('focus',show);node.addEventListener('keydown',event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();show();}});
   });
   detail.innerHTML=selectedCycle?`<strong>Chemo #${selectedCycle.number} · ${fmtDate(startDate)}–${fmtDate(endDate)}</strong>Calendar dates align every lane. Swipe the chart for later dates; tap a course bar or dose marker for details.`:'<strong>All treatment cycles</strong>Purple: treatment. Red: bloodwork. Medication course bars, dose markers, and blue observations share the same dates. Tap an event for details.';
+  detail.innerHTML+='<br>A missing dose log does not mean a dose was missed. Gaps in a medication band indicate missing or conflicting evidence for that dose.';
   windowDetails.innerHTML=selectedCycle?renderCycleDetails(selectedCycle,window):'';
   q('#treatmentMedicationSummary').innerHTML=renderMedicationOverview(window);
 }
@@ -1571,16 +1609,73 @@ function courseRecordedEnd(course){
   return course.endDate||course.confirmedThrough||null;
 }
 
-// Extend an owner-confirmed course only through consecutive explicitly logged doses.
+// A course is evidence of use only for its confirmed dates. Explicit records take
+// precedence for that date; gaps, held doses, and different/unknown doses do not
+// establish an uninterrupted course at the old dose. These helpers never edit it.
+function medicationCourseDailyDates(course){
+  if(!course.status?.includes('owner-confirmed daily given')||!courseRecordedEnd(course))return [];
+  const nextCourse=(state.medicationCourses||[]).filter(c=>c!==course&&c.medicationId===course.medicationId&&c.startDate>course.startDate).sort((a,b)=>a.startDate.localeCompare(b.startDate))[0];
+  const limit=[course.endDate,nextCourse?.startDate&&addDays(nextCourse.startDate,-1)].filter(Boolean).sort()[0]||'9999-12-31';
+  const recordedEnd=courseRecordedEnd(course)<limit?courseRecordedEnd(course):limit;
+  const doseKey=value=>{const text=String(value||'').trim().toLowerCase(),mg=/^(\d+(?:\.\d+)?)\s*mg$/.exec(text);return mg?`${Number(mg[1])}mg`:text.replace(/\s+/g,'');};
+  const records=(state.medicationAdministrations||[]).filter(a=>a.medicationId===course.medicationId&&a.date>=course.startDate&&a.date<=limit);
+  const byDate=new Map();
+  for(const row of records){if(!byDate.has(row.date))byDate.set(row.date,[]);byDate.get(row.date).push(row);}
+  const matches=rows=>rows.length===1&&rows[0].status==='given'&&Boolean(doseKey(course.dose))&&doseKey(rows[0].dose)===doseKey(course.dose);
+  const dates=new Set();
+  for(let date=course.startDate;date<=recordedEnd;date=addDays(date,1)){
+    if(!byDate.has(date)||matches(byDate.get(date)))dates.add(date);
+  }
+  // Only a daily prednisone regimen can be extended from individual daily doses.
+  if(course.medicationId==='med-prednisone'&&!course.endDate&&/every\s*24\s*hours?|once\s*(?:a\s*)?daily|^daily$/i.test(course.frequency||'')){
+    for(const [date,rows] of byDate)if(matches(rows))dates.add(date);
+  }
+  return [...dates].sort();
+}
+function medicationCourseSpans(course){
+  if(!course.status?.includes('owner-confirmed daily given')){
+    const end=courseRecordedEnd(course);
+    return end&&end>=course.startDate?[{start:course.startDate,end}]:[];
+  }
+  const spans=[];
+  for(const date of medicationCourseDailyDates(course)){
+    const last=spans.at(-1);
+    if(last&&date===addDays(last.end,1))last.end=date;
+    else spans.push({start:date,end:date});
+  }
+  return spans;
+}
 function chartCourseEnd(course){
-  let end=courseRecordedEnd(course);
-  // A closed course must never absorb subsequent doses from a different regimen.
-  // Only the currently open course can advance through consecutive logged doses.
-  if(course.medicationId!=='med-prednisone'||course.endDate||!end)return end;
-  const given=new Set((state.medicationAdministrations||[])
-    .filter(a=>a.medicationId==='med-prednisone'&&a.status==='given').map(a=>a.date));
-  while(given.has(addDays(end,1)))end=addDays(end,1);
+  const recordedEnd=courseRecordedEnd(course);
+  if(course.medicationId!=='med-prednisone'||!course.status?.includes('owner-confirmed daily given')||!recordedEnd)return recordedEnd;
+  const dates=new Set(medicationCourseDailyDates(course));
+  if(!dates.has(course.startDate))return null;
+  let end=course.startDate;
+  while(dates.has(addDays(end,1)))end=addDays(end,1);
   return end;
+}
+function careSnapshotDateList(rows){
+  const dates=[...new Set(rows.map(row=>typeof row==='string'?row:row.date))].filter(Boolean).sort();
+  const spans=[];
+  for(const date of dates){const last=spans.at(-1);if(last&&date===addDays(last.end,1))last.end=date;else spans.push({start:date,end:date});}
+  return spans.map(span=>{
+    if(span.start===span.end)return fmtDate(span.start);
+    if(span.start.slice(0,7)===span.end.slice(0,7))return `${fmtDate(span.start).split(',')[0]}–${Number(span.end.slice(-2))}, ${span.end.slice(0,4)}`;
+    return `${span.start.slice(0,4)===span.end.slice(0,4)?fmtDate(span.start).split(',')[0]:fmtDate(span.start)}–${fmtDate(span.end)}`;
+  }).join('; ');
+}
+function medicationCourseSummary(course,{start='',end='9999-12-31'}={}){
+  const name=medicationName(course.medicationId),dose=course.dose||'dose not recorded',frequency=course.frequency||'frequency not recorded';
+  const prefix=`${name} ${dose}, ${frequency}`;
+  if(course.status?.includes('owner-confirmed daily given')){
+    const allDates=medicationCourseDailyDates(course),dates=allDates.filter(date=>date>=start&&date<=end);
+    if(dates.length)return `${prefix}: daily use confirmed for ${careSnapshotDateList(dates)} from the owner-reported course and dated dose records`;
+    const prior=allDates.filter(date=>date<start).at(-1);
+    return `${prefix}: ${prior?`last supported dose before this period was ${fmtDate(prior)}`:'no confirmed daily use in this period'}`;
+  }
+  const from=course.startDate<start?start:course.startDate,through=courseRecordedEnd(course);
+  const to=through&&through<end?through:end;
+  return `${prefix}: ${course.status?.includes('owner-confirmed')?'owner-reported':'recorded'} course ${through?`${fmtDate(from)}–${fmtDate(to)}${from!==course.startDate||to!==through?' within this period':''}`:`started ${fmtDate(course.startDate)}; end date not recorded`}`;
 }
 
 function reportedCourseDays(id,window=null){
@@ -1600,7 +1695,7 @@ function renderCycleDetails(treatment,window){
   const labs=state.labs.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||a.metric.localeCompare(b.metric));
   const observations=state.observations.filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date));
   const medications=(state.medicationAdministrations||[]).filter(x=>inCycleWindow(x.date,window)).sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
-  const courses=(state.medicationCourses||[]).filter(c=>chartCourseEnd(c)&&c.startDate<=window.displayEnd&&chartCourseEnd(c)>=window.start);
+  const courses=(state.medicationCourses||[]).filter(c=>medicationCourseSpans(c).some(span=>span.start<=window.displayEnd&&span.end>=window.start));
   const costs=state.costs.filter(x=>inCycleWindow(x.date,window));
   const cyclePaid=costs.reduce((sum,c)=>sum+Number(c.amountPaid||0),0);
 
@@ -1638,7 +1733,7 @@ function renderCycleDetails(treatment,window){
     <div class="cycle-section"><div class="cycle-section-title ksu-title">WHY THIS DOSE</div><div class="item-copy" style="margin-top:0">${esc(treatment.doseReason)}</div></div>
     <div class="cycle-section"><div class="cycle-section-title blood-title">BLOODWORK & CHEMISTRY</div>${labRows}</div>
     <div class="cycle-section"><div class="cycle-section-title owner-title">OWNER-OBSERVED SYMPTOMS</div>${obsRows}</div>
-    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION USE</div>${courses.map(c=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${esc(medicationName(c.medicationId))} · ${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))}</div><div class="cycle-observation-copy">${esc(c.dose||'Dose unrecorded')} · ${esc(c.frequency||'Frequency unrecorded')} · ${esc(c.status)}</div></div>`).join('')}${medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join('')}${!courses.length&&!medications.length?'<div class="empty-state">No medication use recorded in this cycle.</div>':''}</div>
+    <div class="cycle-section"><div class="cycle-section-title owner-title">MEDICATION USE</div>${courses.map(c=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${esc(medicationCourseSummary(c,{start:window.start,end:window.displayEnd}))}</div><div class="cycle-observation-copy">Original course note: ${esc(c.status)} · Source: ${esc(c.source)}</div></div>`).join('')}${medications.map(a=>`<div class="cycle-observation medication-cycle-observation"><div class="cycle-observation-title">${fmtDate(a.date)}${a.time?` · ${esc(a.time)}`:''} · ${esc(medicationName(a.medicationId))} ${esc(a.dose||'')}</div><div class="cycle-observation-copy">${esc(a.status)}${a.reason?` · ${esc(a.reason)}`:''}</div></div>`).join('')}${!courses.length&&!medications.length?'<div class="empty-state">No medication use recorded in this cycle.</div>':''}</div>
     ${treatment.recordCheck?`<div class="alert"><strong>Record check:</strong> ${esc(treatment.recordCheck)}</div>`:''}
   </section>`;
 }
@@ -2148,13 +2243,13 @@ function renderMedicationOverview(window=null){
   </section>`;
 }
 
-function renderMedicationLedger(){
+function renderMedicationLedger(includePurchases=true){
   return `<div class="medication-ledger">${state.medications.map(m=>{
     const a=medicationStats(m.id),held=state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length;
     const courseOnly=!a.given.length&&state.medicationCourses.some(c=>c.medicationId===m.id);
     const purchases=a.purchases.map(p=>`<div class="medication-purchase-row"><span>${fmtDate(p.date)} · ${p.quantity} × ${p.tabletStrengthMg} mg<br><small>${esc(p.source)}</small></span><strong>${money(p.amountPaid)}<br><small>${money(p.amountPaid/p.quantity)} / tablet</small></strong></div>`).join('');
     const courseDays=state.medicationCourses.filter(c=>c.medicationId===m.id&&c.status?.includes('owner-confirmed seven-day')).reduce((n,c)=>n+daysBetween(c.startDate,chartCourseEnd(c))+1,0);
-    return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${courseOnly?'—':a.tablets}${a.unknown?' + ?':''}</strong><span>${a.reported.length?'tablet equivalents, owner-reported':'tablets documented given'}</span></div><div><strong>${courseDays||a.given.length}</strong><span>${courseDays?'course days reported':a.reported.length?'daily doses reported':'doses logged'}${held?` · ${held} held`:''}</span></div><div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div></div><p class="medication-note">${esc(m.prescribedDose)}${courseDays?' · Seven days after the 8/20 neutrophil result (250/µL); dose, frequency, and tablet count unrecorded.':''}${a.reported.length?` · Owner confirms daily use from ${fmtDate(a.reported[0].date)} through ${fmtDate(a.last)}; ${a.tablets} ${m.tabletStrengthMg} mg tablet equivalents across ${a.given.length} days. Future prescribed days are not counted.`:''}${courseOnly&&!courseDays?' · Use is recorded as a course; individual tablet counts are not itemized.':''}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last&&!a.reported.length?` · Last given ${fmtDate(a.last)}.`:''}</p><div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div></article>`;
+    return `<article class="medication-ledger-card"><h3>${esc(m.name)}${m.tabletStrengthMg?` · ${m.tabletStrengthMg} mg tablets`:''}</h3><div class="medication-kpis"><div><strong>${courseOnly?'—':a.tablets}${a.unknown?' + ?':''}</strong><span>${a.reported.length?'tablet equivalents, owner-reported':'tablets documented given'}</span></div><div><strong>${courseDays||a.given.length}</strong><span>${courseDays?'course days reported':a.reported.length?'daily doses reported':'doses logged'}${held?` · ${held} held`:''}</span></div>${includePurchases?`<div class="owner-only"><strong>${a.purchases.length?a.purchased:'—'}</strong><span>tablets purchased</span></div><div class="owner-only"><strong>${a.purchases.length?money(a.spent):'—'}</strong><span>documented spending</span></div>`:''}</div><p class="medication-note">${esc(m.prescribedDose)}${courseDays?' · Seven days after the 8/20 neutrophil result (250/µL); dose, frequency, and tablet count unrecorded.':''}${a.reported.length?` · ${esc(state.medicationCourses.filter(c=>c.medicationId===m.id).map(c=>medicationCourseSummary(c)).join('. '))}. ${a.tablets} ${m.tabletStrengthMg} mg tablet equivalents across ${new Set(a.given.map(row=>row.date)).size} recorded days. Future prescribed days are not counted.`:''}${courseOnly&&!courseDays?' · Use is recorded as a course; individual tablet counts are not itemized.':''}${a.unknown?` · ${a.unknown} administration(s) lack a confirmed tablet quantity.`:''}${a.last&&!a.reported.length?` · Last given ${fmtDate(a.last)}.`:''}</p>${includePurchases?`<div class="owner-only">${purchases||'<p class="medication-note">Purchase details not recorded.</p>'}</div>`:''}</article>`;
   }).join('')}</div>`;
 }
 
@@ -2164,39 +2259,46 @@ function renderMedications(){
   const cerenia=given.filter(a=>a.medicationId==='med-cerenia');
   const metro=given.filter(a=>a.medicationId==='med-metronidazole');
   const traz=given.filter(a=>a.medicationId==='med-trazodone');
-  const currentPred=(state.medicationCourses||[]).find(c=>c.medicationId==='med-prednisone'&&!c.endDate);
+  const currentPred=(state.medicationCourses||[]).filter(c=>c.medicationId==='med-prednisone'&&!c.endDate).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1);
 
   els.medicationSummary.innerHTML=`<div class="summary-grid medication-grid">
     <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-cerenia').tablets}</div><div class="summary-label">CERENIA TABLETS</div><div class="item-meta">60 mg PRN</div></div>
     <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-metronidazole').tablets}</div><div class="summary-label">METRONIDAZOLE TABLETS</div><div class="item-meta">250 mg PRN</div></div>
-    <div class="summary-tile med-summary ksu-med"><div class="summary-value">${currentPred?.dose||'10 mg'}</div><div class="summary-label">PREDNISONE NOW</div><div class="item-meta">every 24 hours</div></div>
+    <div class="summary-tile med-summary ksu-med"><div class="summary-value">${esc(currentPred?.dose||'Not recorded')}</div><div class="summary-label">PREDNISONE PLAN ON FILE</div><div class="item-meta">${esc(currentPred?.frequency||'Frequency not recorded')}</div></div>
     <div class="summary-tile med-summary neutral-med"><div class="summary-value">${traz.length}</div><div class="summary-label">TRAZODONE DAYS</div><div class="item-meta">200 mg pre-visit</div></div>
   </div>`;
 
-  els.medicationSummary.innerHTML += renderMedicationOverview() + renderMedicationLedger();
+  els.medicationSummary.innerHTML += '<details class="medication-use-totals"><summary>Medication use totals</summary>'+renderMedicationLedger(false)+'</details><p class="medication-note">A missing dose log does not mean a dose was missed. The record distinguishes owner-confirmed courses from individual dose logs.</p>';
 
   els.medicationHistory.innerHTML=(state.medications||[]).map(m=>{
     const rows=administrations.filter(a=>a.medicationId===m.id);
     const courses=(state.medicationCourses||[]).filter(c=>c.medicationId===m.id);
     if(!rows.length&&!courses.length)return '';
     const history=rows.map(a=>`<div class="medication-history-row"><div><strong>${fmtDate(a.date)}${a.time?' · '+esc(a.time):''}</strong> · ${esc(a.dose||'dose not recorded')} <span class="chip ${a.status==='held'?'warn':'info'}">${esc(a.status)}</span>${a.reason?`<div class="item-meta">${esc(a.reason)}</div>`:''}</div><button class="text-button" type="button" data-edit-medication="${esc(a.id)}">Correct</button></div>`).join('');
-    return `<details class="medication-group"><summary><strong>${esc(m.name)}</strong><span>${courses.length?`${courses.length} reported course${courses.length===1?'':'s'} · `:''}${rows.length} dated record${rows.length===1?'':'s'}</span></summary><div class="medication-group-body">${courses.map(c=>`<p class="medication-note">${fmtDate(c.startDate)}–${fmtDate(chartCourseEnd(c))} · ${esc(c.dose||'Dose unrecorded')} · ${esc(c.status)}</p>`).join('')}${history}</div></details>`;
+    return `<details class="medication-group"><summary><strong>${esc(m.name)}</strong><span>${courses.length?`${courses.length} reported course${courses.length===1?'':'s'} · `:''}${rows.length} dated record${rows.length===1?'':'s'}</span></summary><div class="medication-group-body">${courses.map(c=>`<p class="medication-note">${esc(medicationCourseSummary(c))}.<br><small>Original course note: ${esc(c.status)} · Source: ${esc(c.source)}</small></p>`).join('')}${history}</div></details>`;
   }).join('');
 }
 
 function renderTimeline(){
   const events=[];
-  (state.carePlan?.visits||[]).filter(v=>v.date).forEach(v=>events.push({date:v.date,kind:'planned',source:v.source,title:v.label,detail:'Upcoming appointment · no treatment or lab result yet'}));
   state.milestones.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:x.title,detail:x.detail}));
   state.treatments.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:`Vinblastine #${x.number} · ${x.doseMg} mg`,detail:`${x.doseMgM2} mg/m² · ${x.weightLb} lb · ${x.doseReason}`}));
   state.labs.forEach(x=>{ if(['Neutrophils','ALT','ALP'].includes(x.metric)) events.push({date:x.date,kind:'lab',source:x.source,title:`${x.metric}: ${x.displayValue||x.value} ${x.unit}`,detail:x.context}); });
   state.observations.forEach(x=>events.push({date:x.date,kind:'owner',source:'Owner observation',title:'Home observation',detail:x.notes}));
-  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter||(timelineFilter==='clinical'&&['lab','planned'].includes(x.kind))).sort((a,b)=>b.date.localeCompare(a.date));
-  els.timelineEntries.innerHTML=filtered.map(x=>`<article class="timeline-entry ${x.kind==='owner'?'owner':x.kind==='lab'?'lab':''}"><div class="timeline-date">${fmtDate(x.date).replace(', 2026','')}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-content"><div class="source-label">${esc(x.source)}</div><div class="item-title">${esc(x.title)}</div><div class="item-copy">${esc(x.detail)}</div></div></article>`).join('');
+  const planned=(state.carePlan?.visits||[]).filter(v=>v.date).sort((a,b)=>a.date.localeCompare(b.date));
+  const upcoming=planned.filter(v=>v.date>=todayIso()),past=planned.filter(v=>v.date<todayIso());
+  const plannedRow=v=>`<div class="care-plan-row"><div><strong>${esc(v.label)}</strong><small>${esc(v.source||'Source not recorded')}</small></div><span>${fmtDate(v.date)}</span></div>`;
+  const plannedRoot=q('#timelineUpcoming');
+  if(plannedRoot){
+    plannedRoot.hidden=timelineFilter==='owner';
+    plannedRoot.innerHTML=`<div class="card-head"><h2>Upcoming</h2><button class="text-button" type="button" data-nav="more/plan">Manage dates</button></div>${upcoming.length?upcoming.slice(0,2).map(plannedRow).join(''):'<p class="empty-state">No upcoming dated appointments saved.</p>'}${upcoming.length>2?`<details class="past-appointments"><summary>${upcoming.length-2} later appointments</summary>${upcoming.slice(2).map(plannedRow).join('')}</details>`:''}<p class="field-help">Scheduled care is a plan, not confirmation that a treatment or test happened.</p>${past.length?`<details class="past-appointments"><summary>Earlier scheduled dates (${past.length})</summary>${past.map(plannedRow).join('')}</details>`:''}`;
+  }
+  const filtered=events.filter(x=>timelineFilter==='all'||x.kind===timelineFilter||(timelineFilter==='clinical'&&x.kind==='lab')).sort((a,b)=>b.date.localeCompare(a.date));
+  els.timelineEntries.innerHTML=filtered.map(x=>`<article class="timeline-entry ${x.kind==='owner'?'owner':x.kind==='lab'?'lab':''}"><div class="timeline-date">${fmtDate(x.date).replace(', 2026','')}</div><div class="timeline-line"><div class="timeline-dot"></div></div><div class="timeline-content"><div class="source-label">${esc(x.source)}</div><div class="item-title">${esc(x.title)}</div><div class="item-copy">${esc(x.detail)}</div></div></article>`).join('')||'<p class="empty-state">No recorded events in this view.</p>';
 }
 
 function renderCosts(){
-  q('#medicationCostBreakdown').innerHTML=renderMedicationLedger();
+  q('#medicationCostBreakdown').innerHTML=renderMedicationOverview()+renderMedicationLedger();
   const total=totalPaid(),confirmed=confirmedPaid(),provisional=provisionalPaid();
   els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">DOCUMENTED CARE COSTS</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
 
@@ -2483,7 +2585,7 @@ async function openDocument(id){
 }
 
 function bindExports(){
-  document.addEventListener('click',event=>{if(!event.target.closest('[data-open-backup]'))return;navigate('more');q('#backupStatus').scrollIntoView({block:'center',behavior:'smooth'});});
+  document.addEventListener('click',event=>{if(!event.target.closest('[data-open-backup]'))return;navigate('more/backup');q('#backupStatus').scrollIntoView({block:'center',behavior:'smooth'});});
   q('#shareCareSummary').addEventListener('click',async()=>{
     try{
       const pdf=buildCareSummaryPdf(),blob=new Blob([pdf],{type:'application/pdf'}),file=new File([blob],'roger-care-snapshot.pdf',{type:'application/pdf'});
@@ -2598,59 +2700,182 @@ function resolveCareSnapshotRange(){
   const treatment=latestTreatment();
   return {mode:'treatment',start:treatment.date,end:latest,label:`Since chemo #${treatment.number}`,context:`Treatment on ${fmtDate(treatment.date)}`};
 }
+// Free-text mentions supplement structured findings, but a negated mention is
+// not a positive symptom. Keep this interpretation local to the visit snapshot.
+function careSnapshotContextOnly(text){
+  return /\b(?:watch(?:ing)?(?: out)? for|monitor(?:ing)? for|look(?:ing)? for|call(?: the vet)? if|contact(?: the vet)? if|if|in case|warned about|warning signs?|discuss(?:ed|ing)?|instructions?|risk of)\b/i.test(String(text||''));
+}
+function careSnapshotUncertainText(text){
+  return /\?|\b(?:possible|possibly|maybe|might|could|unsure|uncertain|suspect(?:ed)?)\b/i.test(String(text||''));
+}
+function careSnapshotMentions(text,pattern,{includeUncertain=false}={}){
+  // A comma can continue a negated list ("no blood, black/tarry stool, or
+  // diarrhea"), so it must not reset negation. A new sentence or an explicit
+  // contrast does. Treat unclear list-like wording conservatively.
+  return String(text||'').split(/[.;!\n]|\b(?:but|however|then)\b/i).some(clause=>{
+    if(!includeUncertain&&careSnapshotUncertainText(clause))return false;
+    clause=clause.replace(/\bblood(?:[ -]?(?:work|tests?|draws?|samples?|counts?|pressure|panels?|results?|cells?|glucose|chemistry)|\s+(?:was |is |being )?(?:drawn|collected|tested))\b/gi,'clinical testing');
+    const matcher=new RegExp(pattern.source,pattern.flags.replace(/g/g,'')+'g');
+    for(const match of clause.matchAll(matcher)){
+      let before=clause.slice(0,match.index);
+      if(careSnapshotContextOnly(before))continue;
+      const after=clause.slice(match.index+match[0].length);
+      // An explicit new observation after a comma starts its own statement:
+      // "no blood, but stool was watery" or "no blood, stool was watery".
+      const comma=before.lastIndexOf(',');
+      const tail=comma>=0?before.slice(comma+1):'';
+      if(/^\s*(?:(?:he|she|roger|stools?|vomit|there)\s+(?:was|were|is|are|had|has)|(?:I|we)\s+(?:saw|noticed|observed|recorded))\b/i.test(tail))before=tail;
+      const negated=/\b(?:no|without|denies|negative for)\b[^.;]*$|\bnot\s*(?:seen|observed|present)?\s*$/i.test(before)
+        ||/^\s*(?:was |were |is |are )?(?:absent|not (?:seen|observed|present))\b/i.test(after);
+      if(!negated)return true;
+    }
+    return false;
+  });
+}
+
+function careSnapshotStoolTexts(o){
+  return [o.gi,o.stool,...(o.stoolEvents||[]).filter(row=>row.status==='observed').map(row=>row.notes),
+    ...String(o.notes||'').split(/[.;!\n]/).filter(text=>/stool|bowel|poop|diarrhea|tarry/i.test(text))].filter(Boolean);
+}
+function careSnapshotNauseaValue(o){
+  if((o.nauseaSigns||[]).length)return 1;
+  if(String(o.nauseaOther||'').trim()){
+    if(careSnapshotContextOnly(o.nauseaOther)||careSnapshotUncertainText(o.nauseaOther))return null;
+    if(/\bno nausea\b/i.test(o.nauseaOther))return 0;
+    return 1;
+  }
+  if(o.nausea!==null&&o.nausea!==undefined&&o.nausea!==''&&Number.isFinite(Number(o.nausea)))return Number(o.nausea);
+  if(o.nauseaNoneObserved)return 0;
+  const text=[o.gi,o.notes,o.rawEntry].filter(Boolean).join(' ');
+  if(careSnapshotMentions(text,/nausea|lip lick|repeated swallow|drool|borborygmi|gurgling|stomach noise/i))return 1;
+  if(/\bno nausea(?: signs| behaviors)?\b/i.test(text))return 0;
+  return null;
+}
+function careSnapshotDoseSummary(id,records){
+  const name=medicationName(id),groups=new Map();
+  for(const record of records){
+    const key=`${record.dose||'dose not recorded'} ${record.status||'status not recorded'}`;
+    if(!groups.has(key))groups.set(key,[]);groups.get(key).push(record);
+  }
+  return `${name}: ${[...groups].map(([label,rows])=>`${label} on ${careSnapshotDateList(rows)}${rows.length>new Set(rows.map(row=>row.date)).size?` (${rows.length} dose records)`:''}`).join('; ')}`;
+}
 function careSnapshotData(){
   const range=resolveCareSnapshotRange();
   const {start,end}=range;
   const treatment=[...(state.treatments||[])].filter(row=>row.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||null;
   const rows=comparisonRows().filter(row=>row.date>=start&&row.date<=end&&row.observations.length);
   const observations=(state.observations||[]).filter(o=>o.date>=start&&o.date<=end);
+  // Keep stored wording and each reported date intact. Collapse only identical
+  // (date, text) duplicates; same-date ties follow the latest stored entry.
+  const noteTexts=new Set();
+  const recentOwnerNotes=observations.map((observation,index)=>({id:observation.id,date:observation.date,text:observation.notes,index}))
+    .filter(note=>typeof note.text==='string'&&note.text.trim())
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.index-a.index)
+    .filter(note=>{const key=JSON.stringify([note.date,note.text]);if(noteTexts.has(key))return false;noteTexts.add(key);return true;})
+    .slice(0,3).map(({index,...note})=>note);
+
+  const hasNumber=value=>value!==null&&value!==undefined&&String(value).trim()!==''&&Number.isFinite(Number(value));
   const appetiteRows=rows.filter(row=>row.observations.some(appetiteIsKnown));
   const appetiteReduced=appetiteRows.filter(row=>row.observations.some(appetiteIsReduced));
-  const appetitePercents=observations.map(o=>Number(o.appetitePercent)).filter(n=>Number.isFinite(n)&&n>=0);
+  const appetiteIncreased=appetiteRows.filter(row=>row.observations.some(o=>hasNumber(o.appetitePercent)?Number(o.appetitePercent)>100:/increased/i.test(o.appetite||'')));
+  const appetiteNormal=appetiteRows.filter(row=>!appetiteReduced.includes(row)&&!appetiteIncreased.includes(row)&&row.observations.some(o=>hasNumber(o.appetitePercent)?Number(o.appetitePercent)>=90&&Number(o.appetitePercent)<=100:/normal/i.test(o.appetite||'')));
+  const appetitePercents=observations.filter(o=>hasNumber(o.appetitePercent)&&Number(o.appetitePercent)>=0).map(o=>Number(o.appetitePercent));
   const minAppetite=appetitePercents.length?Math.min(...appetitePercents):null;
   const energyRows=rows.filter(row=>row.values.energy!==null);
   const energyReduced=energyRows.filter(row=>row.values.energy<3);
-  const nauseaRows=rows.filter(row=>row.values.nausea!==null);
-  const nauseaDays=nauseaRows.filter(row=>row.values.nausea>0);
+  const energyNormal=energyRows.filter(row=>row.values.energy===3);
+  const energyHigher=energyRows.filter(row=>row.values.energy>3);
+  const nauseaValue=row=>{const values=row.observations.map(careSnapshotNauseaValue).filter(value=>value!==null);return values.length?Math.max(...values):null;};
+  const nauseaRows=rows.filter(row=>nauseaValue(row)!==null);
+  const nauseaDays=nauseaRows.filter(row=>nauseaValue(row)>0);
+  const nauseaNoneDays=nauseaRows.filter(row=>nauseaValue(row)===0);
   const nauseaDates=nauseaDays.map(row=>row.date);
-  const nauseaTop=mostCommonLabels(observations.flatMap(o=>nauseaLabels(o)));
-  const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null);
-  const looseDays=stoolRows.filter(row=>row.values.looseStool===1);
-  const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/\bblood\b|black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
-  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/bright\s*red.*blood|blood.*bright\s*red/i.test(String(value||'')))));
-  const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||[o.gi,o.notes,...(o.stoolEvents||[]).map(s=>s.notes)].some(value=>/black\s*\/?\s*tarry|tarry/i.test(String(value||'')))));
+  const nauseaTop=mostCommonLabels(observations.filter(o=>careSnapshotNauseaValue(o)>0).flatMap(o=>nauseaLabels(o).filter(label=>!careSnapshotContextOnly(label)&&!careSnapshotUncertainText(label))));
+  const stoolPattern=/diarrhea|loose|watery|liquid|unformed|mushy/i;
+  const looseObservation=o=>(o.stoolEvents||[]).filter(s=>s.status==='observed').some(s=>['very_soft','unformed','watery'].includes(s.consistency)||hasNumber(s.score)&&Number(s.score)>=6||careSnapshotMentions(s.notes,stoolPattern))
+    ||(!o.stoolEvents?.length&&Number.parseFloat(o.stool)>=6)||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,stoolPattern));
+  const stoolRows=rows.filter(row=>row.values.stoolCount!==null||row.values.stoolScore!==null||row.observations.some(looseObservation));
+  const looseDays=rows.filter(row=>row.observations.some(looseObservation));
+  const characterizedStoolDays=stoolRows.filter(row=>row.observations.some(o=>(o.stoolEvents||[]).some(s=>s.status==='observed'&&(hasNumber(s.score)&&Number(s.score)>0||Boolean(s.consistency)))||Number.parseFloat(o.stool)>0));
+  const noStoolDays=rows.filter(row=>row.values.stoolCount===0);
+  const bloodDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/\bblood\b|black\s*\/?\s*tarry|tarry/i))));
+  const brightRedStoolDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'bright_red_blood')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/bright[ -]*red(?:\s+\w+){0,3}\s+blood|blood(?:\s+\w+){0,3}\s+bright[ -]*red/i))));
+  const blackTarryDays=rows.filter(row=>row.observations.some(o=>observationHasStoolFlag(o,'black_tarry')||careSnapshotStoolTexts(o).some(text=>careSnapshotMentions(text,/black\s*\/?\s*tarry|tarry/i))));
+  const noteReviews=[];
+  for(const observation of observations){
+    const candidates=[
+      ...careSnapshotStoolTexts(observation).map(text=>({text,pattern:/\bblood\b|black\s*\/?\s*tarry|tarry|diarrhea|loose|watery/i})),
+      ...[observation.gi,observation.notes,observation.nauseaOther].filter(Boolean).map(text=>({text,pattern:/nausea|lip lick|repeated swallow|drool|borborygmi|gurgling|stomach noise/i}))
+    ];
+    for(const {text,pattern} of candidates){
+      if(careSnapshotUncertainText(text)&&careSnapshotMentions(text,pattern,{includeUncertain:true})&&!careSnapshotMentions(text,pattern)&&!noteReviews.some(note=>note.date===observation.date&&note.text===text))noteReviews.push({date:observation.date,text});
+    }
+  }
   const stoolScores=stoolRows.map(row=>row.values.stoolScore).filter(value=>value!==null&&Number.isFinite(Number(value))).map(Number);
-  const vomitingRows=rows.filter(row=>row.observations.some(o=>o.vomiting!==null&&o.vomiting!==undefined&&o.vomiting!==''));
-  const vomitingEpisodes=vomitingRows.reduce((sum,row)=>sum+Math.max(0,...row.observations.map(o=>Number(o.vomiting)||0)),0);
+  const vomitingRows=rows.filter(row=>row.observations.some(o=>hasNumber(o.vomiting)&&Number(o.vomiting)>=0));
+  const vomitingDays=vomitingRows.filter(row=>row.observations.some(o=>hasNumber(o.vomiting)&&Number(o.vomiting)>0));
+  const vomitingNoneDays=vomitingRows.filter(row=>!vomitingDays.includes(row)&&!row.observations.some(o=>(o.vomitFlags||[]).length));
+  const vomitingEpisodes=vomitingRows.reduce((sum,row)=>sum+Math.max(0,...row.observations.filter(o=>hasNumber(o.vomiting)).map(o=>Number(o.vomiting))),0);
   const vomitFindings=[...new Set(observations.flatMap(o=>vomitFlagLabels(o)))];
   const weightPoints=[
-    ...state.treatments.filter(t=>t.date>=start&&t.date<=end&&Number(t.weightLb)>0).map(t=>({date:t.date,value:Number(t.weightLb),source:`Chemo #${t.number}`})),
-    ...observations.filter(o=>Number(o.weightLb)>0).map(o=>({date:o.date,value:Number(o.weightLb),source:'owner / clinic journal'}))
+    ...(state.treatments||[]).filter(t=>t.date<=end&&Number(t.weightLb)>0).map(t=>({date:t.date,value:Number(t.weightLb),source:`Chemo #${t.number}`})),
+    ...(state.observations||[]).filter(o=>o.date<=end&&Number(o.weightLb)>0).map(o=>({date:o.date,value:Number(o.weightLb),source:'owner / clinic journal'}))
   ].sort((a,b)=>a.date.localeCompare(b.date));
-  const priorWeight=[...(state.treatments||[])].filter(t=>t.date<=end&&Number(t.weightLb)>0).sort((a,b)=>a.date.localeCompare(b.date)).at(-1);
-  const latestWeight=weightPoints.at(-1)||(priorWeight?{date:priorWeight.date,value:Number(priorWeight.weightLb),source:`Chemo #${priorWeight.number}`}:null);
+  const latestWeight=weightPoints.at(-1)||null;
   const window={start,endExclusive:addDays(end,1),displayEnd:end};
   const cerenia=medicationStats('med-cerenia',window);
   const cereniaDates=[...new Set(cerenia.given.map(a=>a.date))];
   const cereniaOnNausea=nauseaDates.filter(date=>cereniaDates.includes(date)).length;
-  const supportive=(state.medicationAdministrations||[]).filter(a=>a.status==='given'&&a.date>=start&&a.date<=end);
-  const supportiveCounts=[...new Set(supportive.map(a=>a.medicationId))].map(id=>({name:medicationName(id),count:supportive.filter(a=>a.medicationId===id).length}));
-  const pred=(state.medicationCourses||[]).filter(course=>course.medicationId==='med-prednisone'&&course.startDate<=end&&(!course.endDate||course.endDate>=start)).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1)||null;
-  const predRecordedThrough=pred?courseRecordedEnd(pred):null;
+  const medications=(state.medicationAdministrations||[]).filter(a=>a.date>=start&&a.date<=end);
+  const allPredCourses=(state.medicationCourses||[]).filter(course=>course.medicationId==='med-prednisone').sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const predCourses=allPredCourses.filter((course,index)=>course.startDate<=end&&(!course.endDate||course.endDate>=start)&&(!allPredCourses[index+1]||allPredCourses[index+1].startDate>start));
+  const pred=predCourses.at(-1)||null;
+  const predRecordedThrough=pred?chartCourseEnd(pred):null;
   const predThrough=predRecordedThrough?(predRecordedThrough>end?end:predRecordedThrough):null;
+  const predSummary=predCourses.map(course=>medicationCourseSummary(course,{start,end})).join('. ');
+  const predSupportedDates=new Set(predCourses.flatMap(medicationCourseDailyDates));
+  const predExceptions=medications.filter(a=>a.medicationId==='med-prednisone'&&!predSupportedDates.has(a.date));
   const latestNeut=(state.labs||[]).filter(l=>l.metric==='Neutrophils'&&l.date<=end).sort((a,b)=>a.date.localeCompare(b.date)).at(-1)||null;
   const questions=(state.carePlan?.questions||[]).filter(question=>question.status!=='resolved');
-  const appetiteText=!appetiteRows.length?'Not specifically recorded in this period.':appetiteReduced.length?`Below Roger's normal on ${appetiteReduced.length} of ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.${minAppetite!==null?` Lowest recorded intake: about ${minAppetite}% of normal.`:''}`:`At or near Roger's normal on all ${appetiteRows.length} logged appetite day${appetiteRows.length===1?'':'s'}.`;
-  const energyText=!energyRows.length?'Not specifically recorded in this period.':energyReduced.length?`Below Roger's normal on ${energyReduced.length} of ${energyRows.length} logged energy day${energyRows.length===1?'':'s'}.`:`At Roger's normal level on all ${energyRows.length} logged energy day${energyRows.length===1?'':'s'}.`;
-  const nauseaText=!nauseaRows.length?'Not specifically recorded in this period.':nauseaDays.length?`Nausea-associated behaviors recorded on ${nauseaDays.length} of ${nauseaRows.length} days with a nausea observation.${nauseaTop.length?` Most frequent: ${nauseaTop.map(item=>item.label).join(', ')}.`:''}`:`No nausea-associated behaviors recorded on ${nauseaRows.length} day${nauseaRows.length===1?'':'s'} with a nausea observation.`;
-  const stoolText=!stoolRows.length?'No bowel-movement observations recorded in this period.':`${looseDays.length} of ${stoolRows.length} logged stool day${stoolRows.length===1?'':'s'} had loose, unformed, watery, or legacy score 6+ stool.${stoolScores.length?` Highest recorded legacy score: ${Math.max(...stoolScores)}.`:''}${bloodDays.length?` Blood or black/tarry appearance was recorded on ${bloodDays.length} day${bloodDays.length===1?'':'s'}${blackTarryDays.length?` (${blackTarryDays.length} black/tarry)`:''}.`:''}`;
-  const vomitingText=!vomitingRows.length?'Vomiting was not specifically recorded in this period.':vomitingEpisodes?`${vomitingEpisodes} vomiting episode${vomitingEpisodes===1?'':'s'} recorded across ${vomitingRows.length} logged day${vomitingRows.length===1?'':'s'}.${vomitFindings.length?` Appearance findings: ${vomitFindings.join(', ')}.`:''}`:`No vomiting recorded on ${vomitingRows.length} day${vomitingRows.length===1?'':'s'} with a vomiting entry.`;
-  const weightText=!latestWeight?'No weight is recorded by the end of this period.':latestWeight.date<start?`Most recent recorded weight before this period: ${latestWeight.value} lb on ${fmtDate(latestWeight.date)}.`:`Latest recorded weight in this period: ${latestWeight.value} lb on ${fmtDate(latestWeight.date)} (${latestWeight.source}).`;
+  const appetiteParts=[];
+  if(appetiteReduced.length)appetiteParts.push(`Below his usual appetite on ${careSnapshotDateList(appetiteReduced)}${minAppetite!==null?`; lowest recorded intake was about ${minAppetite}% of normal`:''}.`);
+  if(appetiteIncreased.length)appetiteParts.push(`More appetite than usual on ${careSnapshotDateList(appetiteIncreased)}.`);
+  if(appetiteNormal.length)appetiteParts.push(`At or near his usual appetite on ${careSnapshotDateList(appetiteNormal)}.`);
+  const appetiteNotes=mostCommonLabels(observations.flatMap(appetiteLabels));
+  if(appetiteNotes.length)appetiteParts.push(`Appetite notes: ${appetiteNotes.map(item=>item.label).join('; ')}.`);
+  const appetiteText=appetiteParts.join(' ')||'Appetite was not specifically described in this period.';
+  const energyParts=[];
+  if(energyReduced.length)energyParts.push(`Less energy than usual on ${careSnapshotDateList(energyReduced)}.`);
+  if(energyHigher.length)energyParts.push(`More energy than usual on ${careSnapshotDateList(energyHigher)}.`);
+  if(energyNormal.length)energyParts.push(`Usual energy on ${careSnapshotDateList(energyNormal)}.`);
+  const energyNotes=mostCommonLabels(observations.flatMap(energyLabels));
+  if(energyNotes.length)energyParts.push(`Energy notes: ${energyNotes.map(item=>item.label).join('; ')}.`);
+  const energyText=energyParts.join(' ')||'Energy was not specifically described in this period.';
+  const nauseaParts=[];
+  if(nauseaDays.length)nauseaParts.push(`Nausea-associated behaviors on ${careSnapshotDateList(nauseaDays)}${nauseaTop.length?`: ${nauseaTop.map(item=>item.label).join('; ')}`:''}.`);
+  if(nauseaNoneDays.length)nauseaParts.push(`No nausea signs observed on ${careSnapshotDateList(nauseaNoneDays)}.`);
+  const nauseaText=nauseaParts.join(' ')||'Nausea signs were not specifically described in this period.';
+  const stoolParts=[];
+  if(looseDays.length)stoolParts.push(`Loose stool or diarrhea was described or scored on ${careSnapshotDateList(looseDays)}.`);
+  if(!looseDays.length&&characterizedStoolDays.length)stoolParts.push(`Stools described or scored on ${careSnapshotDateList(characterizedStoolDays)} did not have a loose-stool finding.`);
+  if(noStoolDays.length)stoolParts.push(`No bowel movement was reported on ${careSnapshotDateList(noStoolDays)}.`);
+  if(stoolScores.length)stoolParts.push(`Highest recorded stool score: ${Math.max(...stoolScores)} on the existing 1–8 scale.`);
+  if(bloodDays.length)stoolParts.push(`Blood or possible blood, or black/tarry appearance, was noted on ${careSnapshotDateList(bloodDays)}${blackTarryDays.length?`; black/tarry notes on ${careSnapshotDateList(blackTarryDays)}`:''}.`);
+  if(!stoolParts.length&&stoolRows.length)stoolParts.push('Bowel movements were logged, but their consistency was not described or scored.');
+  const stoolText=stoolParts.join(' ')||'No bowel-movement observations were recorded in this period.';
+  const vomitingParts=[];
+  if(vomitingEpisodes)vomitingParts.push(`${vomitingEpisodes} vomiting episode${vomitingEpisodes===1?'':'s'} recorded on ${careSnapshotDateList(vomitingDays)}.`);
+  if(vomitingNoneDays.length)vomitingParts.push(`No vomiting observed on ${careSnapshotDateList(vomitingNoneDays)}.`);
+  if(vomitFindings.length)vomitingParts.push(`Vomit appearance noted: ${vomitFindings.join('; ')}.`);
+  const vomitingText=vomitingParts.join(' ')||'Vomiting was not specifically recorded in this period.';
+  const weightText=!latestWeight?'No weight is recorded by the end of this period.':latestWeight.date<start?`Most recent recorded weight before this period: ${latestWeight.value} lb on ${fmtDate(latestWeight.date)} (${latestWeight.source}).`:`Latest recorded weight in this period: ${latestWeight.value} lb on ${fmtDate(latestWeight.date)} (${latestWeight.source}).`;
   const medicationParts=[];
-  if(pred)medicationParts.push(`Prednisone ${pred.dose||'dose unrecorded'} ${pred.frequency||''}${predThrough?`, owner-confirmed through ${fmtDate(predThrough)}`:''}`);
-  medicationParts.push(`Cerenia: ${cerenia.given.length} recorded dose${cerenia.given.length===1?'':'s'}`);
-  for(const med of supportiveCounts.filter(item=>item.name!=='Cerenia'&&item.name!=='Prednisone'))medicationParts.push(`${med.name}: ${med.count} recorded administration${med.count===1?'':'s'}`);
-  const medicationText=medicationParts.join('. ')+'.';
+  if(predSummary)medicationParts.push(predSummary);
+  if(predExceptions.length)medicationParts.push(careSnapshotDoseSummary('med-prednisone',predExceptions));
+  const otherIds=[...new Set(medications.filter(a=>a.medicationId!=='med-prednisone').map(a=>a.medicationId))];
+  for(const id of otherIds)medicationParts.push(careSnapshotDoseSummary(id,medications.filter(a=>a.medicationId===id)));
+  if(!otherIds.includes('med-cerenia'))medicationParts.push('No Cerenia doses were logged in this period');
+  const medicationText=medicationParts.join('. ')+'. A missing dose log does not mean a dose was missed.';
   const treatmentInRange=Boolean(treatment&&treatment.date>=start&&treatment.date<=end);
   const clinicalParts=[];
   if(treatment)clinicalParts.push(treatmentInRange
@@ -2659,98 +2884,75 @@ function careSnapshotData(){
   if(latestNeut)clinicalParts.push(`Latest stored neutrophils as of the end of this period: ${latestNeut.displayValue||latestNeut.value} ${latestNeut.unit} on ${fmtDate(latestNeut.date)}.`);
   const clinicalText=clinicalParts.join(' ')||'No vinblastine treatment or neutrophil result is recorded by the end of this period.';
   return {
-    range,treatment,start,end,rows,observations,
-    appetiteRows,appetiteReduced,minAppetite,
-    energyRows,energyReduced,
-    nauseaRows,nauseaDays,nauseaDates,nauseaTop,
-    stoolRows,looseDays,bloodDays,brightRedStoolDays,blackTarryDays,stoolScores,
-    vomitingRows,vomitingEpisodes,vomitFindings,
-    latestWeight,cerenia,cereniaDates,cereniaOnNausea,pred,predThrough,latestNeut,
+    range,treatment,start,end,rows,observations,recentOwnerNotes,
+    appetiteRows,appetiteReduced,appetiteNormal,appetiteIncreased,minAppetite,
+    energyRows,energyReduced,energyNormal,energyHigher,
+    nauseaRows,nauseaDays,nauseaNoneDays,nauseaDates,nauseaTop,
+    stoolRows,looseDays,characterizedStoolDays,noStoolDays,bloodDays,brightRedStoolDays,blackTarryDays,stoolScores,noteReviews,
+    vomitingRows,vomitingDays,vomitingNoneDays,vomitingEpisodes,vomitFindings,
+    latestWeight,cerenia,cereniaDates,cereniaOnNausea,pred,predThrough,predSummary,predExceptions,latestNeut,
     appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions
   };
 }
 function careSnapshotNarrative(snapshot){
   const paragraphs=[];
   const calendarDays=Math.max(1,daysBetween(snapshot.start,snapshot.end)+1);
-  const loggedDays=snapshot.rows.length;
-  const periodLead=snapshot.range.mode==='treatment'
+  const periodLead=snapshot.range.mode==='treatment'&&snapshot.treatment
     ? `Since chemo #${snapshot.treatment.number}`
     : snapshot.range.mode==='visit'
       ? 'Since the last documented visit'
       : snapshot.range.mode==='7days'
-        ? 'Over the last 7 days'
+        ? 'Over this 7-day period'
         : `From ${fmtDate(snapshot.start)} through ${fmtDate(snapshot.end)}`;
-  const coverageLead=loggedDays&&loggedDays<calendarDays
-    ? `${periodLead}, I have ${loggedDays} of ${calendarDays} days logged, so this is a partial picture.`
-    : loggedDays
-      ? `${periodLead}, I have ${loggedDays} day${loggedDays===1?'':'s'} of home observations recorded.`
-      : `${periodLead}, I do not have home observations logged.`;
-
   const urgent=[];
-  if(snapshot.blackTarryDays.length)urgent.push(`black/tarry stool on ${snapshot.blackTarryDays.length} day${snapshot.blackTarryDays.length===1?'':'s'}`);
-  if(snapshot.vomitFindings.includes('bright-red blood in vomit'))urgent.push('bright-red blood in vomit');
-  if(snapshot.vomitFindings.includes('dark material resembling coffee grounds'))urgent.push('dark material resembling coffee grounds in vomit');
-  if(snapshot.brightRedStoolDays.length)urgent.push(`bright-red blood in stool on ${snapshot.brightRedStoolDays.length} day${snapshot.brightRedStoolDays.length===1?'':'s'}`);
-
+  if(snapshot.blackTarryDays.length)urgent.push(`black/tarry stool on ${careSnapshotDateList(snapshot.blackTarryDays)}`);
+  for(const finding of snapshot.vomitFindings)urgent.push(`${finding} on ${careSnapshotDateList(snapshot.rows.filter(row=>row.observations.some(o=>vomitFlagLabels(o).includes(finding))))}`);
+  if(snapshot.brightRedStoolDays.length)urgent.push(`bright-red blood in stool on ${careSnapshotDateList(snapshot.brightRedStoolDays)}`);
+  const otherBlood=snapshot.bloodDays.filter(row=>!snapshot.blackTarryDays.includes(row)&&!snapshot.brightRedStoolDays.includes(row));
+  if(otherBlood.length)urgent.push(`blood or possible blood mentioned in stool notes on ${careSnapshotDateList(otherBlood)}`);
+  let opening=snapshot.rows.length?`${periodLead}, my home notes cover ${careSnapshotDateList(snapshot.rows)}.`:`${periodLead}, I have no home observations recorded.`;
+  if(urgent.length)opening+=` My notes include ${urgent.join('; ')}.`;
+  if(snapshot.rows.length<calendarDays)opening+=' There are gaps in my notes; those days are unknown.';
+  paragraphs.push(opening);
+  if(snapshot.noteReviews.length)paragraphs.push(`Some wording in my notes needs review: ${snapshot.noteReviews.map(note=>`${fmtDate(note.date)}: “${note.text.length>180?note.text.slice(0,177)+'…':note.text}”`).join('; ')}. These mentions are not counted as confirmed symptoms.`);
   const changes=[];
-  if(snapshot.appetiteRows.length){
-    if(snapshot.appetiteReduced.length)changes.push(`his appetite was below normal on ${snapshot.appetiteReduced.length} of ${snapshot.appetiteRows.length} logged appetite day${snapshot.appetiteRows.length===1?'':'s'}${snapshot.minAppetite!==null?`, with the lowest recorded intake around ${snapshot.minAppetite}% of normal`:''}`);
-    else changes.push(`his appetite stayed at or near his normal level on the ${snapshot.appetiteRows.length} day${snapshot.appetiteRows.length===1?'':'s'} I logged it`);
-  }
-  if(snapshot.energyRows.length){
-    if(snapshot.energyReduced.length)changes.push(`his energy was below his usual baseline on ${snapshot.energyReduced.length} of ${snapshot.energyRows.length} logged day${snapshot.energyRows.length===1?'':'s'}`);
-    else changes.push(`his energy stayed at his usual baseline on the ${snapshot.energyRows.length} day${snapshot.energyRows.length===1?'':'s'} I logged it`);
-  }
-
-  const nausea=[];
-  if(snapshot.nauseaRows.length){
-    if(snapshot.nauseaDays.length){
-      const behaviors=snapshot.nauseaTop.length?snapshot.nauseaTop.map(item=>item.label).join(', '):'the behaviors recorded in the journal';
-      nausea.push(`I noticed nausea-associated behaviors on ${snapshot.nauseaDays.length} day${snapshot.nauseaDays.length===1?'':'s'}, most often ${behaviors}`);
-      if(snapshot.cerenia.given.length)nausea.push(`Cerenia was recorded ${snapshot.cerenia.given.length} time${snapshot.cerenia.given.length===1?'':'s'} in this period${snapshot.cereniaOnNausea?`, including on ${snapshot.cereniaOnNausea} of those nausea-observation day${snapshot.cereniaOnNausea===1?'':'s'}`:''}`);
-    }else nausea.push(`I did not record nausea-associated behaviors on the ${snapshot.nauseaRows.length} day${snapshot.nauseaRows.length===1?'':'s'} when I specifically logged them`);
-  }
-
-  const gi=[];
-  if(snapshot.stoolRows.length){
-    if(snapshot.looseDays.length)gi.push(`stool was loose, unformed, watery, or a legacy score of 6+ on ${snapshot.looseDays.length} of ${snapshot.stoolRows.length} logged stool day${snapshot.stoolRows.length===1?'':'s'}`);
-    else gi.push(`I did not record loose or diarrheic stool on the ${snapshot.stoolRows.length} stool day${snapshot.stoolRows.length===1?'':'s'} logged in this period`);
-  }
-  if(snapshot.vomitingRows.length){
-    if(snapshot.vomitingEpisodes)gi.push(`I recorded ${snapshot.vomitingEpisodes} vomiting episode${snapshot.vomitingEpisodes===1?'':'s'} across ${snapshot.vomitingRows.length} logged day${snapshot.vomitingRows.length===1?'':'s'}`);
-    else gi.push(`I did not record vomiting on the ${snapshot.vomitingRows.length} day${snapshot.vomitingRows.length===1?'':'s'} when vomiting was specifically logged`);
-  }
-
-  let first=coverageLead;
-  if(urgent.length)first+=` The most important finding${urgent.length===1?'':'s'} I recorded ${urgent.length===1?'was':'were'} ${urgent.join('; ')}.`;
-  else if(changes.length)first+=` The main things I noticed were that ${changes.join('; and ')}.`;
-  else if(loggedDays)first+=' The summary below reflects only the structured items I specifically logged.';
-  paragraphs.push(first);
-
-  const details=[...(!urgent.length?[]:changes),...nausea,...gi];
-  if(details.length)paragraphs.push(details.join('. ')+'.');
-
+  if(snapshot.appetiteReduced.length)changes.push(`His appetite was below normal on ${careSnapshotDateList(snapshot.appetiteReduced)}${snapshot.minAppetite!==null?`, with the lowest recorded intake about ${snapshot.minAppetite}% of normal`:''}.`);
+  else if(snapshot.appetiteNormal.length)changes.push(`His appetite was close to normal on ${careSnapshotDateList(snapshot.appetiteNormal)}.`);
+  if(snapshot.appetiteReduced.length&&snapshot.appetiteNormal.includes(snapshot.appetiteRows.at(-1)))changes.push(`The latest appetite entry was close to normal on ${fmtDate(snapshot.appetiteRows.at(-1).date)}.`);
+  if(snapshot.appetiteIncreased.length)changes.push(`He had more appetite than usual on ${careSnapshotDateList(snapshot.appetiteIncreased)}.`);
+  if(snapshot.energyReduced.length)changes.push(`He had less energy than usual on ${careSnapshotDateList(snapshot.energyReduced)}.`);
+  else if(snapshot.energyNormal.length)changes.push(`His energy was at his usual level on ${careSnapshotDateList(snapshot.energyNormal)}.`);
+  if(snapshot.energyReduced.length&&snapshot.energyNormal.includes(snapshot.energyRows.at(-1)))changes.push(`The latest energy entry was back at his usual level on ${fmtDate(snapshot.energyRows.at(-1).date)}.`);
+  if(snapshot.energyHigher.length)changes.push(`I recorded higher energy on ${careSnapshotDateList(snapshot.energyHigher)}.`);
+  if(changes.length)paragraphs.push(changes.join(' '));
+  const symptoms=[];
+  if(snapshot.nauseaDays.length){
+    if(snapshot.nauseaTop.length)symptoms.push(`I noticed ${snapshot.nauseaTop.map(item=>item.label).join(', ')} on ${careSnapshotDateList(snapshot.nauseaDays)}.`);
+    else symptoms.push(`My notes mention nausea signs on ${careSnapshotDateList(snapshot.nauseaDays)}.`);
+  }else if(snapshot.nauseaNoneDays.length)symptoms.push(`I specifically noted no nausea signs on ${careSnapshotDateList(snapshot.nauseaNoneDays)}.`);
+  if(snapshot.cerenia.given.length)symptoms.push(`I logged ${snapshot.cerenia.given.length} Cerenia dose${snapshot.cerenia.given.length===1?'':'s'} on ${careSnapshotDateList(snapshot.cereniaDates)}.`);
+  if(snapshot.looseDays.length)symptoms.push(`Loose stool or diarrhea was described or scored on ${careSnapshotDateList(snapshot.looseDays)}.`);
+  if(snapshot.vomitingEpisodes)symptoms.push(`I recorded ${snapshot.vomitingEpisodes} vomiting episode${snapshot.vomitingEpisodes===1?'':'s'} on ${careSnapshotDateList(snapshot.vomitingDays)}.`);
+  else if(snapshot.vomitingNoneDays.length)symptoms.push(`I specifically noted no vomiting on ${careSnapshotDateList(snapshot.vomitingNoneDays)}.`);
+  if(symptoms.length)paragraphs.push(symptoms.join(' '));
   const closing=[];
-  const treatmentWeight=Number(snapshot.treatment?.weightLb);
-  const latestWeight=Number(snapshot.latestWeight?.value);
-  if(Number.isFinite(latestWeight)){
-    if(snapshot.latestWeight.date<snapshot.start)closing.push(`The most recent weight I have before this period is ${latestWeight.toFixed(1)} lb from ${fmtDate(snapshot.latestWeight.date)}`);
-    else if(snapshot.treatment&&snapshot.treatment.date<=snapshot.latestWeight.date&&Number.isFinite(treatmentWeight)){
-      const delta=latestWeight-treatmentWeight;
-      const deltaText=Math.abs(delta)>=0.1?` (${delta>0?'+':''}${delta.toFixed(1)} lb from chemo #${snapshot.treatment.number})`:'';
-      closing.push(`His latest recorded weight is ${latestWeight.toFixed(1)} lb on ${fmtDate(snapshot.latestWeight.date)}${deltaText}`);
-    }else closing.push(`His latest recorded weight is ${latestWeight.toFixed(1)} lb on ${fmtDate(snapshot.latestWeight.date)}`);
-  }
-  if(snapshot.pred){
-    const dose=[snapshot.pred.dose,snapshot.pred.frequency].filter(Boolean).join(' ');
-    closing.push(`Prednisone is recorded as ${dose||'prescribed'}${snapshot.predThrough?`, and I have daily dosing confirmed through ${fmtDate(snapshot.predThrough)}`:''}`);
-  }
-  if(snapshot.questions.length)closing.push(`I have ${snapshot.questions.length} question${snapshot.questions.length===1?'':'s'} saved that I want to make sure I ask the care team`);
-  if(closing.length)paragraphs.push(closing.join('. ')+'.');
-
+  if(snapshot.latestWeight)closing.push(snapshot.weightText);
+  if(snapshot.predSummary)closing.push(`${snapshot.predSummary}. A missing dose log does not mean a dose was missed.`);
+  if(snapshot.predExceptions.length)closing.push(`${careSnapshotDoseSummary('med-prednisone',snapshot.predExceptions)}.`);
+  if(snapshot.questions.length)closing.push(`I have ${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'} for the care team.`);
+  if(closing.length)paragraphs.push(closing.join(' '));
+  paragraphs.push('Symptoms I did not specifically record remain unknown.');
   return paragraphs;
 }
 
+function careSnapshotOwnerNotesHtml(snapshot,{interactive=false}={}){
+  const notes=snapshot.recentOwnerNotes||[];
+  const noteBody=note=>`<div class="care-snapshot-owner-note-text" style="white-space:pre-wrap;overflow-wrap:anywhere">${esc(note.text)}</div>`;
+  const items=notes.map(note=>interactive
+    ? `<details class="care-snapshot-owner-note"><summary>${fmtDate(note.date)} · Owner note · Read full note</summary>${noteBody(note)}</details>`
+    : `<article class="care-snapshot-owner-note"><h3>${fmtDate(note.date)} · Owner note</h3>${noteBody(note)}</article>`).join('');
+  return `<section class="care-snapshot-owner-notes"><h3>Recent owner notes · original wording</h3><p class="care-snapshot-note">Up to 3 most recent owner notes in the selected period, shown in full. All entries and their complete wording remain in Journal and the full record. These are owner notes, not clinical interpretations.</p>${items||'<p>No written owner notes in this selected period.</p>'}${interactive?'<button type="button" class="text-button" data-nav="journal">Open Journal</button>':''}</section>`;
+}
 function renderCareSnapshotPreview(){
   const root=els.careSnapshotPreview;if(!root||!state)return;
   qa('[data-snapshot-range]').forEach(button=>button.classList.toggle('active',button.dataset.snapshotRange===careSnapshotRange.mode));
@@ -2767,27 +2969,55 @@ function renderCareSnapshotPreview(){
   const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} – ${fmtDate(snapshot.end)}`;
   const narrative=careSnapshotNarrative(snapshot);
   const items=[['APPETITE',snapshot.appetiteText],['ENERGY',snapshot.energyText],['NAUSEA-ASSOCIATED',snapshot.nauseaText],['GI / STOOL',snapshot.stoolText],['VOMITING',snapshot.vomitingText],['MEDICATIONS',snapshot.medicationText]];
-  root.innerHTML=`<div class="care-snapshot-period"><div><strong>${esc(snapshot.range.label)}</strong><span>${esc(range)} · ${esc(snapshot.range.context)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><section class="care-snapshot-narrative"><div class="care-snapshot-label">KEY OBSERVATIONS</div>${narrative.map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</section><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><div class="care-snapshot-note">The summary above is generated only from Roger's recorded observations, medications, labs, and questions. Missing or unlogged days remain unknown.</div>`;
+  root.innerHTML=`<div class="care-snapshot-period"><div><strong>${esc(snapshot.range.label)}</strong><span>${esc(range)} · ${esc(snapshot.range.context)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><section class="care-snapshot-narrative"><div class="care-snapshot-label">KEY OBSERVATIONS</div>${narrative.map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</section><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><div class="care-snapshot-note">The summary above is generated only from Roger's recorded observations, medications, labs, and questions. Missing or unlogged days remain unknown.</div>${careSnapshotOwnerNotesHtml(snapshot,{interactive:true})}`;
 }
 
 function pdfPlain(value){
   return String(value??'').replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2192/g,' -> ').replace(/\u00b5/g,'u').replace(/\u00b2/g,'2').replace(/\u2265/g,'>=')
     .normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7e\n]/g,' ');
 }
+function pdfOwnerNoteText(value){
+  // Match the export's existing punctuation normalization, but make every other
+  // unsupported character visible rather than silently dropping it.
+  const normalized=String(value??'').replace(/[\u2018\u2019]/g,"'").replace(/[\u2013\u2014]/g,'-').replace(/\u2192/g,' -> ').replace(/\u00b5/g,'u').replace(/\u00b2/g,'2').replace(/\u2265/g,'>=')
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g,'');
+  return [...normalized].map(character=>/[\x20-\x7e\n]/.test(character)?character:`[U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')}]`).join('');
+}
 function buildCareSummaryPdf(){
   const pages=[[]],margin=45;let y=747;
-  const page=()=>{pages.push([]);y=747;};
+  const page=()=>{if(pages.at(-1).length)pages.push([]);y=747;};
   const line=(value,size=10,bold=false,indent=0,leading=14)=>{
     if(y<55)page();pages.at(-1).push({text:pdfPlain(value),size,bold,x:margin+indent,y});y-=leading;
   };
-  const wrap=(value,size=10,bold=false,indent=0)=>{
+  const wrappedLines=(value,indent=0)=>{
+    const lines=[],limit=Math.max(52,82-Math.round(indent/8));
     for(const paragraph of pdfPlain(value).split('\n')){
       const words=paragraph.split(/\s+/).filter(Boolean);let current='';
-      for(const word of words){if((current+' '+word).trim().length>Math.max(52,82-Math.round(indent/8))&&current){line(current,size,bold,indent,size+4);current='';}current+=(current?' ':'')+word;}
-      line(current||' ',size,bold,indent,size+4);
+      for(const word of words){
+        if((current+' '+word).trim().length>limit&&current){lines.push(current);current='';}
+        let remaining=word;
+        while(remaining.length>limit){lines.push(remaining.slice(0,limit));remaining=remaining.slice(limit);}
+        current+=(current?' ':'')+remaining;
+      }
+      lines.push(current||' ');
     }
+    return lines;
   };
-  const heading=value=>{y-=7;if(y<75)page();line(value,13,true,0,19);};
+  const wrap=(value,size=10,bold=false,indent=0)=>{
+    const lines=wrappedLines(value,indent),leading=size+4;
+    // Keep short paragraphs intact. If a section heading immediately precedes
+    // one, move that heading too rather than leaving it alone at the foot.
+    if(lines.length<=8&&y-(lines.length-1)*leading<55){
+      const headingLine=pages.at(-1).at(-1)?.sectionHeading?pages.at(-1).pop():null;
+      page();
+      if(headingLine)line(headingLine.text,headingLine.size,headingLine.bold,headingLine.x-margin,19);
+    }
+    lines.forEach(text=>line(text,size,bold,indent,leading));
+  };
+  const heading=value=>{
+    if(y-7-19-13<55)page();else y-=7;
+    line(value,13,true,0,19);pages.at(-1).at(-1).sectionHeading=true;
+  };
   const p=state.profile,snapshot=careSnapshotData(),plan=state.carePlan||{visits:[]};
   const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} - ${fmtDate(snapshot.end)}`;
   line(`${p.fullName||p.name} | CARE SNAPSHOT`,18,true,0,27);
@@ -2811,11 +3041,25 @@ function buildCareSummaryPdf(){
   heading('Questions for care team');
   if(snapshot.questions.length)snapshot.questions.forEach((question,index)=>wrap(`${index+1}. ${question.text}${question.source?.date?` (from ${fmtDate(question.source.date)} journal entry)`:''}`,9,false,8));
   else wrap('No open owner questions recorded.',9,false,8);
-  heading('Upcoming care');
+  heading('Care plan dates on file');
+  wrap('These are saved scheduled dates; they do not confirm that a visit occurred.',9,false,8);
   for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
   wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`,9,false,8);
-  line('Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This snapshot supports discussion with the veterinary team; it does not diagnose cause.',9,false,0,15);
-  page();line('Clinical history | concise review',16,true,0,25);
+  wrap('Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This snapshot supports discussion with the veterinary team; it does not diagnose cause.',9);
+  if(snapshot.recentOwnerNotes.length){
+    // A short overview caveat may have just flowed onto a new page. Continue
+    // there instead of marooning those few lines on an otherwise blank page.
+    if(pages.at(-1).length>6)page();else if(pages.at(-1).length)y-=12;
+    line('Recent owner notes',16,true,0,25);
+    wrap('Up to 3 most recent owner notes in the selected period. Owner notes (PDF text rendering; exact original wording in Journal and the full record). These are owner notes, not clinical interpretations.',9);
+    const noteTexts=snapshot.recentOwnerNotes.map(note=>pdfOwnerNoteText(note.text));
+    if(noteTexts.some(text=>/\[U\+[0-9A-F]+\]/.test(text)))wrap('Unsupported characters are shown as bracketed Unicode codes, such as [U+2705], rather than omitted.',9);
+    snapshot.recentOwnerNotes.forEach((note,index)=>{heading(`${fmtDate(note.date)} | Owner note`);wrap(noteTexts[index],9,false,8);});
+  }
+  // Notes and history can share a page when there is room for a useful start.
+  // Otherwise begin history on a fresh page; the short overview stays separate.
+  if(!snapshot.recentOwnerNotes.length||y<200)page();else y-=14;
+  line('Clinical history | concise review',16,true,0,25);
   const treatments=[...state.treatments].sort((a,b)=>a.number-b.number),rows=comparisonRows();
   for(const t of treatments){
     const window=cycleWindowFor(t,treatments);
@@ -2828,16 +3072,19 @@ function buildCareSummaryPdf(){
     if(t.doseReason)wrap(`Dose note: ${t.doseReason}`,9,false,8);
   }
   heading('Medication courses');
-  for(const c of state.medicationCourses||[])wrap(`${medicationName(c.medicationId)}: ${fmtDate(c.startDate)} to ${fmtDate(courseRecordedEnd(c))}; ${c.dose||'dose unrecorded'}; ${c.frequency||'frequency unrecorded'}; ${c.status}`,9,false,8);
+  for(const c of state.medicationCourses||[])wrap(`${medicationCourseSummary(c)}. Original course note: ${c.status}. Source: ${c.source||'not recorded'}.`,9,false,8);
   heading('Recent supportive medication');
   const supportive=(state.medicationAdministrations||[]).filter(a=>a.date>='2026-09-18');
   for(const id of [...new Set(supportive.map(a=>a.medicationId))]){
     const events=supportive.filter(a=>a.medicationId===id).sort((a,b)=>a.date.localeCompare(b.date));
     wrap(`${medicationName(id)}: ${events.map(a=>`${fmtDate(a.date).replace(', 2026','')} ${a.status}${a.dose?' '+a.dose:''}`).join('; ')}`,9,false,8);
   }
+  const sourceCopy='CBC values come from the loaded clinical record. Symptoms and medication use are owner reported. The complete dated journal, correction history, and uploaded documents are available in the app and complete backup.';
+  const checksCopy='Record checks: verify the Oct 2 vinblastine invoice lines; reconcile the July 14 Optimum invoice; confirm amoxicillin dose and frequency.';
+  const sourceBlockHeight=26+wrappedLines(sourceCopy).length*13+wrappedLines(checksCopy).length*14;
+  if(y-sourceBlockHeight<55)page();
   heading('Source and record checks');
-  wrap('CBC values come from the loaded clinical record. Symptoms and medication use are owner reported. The complete dated journal, correction history, and uploaded documents are available in the app and complete backup.',9);
-  wrap('Record checks: verify the Oct 2 vinblastine invoice lines; reconcile the July 14 Optimum invoice; confirm amoxicillin dose and frequency.');
+  wrap(sourceCopy,9);wrap(checksCopy);
   const clean=value=>pdfPlain(value).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
   const objects=['','<< /Type /Catalog /Pages 2 0 R >>','','<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>','<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold >>'];
   const kids=[];
@@ -2865,7 +3112,7 @@ function buildCareSummaryHtml(){
   const neut=state.labs.filter(l=>l.metric==='Neutrophils').sort((a,b)=>a.date.localeCompare(b.date));
   const nadir=neut.reduce((a,b)=>!a||Number(b.value)<Number(a.value)?b:a,null),latest=neut.at(-1);
   const pred=medicationStats('med-prednisone');
-  const courseRows=(state.medicationCourses||[]).map(c=>`<tr><td>${esc(medicationName(c.medicationId))}</td><td>${fmtDate(c.startDate)}–${fmtDate(courseRecordedEnd(c))}</td><td>${esc(c.dose||'Unknown')} · ${esc(c.frequency||'Frequency unknown')}</td><td>${esc(c.status)}<br><small>${esc(c.source)}</small></td></tr>`).join('');
+  const courseRows=(state.medicationCourses||[]).map(c=>`<tr><td>${esc(medicationName(c.medicationId))}</td><td>${esc(medicationCourseSummary(c))}</td><td>${esc(c.dose||'Unknown')} · ${esc(c.frequency||'Frequency unknown')}</td><td>Original course note: ${esc(c.status)}<br><small>${esc(c.source)}</small></td></tr>`).join('');
   const prnRows=(state.medications||[]).filter(m=>!['med-prednisone','med-amoxicillin'].includes(m.id)).map(m=>{const a=medicationStats(m.id);return `<tr><td>${esc(m.name)}</td><td>${a.given.length} given; ${state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length} held</td><td>${a.last?fmtDate(a.last):'No dose logged'}</td><td>${esc(m.prescribedDose)}</td></tr>`;}).join('');
   const medicationEvents=state.medicationAdministrations.filter(a=>a.medicationId==='med-metronidazole').map(a=>`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${a.dose} ${a.status} (${a.reason||'reason unrecorded'})`).join('; ');
   const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date TBD'}</strong> <small>(${esc(v.source||'Source unrecorded')})</small></li>`).join('');
@@ -2883,8 +3130,9 @@ function buildCareSummaryHtml(){
   <h2>How has ${esc(p.name)} been doing?</h2><div class="note"><strong>Key observations</strong>${careSnapshotNarrative(snapshot).map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</div><h2>Structured detail</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
   <h2>Treatment & medication context</h2><p>${esc(snapshot.clinicalText)}</p><p>${esc(snapshot.medicationText)}</p>
   <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
-  <h2>Upcoming care</h2><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
+  <h2>Care plan dates on file</h2><p>These are saved scheduled dates; they do not confirm that a visit occurred.</p><ul>${visits}</ul><p><strong>When to call the vet:</strong> ${esc(plan.vetCallInstructions||'Vet-specific instructions pending.')}${plan.vetCallSource?` (${esc(plan.vetCallSource)})`:''}</p>
   <p class="small">Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This Care Snapshot supports discussion with the veterinary team and does not diagnose cause.</p></section>
+  ${careSnapshotOwnerNotesHtml(snapshot)}
   <h2>Medication courses</h2><table><thead><tr><th>Medication</th><th>Reported dates</th><th>Dose / frequency</th><th>Basis</th></tr></thead><tbody>${courseRows}</tbody></table>
   <h2>PRN / visit medications</h2><table><thead><tr><th>Medication</th><th>Logged use</th><th>Last given</th><th>Prescription on file</th></tr></thead><tbody>${prnRows}</tbody></table>
   <h2>Clinical course</h2><table><thead><tr><th>Date</th><th>Treatment</th><th>Dose</th><th>mg/m²</th><th>Weight</th><th>Dose context</th></tr></thead><tbody>${rows}</tbody></table>
