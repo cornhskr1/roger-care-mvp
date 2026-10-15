@@ -181,6 +181,10 @@ if(require.main===module)(async()=>{
         assert.equal(await page.locator('.nav-item[aria-current="page"]').getAttribute('data-nav'),['costs','snapshot'].includes(route)?'more':route.split('/')[0]);
         const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
         assert(!overflow, `${viewport.width} ${route}: no whole-page horizontal overflow`);
+        if(process.env.QA_SCREENSHOT_DIR&&['home','journal/entries','medications','more/menu','timeline/chart','snapshot'].includes(route)){
+          fs.mkdirSync(process.env.QA_SCREENSHOT_DIR,{recursive:true});
+          await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-${route.replace('/','-')}.png`),fullPage:true});
+        }
       };
       assert.deepEqual(await page.locator('.bottom-nav [data-nav]').evaluateAll(nodes=>nodes.map(node=>node.dataset.nav)),['home','journal','medications','timeline','more']);
       for(const route of Object.keys(expectedRoutes))await checkRoute(route);
@@ -222,8 +226,26 @@ if(require.main===module)(async()=>{
       assert.match(await page.locator('#treatmentWindowDetails').textContent(),/MEDICATION USE/,'Selected-cycle medication history retained');
       await page.locator('#treatmentOverlayChart [data-kind="treatment"]').first().click();
       assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Chemo #1[\s\S]*Synthetic reason/,'Treatment marker exposes recorded dose context');
-      await page.locator('#treatmentOverlayChart [data-kind="course"]').first().click();
-      assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Prednisone[\s\S]*Synthetic confirmation/,'Course marker exposes owner-confirmed regimen and source');
+      const course=page.locator('#treatmentOverlayChart [data-kind="course"]').first();
+      const courseLine=course.locator('line[stroke="#512888"]');
+      // SVG horizontal strokes have a zero-height geometry box. Use a real
+      // pointer at the visible stroke rather than forcing Playwright's group click.
+      await courseLine.evaluate(line=>line.scrollIntoView({block:'center',inline:'center',behavior:'auto'}));
+      await courseLine.evaluate(line=>window.scrollBy(0,line.getBoundingClientRect().top-window.innerHeight*0.4));
+      const point=await courseLine.evaluate(line=>{
+        const rect=line.getBoundingClientRect(),x=(rect.left+rect.right)/2,y=rect.top;
+        const hit=document.elementFromPoint(x,y),nav=document.querySelector('.bottom-nav').getBoundingClientRect();
+        return {x,y,width:window.innerWidth,height:window.innerHeight,navTop:nav.top,hitCourse:Boolean(hit&&line.parentElement.contains(hit))};
+      });
+      assert(point.x>0&&point.x<point.width&&point.y>0&&point.y<point.height,'Course stroke midpoint is in the viewport');
+      assert(point.y<point.navTop-16,'Fixed navigation does not cover the course stroke');
+      assert(point.hitCourse,'Real hit-testing reaches the course stroke');
+      await page.mouse.click(point.x,point.y);
+      assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Prednisone[\s\S]*Synthetic confirmation/,'Course pointer click exposes owner-confirmed regimen and source');
+      await course.focus();
+      assert(await course.evaluate(node=>document.activeElement===node),'Course marker receives keyboard focus');
+      await page.keyboard.press('Enter');
+      assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Prednisone[\s\S]*Synthetic confirmation/,'Course keyboard activation preserves source detail');
       await page.locator('#treatmentWindowSelector [data-treatment-window="all"]').click();
       assert.equal((await page.locator('#treatmentWindowDetails').textContent()).trim(),'','Returning to All clears selected-cycle detail');
       await go('more/profile');
@@ -282,7 +304,6 @@ if(require.main===module)(async()=>{
       assert.deepEqual(await snapshot(),initial,'Navigation, range changes and editor cancellations do not mutate clinical data or localStorage');
       assert.deepEqual(errors,[], 'No browser runtime errors');
       console.log(`PASS ${viewport.width}x${viewport.height}: ${Object.keys(expectedRoutes).length} destinations, history/repeated clicks, journal-first, controls, exports, edit/cancel, continuous prednisone band, no record mutations`);
-      if(process.env.QA_SCREENSHOT_DIR){fs.mkdirSync(process.env.QA_SCREENSHOT_DIR,{recursive:true});for(const route of ['home','journal/entries','medications','more/menu','timeline/chart','snapshot']){await go(route);await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-${route.replace('/','-')}.png`),fullPage:true});}}
       await context.close();
     }
   }catch(error){
