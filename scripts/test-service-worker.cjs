@@ -244,7 +244,7 @@ async function browserChecks() {
     const page = await context.newPage();
     await page.goto(appOrigin + '/');
     await page.evaluate(async () => { await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }); await navigator.serviceWorker.ready; });
-    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    await page.waitForFunction(() => navigator.serviceWorker.controller?.state === 'activated');
     const urls = queryPaths.map(p => apiOrigin + p);
     const read = (url, options = {}) => page.evaluate(async ({ url, options }) => {
       try {
@@ -294,17 +294,45 @@ async function browserChecks() {
     });
     const before = await snapshot();
     upgraded = true;
-    const changed = await page.evaluate(async () => {
+    const lifecycle = await page.evaluate(async () => {
       const oldController = navigator.serviceWorker.controller;
+      const stages = [{ event: 'before update', oldState: oldController.state }];
       const takeover = new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('New worker never took control')), 20000);
-        navigator.serviceWorker.addEventListener('controllerchange', () => { clearTimeout(timeout); resolve(navigator.serviceWorker.controller !== oldController); }, { once: true });
+        let replacement;
+        const cleanup = () => {
+          clearTimeout(timeout);
+          navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+          replacement?.removeEventListener('statechange', onStateChange);
+        };
+        const fail = reason => { cleanup(); reject(new Error(`${reason}: ${JSON.stringify(stages)}`)); };
+        const onStateChange = () => {
+          stages.push({ event: 'replacement state', oldState: oldController.state, newState: replacement.state });
+          if (replacement.state === 'redundant') return fail('Replacement became redundant before activation');
+          if (replacement.state !== 'activated') return;
+          if (navigator.serviceWorker.controller !== replacement) return fail('Replacement lost control before activation');
+          cleanup(); resolve({ changed: replacement !== oldController, state: replacement.state, stages });
+        };
+        const onControllerChange = () => {
+          replacement = navigator.serviceWorker.controller;
+          stages.push({ event: 'controllerchange', oldState: oldController.state, newState: replacement?.state });
+          if (!replacement || replacement === oldController) return fail('Controllerchange did not replace the old worker');
+          // Existing controlled clients get controllerchange while the new worker
+          // is activating, before its activate event and waitUntil cleanup finish.
+          // Await that exact worker's activated state, not an arbitrary delay or
+          // relaxed cache assertion. https://www.w3.org/TR/service-workers/#activation-algorithm
+          replacement.addEventListener('statechange', onStateChange);
+          onStateChange();
+        };
+        const timeout = setTimeout(() => fail('Replacement never completed activation'), 20000);
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange, { once: true });
       });
       await (await navigator.serviceWorker.getRegistration()).update();
       return takeover;
     });
-    assert.equal(changed, true, 'Real controllerchange confirms replacement of old worker');
-    assert.deepEqual((await page.evaluate(() => caches.keys())).sort(), [CURRENT_CACHE, 'unrelated-cache'].sort());
+    console.log('BROWSER upgrade lifecycle:', JSON.stringify(lifecycle));
+    assert.equal(lifecycle.changed, true, 'Real controllerchange confirms replacement of old worker');
+    assert.equal(lifecycle.state, 'activated', 'Replacement activation completed before inspecting cleanup');
+    assert.deepEqual((await page.evaluate(() => caches.keys())).sort(), [CURRENT_CACHE, 'unrelated-cache'].sort(), 'Completed activation removes exactly obsolete Roger Care caches');
     assert.equal(await page.evaluate(async () => await (await (await caches.open('unrelated-cache')).match('/unrelated-resource')).text()), 'unrelated cache survives');
     assert.deepEqual(await snapshot(), before, 'Upgrade preserves local master, pending flag, auth, photo, documents, and recovery copies');
     for (const next of [68, 69, 70]) {
@@ -351,7 +379,7 @@ async function browserChecks() {
     const freshPage = await fresh.newPage();
     await freshPage.goto(appOrigin + '/');
     await freshPage.evaluate(async () => { await navigator.serviceWorker.register('/sw.js'); await navigator.serviceWorker.ready; });
-    await freshPage.waitForFunction(() => !!navigator.serviceWorker.controller);
+    await freshPage.waitForFunction(() => navigator.serviceWorker.controller?.state === 'activated');
     for (const next of [72, 73]) {
       revision = next;
       assert.equal(await freshPage.evaluate(async url => (await (await fetch(url)).json()).revision, urls[0]), next);
