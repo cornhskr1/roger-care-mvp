@@ -34,7 +34,7 @@ const fixture = {
   sourceNotes:[],
   treatments:[{id:'test-treatment-1',number:1,date:'2026-10-02',drug:'Vinblastine',doseMg:2,doseMgM2:1.2,weightLb:50,prednisone:'Synthetic',doseReason:'Synthetic reason',clinicalSummary:'Synthetic summary',source:'Synthetic clinical record'}],
   labs:[{id:'test-lab-1',date:'2026-10-09',metric:'Neutrophils',value:5,unit:'K/uL',source:'Synthetic lab',context:'Synthetic result'},{id:'test-lab-2',date:'2026-10-09',metric:'Hematocrit',value:40,unit:'%',source:'Synthetic lab',context:'Synthetic result'}],
-  observations:Array.from({length:12},(_,i)=>({id:`test-observation-${i}`,date:`2026-10-${String(i+2).padStart(2,'0')}`,appetite:'normal',energy:'normal',nausea:0,vomiting:0,stoolEvents:[{period:'AM',score:3,status:'observed'}],notes:`Synthetic observation ${i}`,medications:[],rawEntry:i===0?'Synthetic original wording':'',source:'owner_observation'})),
+  observations:Array.from({length:12},(_,i)=>({id:`test-observation-${i}`,date:`2026-10-${String(i+2).padStart(2,'0')}`,appetite:'normal',energy:'normal',hydration:'normal',nausea:0,vomiting:0,stoolEvents:[{period:'AM',score:3,status:'observed'}],notes:`Synthetic observation ${i}`,medications:[],rawEntry:i===0?'Synthetic original wording':'',source:'owner_observation'})),
   costs:[{id:'cost-test',date:'2026-10-02',provider:'Synthetic provider',label:'Synthetic cost',amountPaid:50,category:'treatment',status:'confirmed',source:'Synthetic invoice'}],
   milestones:[{date:'2026-10-03',type:'clinical',title:'Synthetic milestone',detail:'Synthetic detail',source:'Synthetic source'}],
   journalCoverageThrough:'2026-10-13',
@@ -122,6 +122,10 @@ function vmChecks() {
   assert.deepEqual(JSON.parse(normalization),['journal/entries','journal/entries','medications','timeline/history','more/menu','snapshot','home']);
   ctx.fixture=structuredClone(fixture);vm.runInContext('state=fixture;',ctx);
   const original=JSON.stringify(ctx.fixture);
+  const defaultRange=JSON.parse(vm.runInContext('JSON.stringify({...resolveCareSnapshotRange(),span:daysBetween(resolveCareSnapshotRange().start,resolveCareSnapshotRange().end)})',ctx));
+  assert.equal(defaultRange.mode,'14days','Snapshot defaults to 14 days');
+  assert.equal(defaultRange.span,13,'Default snapshot has 14 inclusive dates');
+  assert.equal(defaultRange.end,'2026-10-13','Default snapshot ends at the latest synthetic recorded activity');
   for(const route of Object.keys(expectedRoutes))vm.runInContext(`navigate(${JSON.stringify(route)})`,ctx);
   vm.runInContext('renderUpcomingCare(); renderTimeline();',ctx);
   assert.match(document.querySelector('#homeNextVisit').innerHTML,/Today planned visit/);
@@ -212,6 +216,8 @@ if(require.main===module)(async()=>{
       assert.equal(await page.locator('#journalEntries .observation-card').count(),12);
       await page.locator('#journalHistoryToggle').click();
       await go('journal/trends');
+      await page.locator('#comparePrimary').selectOption('weight');
+      await page.locator('#compareSecondary').selectOption('cerenia');
       await page.locator('.bottom-nav [data-nav="timeline"]').click();
       await page.goBack();
       assert.equal(await page.evaluate(()=>location.hash),'#journal/trends','Back restores subsection');
@@ -270,7 +276,38 @@ if(require.main===module)(async()=>{
       assert(await page.locator('#ownerLogin').isVisible(),'Existing login controls accessible; not submitted');
       assert(await page.locator('#ownerLinkPaste').isVisible());
       await go('snapshot');
-      for(const mode of ['treatment','visit','7days','custom']){
+      assert.equal(await page.locator('[data-snapshot-range].active').getAttribute('data-snapshot-range'),'14days','Snapshot defaults to the last 14 recorded-calendar days');
+      const defaultRange=await page.evaluate(()=>{const range=resolveCareSnapshotRange();return {...range,span:daysBetween(range.start,range.end),latest:latestCareActivityDate()};});
+      assert.equal(defaultRange.span,13,'Last 14 days is inclusive');
+      assert.equal(defaultRange.end,defaultRange.latest,'Default period ends at latest recorded activity');
+      assert.equal(await page.locator('#careSnapshotPreview .care-snapshot-narrative > p').first().textContent(),await page.evaluate(()=>careSnapshotNarrative(careSnapshotData())[0]),'Conversational paragraph is first');
+      await page.locator('#careSnapshotPreview .care-snapshot-narrative [data-nav="journal/trends"]').click();
+      assert(await page.locator('#journal-panel-trends').isVisible(),'Snapshot opens the existing trend chart');
+      assert.equal(await page.locator('#comparePrimary').inputValue(),'weight','Trend shortcut preserves the selected primary metric');
+      assert.equal(await page.locator('#compareSecondary').inputValue(),'cerenia','Trend shortcut preserves the selected comparison metric');
+      await page.goBack();
+      assert.equal(await page.evaluate(()=>normalizeRoute(location.hash)),'snapshot','Back returns from the trend chart to Snapshot');
+      assert.equal(await page.locator('[data-snapshot-range].active').getAttribute('data-snapshot-range'),'14days','Trend shortcut and Back retain the selected snapshot range');
+      assert.equal(await page.locator('#careSnapshotPreview .care-snapshot-owner-notes').count(),1,'Owner notes appear once in the preview');
+      const recordedDetails=page.locator('#careSnapshotPreview .care-snapshot-details');
+      assert.equal(await recordedDetails.count(),1,'Recorded detail has one disclosure');
+      assert.equal(await recordedDetails.getAttribute('open'),null,'Recorded detail is collapsed by default');
+      assert(!(await recordedDetails.locator('.care-snapshot-grid').isVisible()),'Field-by-field details stay secondary');
+      assert(await page.locator('#careSnapshotPreview').evaluate(root=>{
+        const narrative=root.querySelector('.care-snapshot-narrative'),notes=root.querySelector('.care-snapshot-owner-notes'),details=root.querySelector('.care-snapshot-details');
+        return Boolean(narrative.compareDocumentPosition(notes)&Node.DOCUMENT_POSITION_FOLLOWING)&&Boolean(notes.compareDocumentPosition(details)&Node.DOCUMENT_POSITION_FOLLOWING);
+      }),'Narrative then original notes then structured details');
+      await recordedDetails.locator('summary').click();
+      for(const label of ['APPETITE','ENERGY','NAUSEA-ASSOCIATED','GI / STOOL','VOMITING','MEDICATIONS']){
+        assert(await recordedDetails.locator('.care-snapshot-item').filter({has:page.locator('.care-snapshot-label',{hasText:label})}).isVisible(),label+' detail remains accessible');
+      }
+      const detailLabels=await recordedDetails.locator('.care-snapshot-label').allTextContents();
+      assert.equal(new Set(detailLabels).size,detailLabels.length,'No duplicate structured sections');
+      assert.match(await recordedDetails.textContent(),/50 lb[\s\S]*vinblastine/,'Weight and clinical context retained');
+      assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1)),'Expanded snapshot details fit the page');
+      if(process.env.QA_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-snapshot-details.png`),fullPage:true});
+      await recordedDetails.locator('summary').click();
+      for(const mode of ['14days','treatment','visit','7days','custom']){
         await page.locator(`[data-snapshot-range="${mode}"]`).click();
         assert((await page.locator('#careSnapshotPreview').textContent()).length>100);
       }
@@ -286,8 +323,16 @@ if(require.main===module)(async()=>{
       await page.locator('#careSnapshotPreview [data-nav="journal"]').click();
       assert(await page.locator('#journal-panel-entries').isVisible(),'Recent notes link directly to Journal');
       await go('snapshot');
-      const exports=await page.evaluate(()=>({pdf:buildCareSummaryPdf().slice(0,8),html:buildCareSummaryHtml().includes('Synthetic Test Pet')}));
+      const exports=await page.evaluate(()=>{
+        const pdf=buildCareSummaryPdf(),html=buildCareSummaryHtml(),doc=new DOMParser().parseFromString(html,'text/html');
+        return {pdf:pdf.slice(0,8),html:html.includes('Synthetic Test Pet'),notesCount:doc.querySelectorAll('.care-snapshot-owner-notes').length,
+          htmlOrder:html.indexOf('Owner update')>=0&&html.indexOf('Owner update')<html.indexOf('Recent owner notes')&&html.indexOf('Recent owner notes')<html.indexOf('Structured detail'),
+          pdfOrder:pdf.indexOf('(Owner update)')>=0&&pdf.indexOf('(Owner update)')<pdf.indexOf('(Recent owner notes)')&&pdf.indexOf('(Recent owner notes)')<pdf.indexOf('(Structured detail)'),
+          pdfNotesCount:(pdf.match(/\(Recent owner notes\)/g)||[]).length};
+      });
       assert.equal(exports.pdf,'%PDF-1.4');assert(exports.html);
+      assert.equal(exports.notesCount,1,'HTML includes one original-note section');assert.equal(exports.pdfNotesCount,1,'PDF includes one original-note section');
+      assert(exports.htmlOrder&&exports.pdfOrder,'HTML and PDF put original notes directly after narrative and before structured details');
       // View-only assertions never request a sign-in or submit an edit.
       await page.evaluate(()=>{ownerCanEdit=false;renderSharedStatus();});
       for(const id of ['openJournalComposer','homeMedicationButton','journalAddButton','medicationAddButton','costAddButton','profilePhotoButton'])assert(await page.locator('#'+id).isDisabled(),id+' disabled for viewer');

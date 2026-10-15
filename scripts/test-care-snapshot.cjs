@@ -128,7 +128,7 @@ test('consecutive same-dose prednisone extends to the last explicit date without
   const source=fixture({medicationCourses:[course()],medicationAdministrations:Array.from({length:11},(_,i)=>dose(i+4))});
   const before=JSON.stringify(source),data=snapshot(source);
   assert.equal(data.predThrough,date(14));assert.equal(api.chartEnd(),date(14));
-  assert.match(data.medicationText,/Oct 2–14, 2026/);assert.match(narrative(data),/Oct 2–14, 2026/);
+  assert.match(data.medicationText,/Oct 2–14, 2026/);assert.match(api.html(),/Oct 2–14, 2026/);
   assert.equal(JSON.stringify(api.state()),before);assert.equal(JSON.stringify(source),before);
 });
 test('dose comparison accepts equivalent simple mg formatting', () => {
@@ -243,7 +243,7 @@ test('uncertain questions are quoted for review rather than counted as confirmed
 test('structured positive flags survive conflicting negative/instructional notes', () => {
   const data=snapshot(fixture({observations:[observation(4,{gi:'No blood, black/tarry stool, or diarrhea.',stoolEvents:[{status:'observed',flags:['black_tarry'],consistency:'watery'}],nausea:0,nauseaSigns:['drooling'],notes:'Discussed nausea with vet.'})]}));
   assert.equal(data.blackTarryDays.length,1);assert.equal(data.looseDays.length,1);assert.equal(data.nauseaDays.length,1);
-  assert.match(narrative(data),/I noticed drooling \/ extra saliva on Oct 4/);
+  assert.match(narrative(data),/I noticed drooling or extra saliva on Oct 4/);
 });
 test('explicit new observations after a comma or contrast still count', () => {
   for(const text of ['No blood, stool was watery.','No diarrhea, but bright red blood in stool.','Blood in stool, discussed with vet.']){
@@ -259,7 +259,7 @@ test('course spans keep gaps unknown and preserve regimen boundaries', () => {
   snapshot(fixture({medicationCourses:[course(),course({id:'second',startDate:date(8),confirmedThrough:date(10),dose:'5 mg'})],medicationAdministrations:[dose(4),dose(6),dose(7)]}));
   assert.equal(JSON.stringify(api.spans()),JSON.stringify([{start:date(2),end:date(4)},{start:date(6),end:date(7)}]));
   assert.equal(JSON.stringify(api.spans(1)),JSON.stringify([{start:date(8),end:date(10)}]));
-  const data=api.data();assert.match(data.medicationText,/A missing dose log does not mean a dose was missed/);assert.match(narrative(data),/A missing dose log does not mean a dose was missed/);
+  const data=api.data();assert.match(data.medicationText,/A missing dose log does not mean a dose was missed/);assert.match(api.html(),/A missing dose log does not mean a dose was missed/);
 });
 test('recent owner notes are newest-first, distinct, nonempty, and bounded to the selected dates', () => {
   const data=snapshot(fixture({observations:[
@@ -298,7 +298,7 @@ test('full HTML export contains the original-note section after the concise snap
 test('PDF notes use a separate page, retain full text, and disclose unsupported characters', () => {
   const original='Synthetic owner’s wording — unchanged. ✅\n'+'syntheticword '.repeat(500)+'LAST_SENTENCE_RETAINED';
   snapshot(fixture({observations:[observation(4,{notes:original})]}));const pdf=api.pdf();
-  assert.ok(pdf.indexOf('Recent owner notes')>pdf.indexOf('Treatment & medication context'));
+  assert.ok(pdf.indexOf('Recent owner notes')<pdf.indexOf('Treatment & medication context'));
   assert.ok(pdf.indexOf('Recent owner notes')<pdf.indexOf('Clinical history | concise review'));
   const renderedText=[...pdf.matchAll(/\((.*?)\) Tj ET/g)].map(match=>match[1].replace(/\\([\\()])/g,'$1')).join(' ');
   assert.match(renderedText,/PDF text rendering/);assert.match(renderedText,/exact original wording in Journal/);assert.match(renderedText,/bracketed Unicode codes/);
@@ -413,6 +413,117 @@ test('compact stool-context table preserves direct links and rejects adjacent un
     if(review!==undefined)assert.equal(data.noteReviews.length,review,text);
     api.html();api.pdf();assert.equal(JSON.stringify(api.state()),before,text);assert.equal(JSON.stringify(value),before,text);
   }
+});
+test('conversational overview connects a true two-week period without field headings or inferred benefit', () => {
+  const observations=Array.from({length:14},(_,i)=>observation(i+2,{appetite:'normal',hydration:'normal',energy:i===1||i===2?'low':'normal',nausea:i===1||i===2||i===6?1:0,nauseaSigns:i===1||i===2||i===6?['lip_licking']:[],vomiting:0,stoolEvents:[{status:'observed',consistency:'formed_firm',score:3}]}));
+  observations[3].notes='Owner impression: seemed more comfortable after the medicine.';
+  const value=fixture({observations,medicationAdministrations:[dose(3,{medicationId:'med-cerenia'}),dose(3,{id:'second-dose-same-day',medicationId:'med-cerenia'}),dose(8,{medicationId:'med-cerenia'})]});
+  const before=JSON.stringify(value),data=snapshot(value,date(2),date(15)),paragraphs=api.narrative(data),first=paragraphs[0];
+  assert.match(first,/Over these two weeks/);assert.match(first,/appetite was close to normal.*water intake was normal/);
+  assert.match(first,/no vomiting or loose stool/);
+  assert.match(first,/days 1–2 after treatment/);assert.match(first,/usual energy recorded again on Oct 15/);
+  assert.match(first,/Cerenia was recorded as given on 2 days when nausea signs were noted/);
+  assert.doesNotMatch(first,/\n|Appetite:|Energy:|Prednisone|weight|better than|tolerated|helped|effective|seemed more comfortable/);
+  assert.ok(data.recentOwnerNotes.some(note=>note.text===observations[3].notes));
+  api.html();api.pdf();assert.equal(JSON.stringify(api.state()),before);assert.equal(JSON.stringify(value),before);
+});
+test('two-week wording follows actual selected dates rather than assuming every period is fourteen days', () => {
+  for(const [from,to,isTwoWeeks] of [[2,8,false],[2,14,false],[2,15,true],[2,16,false]]){
+    const data=snapshot(fixture({observations:[observation(4,{appetite:'normal'})]}),date(from),date(to));
+    assert.equal(api.narrative(data)[0].includes('two weeks'),isTwoWeeks);
+  }
+});
+test('sparse conversational normal findings remain dated and missing water stays unknown', () => {
+  const data=snapshot(fixture({observations:[observation(4,{appetite:'normal',energy:'normal',vomiting:0}),observation(12,{notes:'A general owner note.'})]})),first=api.narrative(data)[0];
+  assert.match(first,/appetite was close to normal on Oct 4/);assert.match(first,/no vomiting on Oct 4/);
+  assert.match(first,/usual level on Oct 4/);assert.match(first,/water intake was not specifically recorded/);
+  assert.doesNotMatch(first,/stayed|throughout|no diarrhea|symptom.free/);assert.match(narrative(data),/gaps in my notes/);
+});
+test('mixed and same-day water intake descriptions preserve their dates and original wording', () => {
+  const data=snapshot(fixture({observations:[observation(3,{hydration:'normal'}),observation(4,{hydration:'increased thirst'}),observation(5,{hydration:'decreased drinking'}),observation(6,{hydration:'good self-hydration'}),observation(7,{hydration:'normal'}),observation(7,{id:'other-water-seven',hydration:'decreased drinking'}),observation(8,{hydration:'Could intake be lower?'})]})),first=api.narrative(data)[0];
+  assert.match(first,/water intake was normal on Oct 3/);assert.match(first,/thirstier on Oct 4/);assert.match(first,/drank less on Oct 5/);assert.match(first,/good self-hydration on Oct 6/);
+  assert.doesNotMatch(first,/normal on Oct 7|normal throughout/);
+  assert.match(narrative(data),/Oct 7, 2026: “normal”; “decreased drinking”/);assert.match(narrative(data),/Could intake be lower/);
+});
+test('intermittent later energy changes are not described as one early post-treatment spell', () => {
+  const observations=Array.from({length:14},(_,i)=>observation(i+2,{energy:[1,3,8,10].includes(i)?'low':'normal'}));
+  const first=api.narrative(snapshot(fixture({observations}),date(2),date(15)))[0];
+  assert.match(first,/lower energy on 4 days/);assert.match(first,/usual energy recorded again on Oct 15/);
+  assert.doesNotMatch(first,/days \d+–\d+ after treatment|first week|recovered|tolerated/);
+});
+test('conversational appetite keeps reduced, increased, and latest near-normal findings', () => {
+  const first=api.narrative(snapshot(fixture({observations:[observation(3,{appetitePercent:50}),observation(4,{appetitePercent:125}),observation(5,{appetitePercent:100})]})))[0];
+  assert.match(first,/below normal on Oct 3/);assert.match(first,/50%/);assert.match(first,/higher than usual on Oct 4/);assert.match(first,/near-normal entry again on Oct 5/);
+});
+test('Cerenia overview counts unique given dates, respects held records and scope, and separates nausea overlap', () => {
+  const administrations=[dose(3,{medicationId:'med-cerenia'}),dose(3,{id:'duplicate-date',medicationId:'med-cerenia'}),dose(4,{medicationId:'med-cerenia',status:'held'}),dose(5,{medicationId:'med-cerenia',status:'unknown'}),dose(6,{medicationId:'med-cerenia',dose:'different dose'}),dose(12,{medicationId:'med-cerenia'})];
+  const data=snapshot(fixture({observations:[observation(3,{nausea:1}),observation(4,{nausea:1}),observation(6,{nausea:0})],medicationAdministrations:administrations}),date(2),date(8)),first=api.narrative(data)[0];
+  assert.match(first,/given on 2 days/);assert.match(first,/including 1 day with nausea signs/);
+  assert.match(first,/given on 2 days \(Oct 3, 2026; Oct 6, 2026\), including 1 day with nausea signs/);
+  assert.doesNotMatch(first,/3 doses|given on 3 days|Oct 12|helped|prevented|effective/);
+});
+test('overlapping owner-confirmed Cerenia courses count dates without calling them explicit logs', () => {
+  const courses=[course({id:'cerenia-course-one',medicationId:'med-cerenia',confirmedThrough:date(5)}),course({id:'cerenia-course-two',medicationId:'med-cerenia',startDate:date(3),confirmedThrough:date(6)})];
+  const data=snapshot(fixture({medicationCourses:courses,medicationAdministrations:[dose(4,{medicationId:'med-cerenia',status:'held'})]})),first=api.narrative(data)[0];
+  assert.match(first,/Cerenia was recorded as given on 4 days/);assert.doesNotMatch(first,/I logged|dose logs|explicit|given on 6 days/);
+});
+test('important findings and uncertainty stay visible after the single overview paragraph', () => {
+  const data=snapshot(fixture({observations:[observation(4,{stoolEvents:[{status:'observed',flags:['black_tarry']}]}),observation(5,{gi:'Could this be blood in stool?'})]})),paragraphs=api.narrative(data);
+  assert.doesNotMatch(paragraphs[0],/Important observations|needs review/);
+  assert.match(paragraphs[1],/Important observations:.*black\/tarry stool on Oct 4/);
+  assert.match(paragraphs.slice(2).join(' '),/Could this be blood in stool\?.*not counted as confirmed symptoms/);
+});
+test('uncertain loose stool is never summarized as a negative even beside a formed score', () => {
+  const data=snapshot(fixture({observations:[observation(4,{gi:'Possible loose stool?',stoolEvents:[{status:'observed',consistency:'formed_firm',score:3}]})]}));
+  assert.doesNotMatch(api.narrative(data)[0],/were not loose|no loose stool|no diarrhea/);
+  assert.match(narrative(data),/Possible loose stool\?/);
+});
+test('PDF clinical appendix uses the same negative and uncertain symptom rules as the snapshot', () => {
+  for(const text of ['No diarrhea.','Watch for diarrhea.','Possible diarrhea?','Watch for nausea.']){
+    const data=snapshot(fixture({observations:[observation(4,{gi:text})]})),pdf=api.pdf();
+    assert.equal(data.looseDays.length,0);assert.equal(data.nauseaDays.length,0);
+    assert.match(pdf,/nausea noted 0 day/);assert.match(pdf,/loose stool\/diarrhea noted 0 day/);
+  }
+});
+test('energy-day count and chart-window overlap use unique current-cycle dates and distinct broad/core windows', () => {
+  const current=fixture().treatments[0],prior={...current,id:'synthetic-prior',number:4,date:'2026-09-18'};
+  const past=[1,3,4,5,7].map(offset=>({id:`prior-${offset}`,date:`2026-09-${18+offset}`,nausea:1}));
+  const observations=[...past,observation(2,{energy:'low'}),observation(3,{energy:'low'}),observation(5,{energy:'low'}),observation(5,{id:'duplicate-energy-five',energy:'low'}),observation(9,{energy:'low'}),observation(12,{energy:'low'}),observation(15,{energy:'normal'})];
+  const value=fixture({treatments:[prior,current],observations}),before=JSON.stringify(value),data=snapshot(value,date(2),date(15));
+  assert.equal(data.energyNauseaTiming.reducedDays,5);assert.equal(data.energyNauseaTiming.window.start,1);assert.equal(data.energyNauseaTiming.window.end,7);
+  assert.equal(data.energyNauseaTiming.window.overlap,3);assert.equal(data.energyNauseaTiming.window.coreOverlap,1);
+  assert.match(api.narrative(data)[0],/lower energy on 5 days.*3 overlapped the chart’s earlier nausea window \(days 1–7 after treatment\)/);
+  assert.match(narrative(data),/prior first-week owner observations.*does not establish the cause/);
+  api.html();api.pdf();assert.equal(JSON.stringify(api.state()),before);assert.equal(JSON.stringify(value),before);
+  const historical=snapshot(value,'2026-09-18','2026-09-30');assert.equal(historical.energyNauseaTiming.window,null);
+  const spanning=snapshot(value,'2026-09-25',date(15));assert.equal(spanning.energyNauseaTiming.window,null);
+  assert.doesNotMatch(api.narrative(spanning)[0],/earlier nausea window/);
+});
+test('without prior nausea evidence the summary counts energy days without inventing a window', () => {
+  const data=snapshot(fixture({observations:[observation(3,{energy:'low'}),observation(4,{energy:'normal'})]}));
+  assert.equal(data.energyNauseaTiming.reducedDays,1);assert.equal(data.energyNauseaTiming.window,null);
+  assert.match(api.narrative(data)[0],/lower energy on 1 day/);assert.doesNotMatch(narrative(data),/nausea window/);
+});
+test('vomit appearance flags suppress a reassuring no-vomiting overview even with other negative days', () => {
+  const observations=Array.from({length:14},(_,i)=>observation(i+2,{vomiting:0,stoolEvents:[{status:'observed',score:3,consistency:'formed_firm'}]}));
+  observations[7].vomitFlags=['coffee_ground_like'];
+  const data=snapshot(fixture({observations}),date(2),date(15));
+  assert.doesNotMatch(api.narrative(data)[0],/no vomiting/);assert.match(narrative(data),/coffee grounds/);
+});
+test('the chart relationship names contiguous overlap offsets and says none when all energy dates are outside', () => {
+  const current=fixture().treatments[0],prior={...current,id:'synthetic-previous',number:4,date:'2026-09-18'};
+  const previous=[2,3,4,6].map(offset=>({id:`old-${offset}`,date:`2026-09-${18+offset}`,nausea:1}));
+  const observations=[...previous,observation(4,{energy:'low'}),observation(5,{energy:'low'}),observation(10,{energy:'low'})];
+  const value=fixture({treatments:[prior,current],observations});
+  let data=snapshot(value,date(2),date(15));
+  assert.match(api.narrative(data)[0],/including 2 on days 2–3 after treatment, within the chart’s earlier nausea window \(days 2–6 after treatment\)/);
+  data=snapshot(value,date(9),date(15));
+  assert.equal(data.energyNauseaTiming.window.overlap,0);assert.match(api.narrative(data)[0],/none fell within the chart’s earlier nausea window/);
+});
+test('nausea behavior wording reads naturally while structured labels retain their exact wording', () => {
+  const data=snapshot(fixture({observations:[observation(4,{nauseaSigns:['lip_licking','drooling']})]}));
+  assert.match(api.narrative(data)[0],/drooling or extra saliva and lip licking or smacking/);
+  assert.match(data.nauseaText,/drooling \/ extra saliva/);assert.match(data.nauseaText,/lip licking \/ smacking/);
 });
 let passed=0;
 for(const {name,run} of tests){try{run();console.log(`PASS ${name}`);passed++;}catch(error){console.error(`FAIL ${name}\n${error.stack}`);process.exitCode=1;}}
