@@ -329,6 +329,91 @@ test('PDF pagination keeps short source blocks together without orphan-only over
     assert.ok(notesPage);assert.ok(bodyLines(notesPage).length>5);
   }
 });
+test('unrelated loose/watery GI prose never turns formed stool into a loose-stool finding', () => {
+  for(const text of ['Loose skin around the mouth; drooling.','Loose jowls and watery eyes.','Drooling with watery saliva.','Loose skin around the mouth, stool was formed.','Stool was soft but formed; liquid medication was given.','Possible loose skin around his mouth; stool was formed.']){
+    const value=fixture({observations:[observation(4,{gi:text,notes:text,stoolEvents:[{status:'observed',consistency:'soft_formed',score:4}]})]});
+    const before=JSON.stringify(value),data=snapshot(value);
+    assert.equal(data.looseDays.length,0,text);assert.doesNotMatch(data.stoolText,/Loose stool or diarrhea was described/);
+    assert.doesNotMatch(narrative(data),/Loose stool or diarrhea was described/);assert.equal(data.noteReviews.length,0,text);
+    assert.equal(JSON.stringify(api.state()),before);assert.equal(JSON.stringify(value),before);
+  }
+});
+test('unrelated GI prose alone remains unknown for stool consistency', () => {
+  const data=snapshot(fixture({observations:[observation(4,{gi:'Loose skin around the mouth and watery saliva.'})]}));
+  assert.equal(data.looseDays.length,0);assert.equal(data.stoolRows.length,0);assert.match(data.stoolText,/No bowel-movement observations/);
+});
+test('explicit stool-linked prose and dedicated stool descriptions retain true findings', () => {
+  for(const text of ['Loose stool in the evening.','Watery bowel movement.','Liquid poop.','Stool was loose.','Stools: watery.','His bowel movements were unformed.','No blood, stool was watery.','Diarrhea overnight.']){
+    const data=snapshot(fixture({observations:[observation(4,{gi:text})]}));assert.equal(data.looseDays.length,1,text);
+  }
+  for(const text of ['loose','watery','liquid','unformed','mushy']){
+    const data=snapshot(fixture({observations:[observation(4,{stoolEvents:[{status:'observed',notes:text}]})]}));assert.equal(data.looseDays.length,1,text);
+  }
+});
+test('stool-specific context preserves negation, uncertainty, and independent structured positives', () => {
+  let data=snapshot(fixture({observations:[observation(4,{gi:'No loose or watery stools; watery saliva only.',stoolEvents:[{status:'observed',consistency:'formed_firm'}]})]}));
+  assert.equal(data.looseDays.length,0);
+  data=snapshot(fixture({observations:[observation(4,{gi:'Could this be watery stool?'})]}));
+  assert.equal(data.looseDays.length,0);assert.equal(data.noteReviews.length,1);assert.match(narrative(data),/Could this be watery stool/);
+  data=snapshot(fixture({observations:[observation(4,{gi:'Watery saliva; no diarrhea.',stoolEvents:[{status:'observed',consistency:'watery',flags:['bright_red_blood']}]})]}));
+  assert.equal(data.looseDays.length,1);assert.equal(data.brightRedStoolDays.length,1);
+});
+test('bare GI adjectives without a stool subject remain unknown', () => {
+  for(const text of ['loose','watery','liquid','unformed','mushy']){
+    const data=snapshot(fixture({observations:[observation(4,{gi:text})]}));assert.equal(data.looseDays.length,0,text);assert.equal(data.stoolRows.length,0,text);
+  }
+});
+test('dedicated stool notes still exclude explicitly unrelated subjects', () => {
+  for(const text of ['loose skin around mouth','loose jowls','watery saliva','watery eyes','liquid medication','mushy food']){
+    const data=snapshot(fixture({observations:[observation(4,{stoolEvents:[{status:'observed',consistency:'formed_firm',notes:text}]})]}));assert.equal(data.looseDays.length,0,text);
+  }
+});
+test('trailing negatives apply equally to dedicated stool and event notes', () => {
+  for(const field of ['stool','event']){
+    for(const text of ['Loose stools were not observed','Watery stool absent','Blood in stool was not seen']){
+      const entry=observation(4,field==='event'?{stoolEvents:[{status:'observed',notes:text}]}:{stool:text});
+      const data=snapshot(fixture({observations:[entry]}));
+      assert.equal(data.looseDays.length,0,`${field}: ${text}`);assert.equal(data.bloodDays.length,0,`${field}: ${text}`);
+      assert.equal(data.noteReviews.length,0,`${field}: ${text}`);
+    }
+  }
+});
+test('blood outside stool context is not converted to stool bleeding', () => {
+  for(const text of ['Blood in saliva, stool formed.','Stool formed, blood from mouth.','Blood work reviewed, stool formed.']){
+    const data=snapshot(fixture({observations:[observation(4,{gi:text})]}));assert.equal(data.bloodDays.length,0,text);
+  }
+  for(const text of ['Bright red blood in stool.','Stool had blood.','Black/tarry stool.']){
+    const data=snapshot(fixture({observations:[observation(4,{gi:text})]}));assert.equal(data.bloodDays.length,1,text);
+  }
+});
+test('compact stool-context table preserves direct links and rejects adjacent unrelated subjects', () => {
+  const cases=[
+    ['gi','Normal stool with watery saliva',0,0],
+    ['gi','Normal stool with loose skin around mouth',0,0],
+    ['gi','Stool with blood from gums',0,0],
+    ['gi','Blood mixed in stool',0,1],
+    ['gi','Blood noted in stool',0,1],
+    ['gi','Blood streaks on stool',0,1],
+    ['gi','Stool had red blood',0,1],
+    ['gi','Bright red blood mixed with stool',0,1],
+    ['gi','Watery stool absent',0,0],
+    ['gi','Watery eyes; mushy food; liquid medicine',0,0],
+    ['gi','Unformed feces',1,0],
+    ['event','black/tarry saliva',0,0],
+    ['event','black/tarry stool',0,1],
+    ['event','saliva was watery',0,0],
+    ['event','skin was loose',0,0],
+    ['event','Watery; possible blood?',1,0,1]
+  ];
+  for(const [field,text,loose,blood,review] of cases){
+    const entry=observation(4,{stoolEvents:[{status:'observed',score:3,consistency:'formed_firm',notes:''}]});
+    if(field==='event')entry.stoolEvents[0].notes=text;else entry[field]=text;
+    const value=fixture({observations:[entry]}),before=JSON.stringify(value),data=snapshot(value);
+    assert.equal(data.looseDays.length,loose,text);assert.equal(data.bloodDays.length,blood,text);
+    if(review!==undefined)assert.equal(data.noteReviews.length,review,text);
+    api.html();api.pdf();assert.equal(JSON.stringify(api.state()),before,text);assert.equal(JSON.stringify(value),before,text);
+  }
+});
 let passed=0;
 for(const {name,run} of tests){try{run();console.log(`PASS ${name}`);passed++;}catch(error){console.error(`FAIL ${name}\n${error.stack}`);process.exitCode=1;}}
 console.log(`${passed}/${tests.length} Care Snapshot tests passed.`);
