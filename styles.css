@@ -464,7 +464,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 
 
 /* Tell my care team workflow */
-.snapshot-range-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:12px 0 8px}
+.snapshot-range-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:6px;margin:12px 0 8px}
 .snapshot-range-button{min-height:42px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--muted);padding:7px 8px;font-size:10px;font-weight:850;line-height:1.2;cursor:pointer}
 .snapshot-range-button.active{background:var(--green-soft);border-color:var(--green2);color:var(--green2);box-shadow:inset 0 0 0 1px var(--green2)}
 .snapshot-custom-range{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#fafafa;margin-bottom:8px}
@@ -555,3 +555,12 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a2
 .medication-use-totals{margin:12px 0;border:1px solid var(--line);border-radius:14px;padding:12px}
 .medication-use-totals>summary{cursor:pointer;color:var(--ksu);font-weight:700}
 .medication-use-totals[open]>summary{margin-bottom:12px}
+
+/* Conversational overview first; exact recorded detail stays one tap away. */
+.care-snapshot-details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.care-snapshot-details>summary{cursor:pointer;font-size:12px;font-weight:800;padding:7px 0}
+.care-snapshot-details[open]>.care-snapshot-grid{margin-top:8px}
+.care-snapshot-owner-notes h3{font-size:14px;margin:16px 0 6px}
+.care-snapshot-owner-note{padding:9px 0;border-bottom:1px solid var(--line)}
+.care-snapshot-owner-note>summary{font-size:12px;font-weight:750;cursor:pointer}
+.care-snapshot-owner-note-text{font-size:12px;line-height:1.5;margin-top:9px}

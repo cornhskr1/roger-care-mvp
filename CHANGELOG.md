@@ -1,5 +1,12 @@
 # Changelog
 
+## App shell v63 — Conversational visit overview
+
+- Lead with a connected owner-style update and a one-tap two-week range.
+- Keep recent original notes next to the overview and recorded details expandable.
+- Count Cerenia use by distinct given dates and include recorded water intake without inferring medication benefit or treatment comparisons.
+- Preserve unknowns, important findings, original notes, and all storage/sync contracts.
+
 ## App shell v62 — Stool context in summaries
 
 - Require stool-specific context before interpreting broad GI or journal descriptions as stool findings.
