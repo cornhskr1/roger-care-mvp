@@ -2268,7 +2268,7 @@ function renderMedications(){
     <div class="summary-tile med-summary neutral-med"><div class="summary-value">${traz.length}</div><div class="summary-label">TRAZODONE DAYS</div><div class="item-meta">200 mg pre-visit</div></div>
   </div>`;
 
-  els.medicationSummary.innerHTML += renderMedicationOverview() + renderMedicationLedger(false) + '<p class="medication-note">A missing dose log does not mean a dose was missed. The record distinguishes owner-confirmed courses from individual dose logs.</p>';
+  els.medicationSummary.innerHTML += '<details class="medication-use-totals"><summary>Medication use totals</summary>'+renderMedicationLedger(false)+'</details><p class="medication-note">A missing dose log does not mean a dose was missed. The record distinguishes owner-confirmed courses from individual dose logs.</p>';
 
   els.medicationHistory.innerHTML=(state.medications||[]).map(m=>{
     const rows=administrations.filter(a=>a.medicationId===m.id);
@@ -2298,7 +2298,7 @@ function renderTimeline(){
 }
 
 function renderCosts(){
-  q('#medicationCostBreakdown').innerHTML=renderMedicationLedger();
+  q('#medicationCostBreakdown').innerHTML=renderMedicationOverview()+renderMedicationLedger();
   const total=totalPaid(),confirmed=confirmedPaid(),provisional=provisionalPaid();
   els.costSummary.innerHTML=`<div class="cost-total"><div class="section-kicker" style="color:#eee8f8">DOCUMENTED CARE COSTS</div><div class="cost-big">${money(total)}</div><div class="cost-sub">${money(confirmed)} confirmed · ${money(provisional)} provisional/unresolved</div></div>${categoryMeters()}`;
 

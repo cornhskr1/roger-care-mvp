@@ -551,3 +551,7 @@ h2{font-size:19px;line-height:1.15;margin:3px 0 0;letter-spacing:-.015em}
 #timeline-panel-review>details>.card{border:0;box-shadow:none;padding:5px 0 0}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a284ce;outline-offset:3px}
 @media(max-width:500px){.snapshot-shortcut{grid-template-columns:1fr}.snapshot-shortcut>.primary-button{width:100%}.snapshot-shortcut>.text-button{justify-self:center}.profile-copy .eyebrow{font-size:8px}.profile-row{grid-template-columns:48px 1fr auto;gap:9px}.avatar-button{width:48px;height:48px;border-radius:16px}.profile-copy h1{font-size:24px}.app-header{padding-bottom:4px}.hero-row{flex-wrap:wrap}.section-tabs button{font-size:12px}.timeline-upcoming .care-plan-row{align-items:flex-start}}
+
+.medication-use-totals{margin:12px 0;border:1px solid var(--line);border-radius:14px;padding:12px}
+.medication-use-totals>summary{cursor:pointer;color:var(--ksu);font-weight:700}
+.medication-use-totals[open]>summary{margin-bottom:12px}

@@ -17,7 +17,7 @@ const expectedRoutes = {
   'timeline/history': ['#timelineUpcoming', '#timelineEntries'],
   'timeline/chart': ['#metricStrip', '#treatmentWindowSelector', '#treatmentOverlayChart', '#treatmentOverlayDetail', '#treatmentMedicationSummary'],
   'timeline/review': ['#statusHero', '#cycleClinicalReview'],
-  costs: ['#costSummary', '#costEntries', '#homeCostSummary', '#openItems'],
+  costs: ['#costSummary', '#costEntries', '#homeCostSummary', '#openItems', '#medicationCostBreakdown'],
   'more/menu': ['#more-panel-menu'],
   'more/questions': ['#questionForm', '#nextVisitQuestions'],
   'more/contacts': ['#careTeamQuick', '#careTeamForm'],
@@ -181,13 +181,27 @@ if(require.main===module)(async()=>{
         assert.equal(await page.locator('.nav-item[aria-current="page"]').getAttribute('data-nav'),['costs','snapshot'].includes(route)?'more':route.split('/')[0]);
         const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1);
         assert(!overflow, `${viewport.width} ${route}: no whole-page horizontal overflow`);
-        if(process.env.QA_SCREENSHOT_DIR&&['home','journal/entries','medications','more/menu','timeline/chart','snapshot'].includes(route)){
+        if(process.env.QA_SCREENSHOT_DIR&&['home','journal/entries','medications','costs','more/menu','timeline/chart','snapshot'].includes(route)){
           fs.mkdirSync(process.env.QA_SCREENSHOT_DIR,{recursive:true});
           await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-${route.replace('/','-')}.png`),fullPage:true});
         }
       };
       assert.deepEqual(await page.locator('.bottom-nav [data-nav]').evaluateAll(nodes=>nodes.map(node=>node.dataset.nav)),['home','journal','medications','timeline','more']);
       for(const route of Object.keys(expectedRoutes))await checkRoute(route);
+      await go('medications');
+      assert.equal(await page.locator('#medicationSummary .medication-overview').count(),0,'Cost overview does not crowd medication history');
+      const totals=page.locator('#medicationSummary .medication-use-totals');
+      assert.equal(await totals.getAttribute('open'),null,'Medication totals are collapsed by default');
+      assert(!(await totals.locator('.medication-ledger').isVisible()),'Collapsed totals keep history prominent');
+      await totals.locator('summary').click();
+      assert(await totals.locator('.medication-ledger').isVisible(),'Medication use totals expand');
+      assert.match(await totals.textContent(),/Prednisone[\s\S]*tablet equivalents, owner-reported[\s\S]*Cerenia/,'Full medication ledger retained');
+      assert(!(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+1)),'Expanded medication totals fit the page');
+      await totals.locator('summary').click();
+      assert(await page.locator('#medicationHistory').isVisible(),'Dose history stays accessible');
+      await go('costs');
+      assert(await page.locator('#medicationCostBreakdown .medication-overview').isVisible(),'Medication cost overview remains accessible under Costs');
+      assert.match(await page.locator('#medicationCostBreakdown').textContent(),/Cerenia across Roger’s care[\s\S]*Average purchase cost/,'Cost context retained');
       await page.evaluate(()=>{location.hash='#journal/medications';});
       await page.waitForFunction(()=>document.querySelector('.view.active')?.dataset.view==='medications');
       assert(await page.locator('#medicationAddButton').isVisible(),'Legacy medication deep link still works');
@@ -283,9 +297,32 @@ if(require.main===module)(async()=>{
       await page.evaluate(()=>{ownerCanEdit=true;renderSharedStatus();});
       for(const [route,button,dialog] of [['home','#openJournalComposer','journalDialog'],['home','#homeMedicationButton','medicationDialog'],['journal/entries','#journalAddButton','journalDialog'],['medications','#medicationAddButton','medicationDialog'],['costs','#costAddButton','costDialog']]){
         await go(route);await page.locator(button).click();assert(await page.locator('#'+dialog).isVisible());
+        const captureMedication=route==='medications'&&dialog==='medicationDialog';
+        if(captureMedication){
+          await page.locator('#medicationDialog .sheet-head').scrollIntoViewIfNeeded();
+          assert(await page.locator('#medicationDialog .sheet-head').evaluate(node=>{
+            const rect=node.getBoundingClientRect(),sheet=node.closest('dialog').getBoundingClientRect();
+            return rect.top>=sheet.top&&rect.bottom<=Math.min(sheet.bottom,innerHeight);
+          }),'Medication editor header can be scrolled fully into view');
+          assert(await page.locator('#medicationDate').evaluate(node=>{
+            const rect=node.getBoundingClientRect(),sheet=node.closest('dialog').getBoundingClientRect();
+            return rect.top>=sheet.top&&rect.bottom<=Math.min(sheet.bottom,innerHeight);
+          }),'Medication date is readable at the top of the editor');
+          if(process.env.QA_SCREENSHOT_DIR){
+            fs.mkdirSync(process.env.QA_SCREENSHOT_DIR,{recursive:true});
+            await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-medication-editor-top.png`),fullPage:false});
+          }
+        }
         const draftField=dialog==='journalDialog'?'textarea[name=notes]':dialog==='medicationDialog'?'textarea[name=reason]':'input[name=label]';
         await page.locator(`#${dialog} ${draftField}`).fill('Unsaved synthetic draft, cancel this');
-        if(process.env.QA_SCREENSHOT_DIR&&route==='medications'&&dialog==='medicationDialog'){
+        if(captureMedication){
+          await page.locator('#medicationDialog .sheet-actions').scrollIntoViewIfNeeded();
+          assert(await page.locator('#medicationDialog .sheet-actions').evaluate(node=>{
+            const rect=node.getBoundingClientRect(),sheet=node.closest('dialog').getBoundingClientRect();
+            return rect.top>=sheet.top&&rect.bottom<=Math.min(sheet.bottom,innerHeight);
+          }),'Medication Cancel and Save actions can be scrolled fully into view');
+        }
+        if(process.env.QA_SCREENSHOT_DIR&&captureMedication){
           fs.mkdirSync(process.env.QA_SCREENSHOT_DIR,{recursive:true});
           await page.screenshot({path:path.join(process.env.QA_SCREENSHOT_DIR,`${viewport.width}-medication-editor.png`),fullPage:false});
         }
