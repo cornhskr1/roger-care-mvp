@@ -15,7 +15,7 @@ const expectedRoutes = {
   'journal/trends': ['#journalSummary', '#journalBrief', '#journalTrend', '#wellbeingForm'],
   medications: ['#medicationSummary', '#medicationHistory', '#medicationAddButton'],
   'timeline/history': ['#timelineUpcoming', '#timelineEntries'],
-  'timeline/chart': ['#metricStrip', '#treatmentWindowSelector', '#treatmentOverlayChart', '#treatmentWindowDetails'],
+  'timeline/chart': ['#metricStrip', '#treatmentWindowSelector', '#treatmentOverlayChart', '#treatmentOverlayDetail', '#treatmentMedicationSummary'],
   'timeline/review': ['#statusHero', '#cycleClinicalReview'],
   costs: ['#costSummary', '#costEntries', '#homeCostSummary', '#openItems'],
   'more/menu': ['#more-panel-menu'],
@@ -215,6 +215,17 @@ if(require.main===module)(async()=>{
       assert.equal(band.length,2,'Both prednisone course bands retained');
       assert(Math.abs(band[0].x2-band[1].x1)<0.01,'Adjacent prednisone courses form continuous purple band');
       assert(band[0].width>band[1].width,'Dose thickness retained');
+      assert.equal((await page.locator('#treatmentWindowDetails').textContent()).trim(),'','All-cycle view has no selected-cycle details');
+      await page.locator('#treatmentWindowSelector [data-treatment-window="1"]').click();
+      assert(await page.locator('#treatmentWindowDetails').isVisible(),'Selecting a treatment exposes cycle details');
+      assert.match(await page.locator('#treatmentWindowDetails').textContent(),/Synthetic reason/,'Selected-cycle source detail retained');
+      assert.match(await page.locator('#treatmentWindowDetails').textContent(),/MEDICATION USE/,'Selected-cycle medication history retained');
+      await page.locator('#treatmentOverlayChart [data-kind="treatment"]').first().click();
+      assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Chemo #1[\s\S]*Synthetic reason/,'Treatment marker exposes recorded dose context');
+      await page.locator('#treatmentOverlayChart [data-kind="course"]').first().click();
+      assert.match(await page.locator('#treatmentOverlayDetail').textContent(),/Prednisone[\s\S]*Synthetic confirmation/,'Course marker exposes owner-confirmed regimen and source');
+      await page.locator('#treatmentWindowSelector [data-treatment-window="all"]').click();
+      assert.equal((await page.locator('#treatmentWindowDetails').textContent()).trim(),'','Returning to All clears selected-cycle detail');
       await go('more/profile');
       assert.match(await page.locator('#profileDetails').textContent(),/TEST-KSU[\s\S]*TEST-OPT/);
       await go('more/backup');
