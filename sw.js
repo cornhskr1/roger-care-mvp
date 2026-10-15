@@ -1,4 +1,5 @@
-const CACHE = 'roger-care-v63';
+const CACHE = 'roger-care-v64';
+const LIVE_RECORD_ORIGIN = 'https://gkotvodoqwdhmdeigrra.supabase.co';
 const CORE = ['./','./index.html','./styles.css?v=45','./import-analysis.js?v=2','./app.js?v=63','./manifest.webmanifest?v=27','./data/seed.json','./icons/icon.svg'];
 
 self.addEventListener('install', event => {
@@ -12,13 +13,20 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('roger-care-') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+
+  // Shared-record and authentication reads must always reach the server.
+  // HTTP cache options alone cannot bypass a response already in CacheStorage.
+  if (new URL(event.request.url).origin === LIVE_RECORD_ORIGIN) {
+    event.respondWith(fetch(event.request, {cache:'no-store'}));
+    return;
+  }
 
   const isAppShell =
     event.request.mode === 'navigate' ||

@@ -17,11 +17,14 @@ jobs:
         with:
           node-version: '22'
       - name: Check JavaScript syntax
-        run: node --check app.js
+        run: |
+          node --check app.js
+          node --check sw.js
       - name: Test navigation and care-summary safety
         run: |
           node scripts/test-navigation.cjs
           node scripts/test-care-snapshot.cjs
+          node scripts/test-service-worker.cjs
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('data/seed.json','utf8')); console.log('seed.json OK')"
       - name: Verify required app assets
@@ -40,6 +43,8 @@ jobs:
         env:
           QA_SCREENSHOT_DIR: qa-screenshots
         run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-navigation.cjs --browser
+      - name: Verify live-record refresh and service-worker upgrades with synthetic records
+        run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-service-worker.cjs --browser
       - name: Retain synthetic UI screenshots
         if: always()
         uses: actions/upload-artifact@v4

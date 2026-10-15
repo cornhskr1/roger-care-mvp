@@ -1,5 +1,12 @@
 # Changelog
 
+## Service worker v64 — Fresh shared-record reads
+
+- Fetch shared-record and authentication reads directly from the server rather than reusing cached API responses.
+- Preserve offline app assets and document-library caching; limit old-cache cleanup to Roger Care caches.
+- Test worker upgrades, fresh reads, offline failures, and preservation of synthetic device records and documents.
+- Leave record writes, authentication, and local storage contracts unchanged.
+
 ## App shell v63 — Conversational visit overview
 
 - Lead with a connected owner-style update and a one-tap two-week range.
