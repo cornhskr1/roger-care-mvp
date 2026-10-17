@@ -122,6 +122,7 @@ let backupPreparedAt = null;
 let backupPreparedStateAt = null;
 let importDraft = null;
 let questionDraftSource = null;
+let appointmentDraft = null, appointmentSaving = false;
 const careSnapshotRange={mode:'14days',from:'',to:''};
 
 const q = sel => document.querySelector(sel);
@@ -147,6 +148,7 @@ async function boot(){
   bindNav();
   bindDialogs();
   bindForms();
+  bindAppointments();
   bindImport();
   bindExports();
   bindProfilePhoto();
@@ -225,10 +227,7 @@ function mergeCanonicalSeed(canonical, saved){
     ...structuredClone(canonical.carePlan),
     vetCallInstructions:savedPlan.vetCallInstructions||'',
     vetCallSource:savedPlan.vetCallSource||'',
-    visits:canonical.carePlan.visits.map(visit=>{
-      const prior=savedPlan.visits?.find(v=>v.id===visit.id);
-      return savedSchemaVersion>=7&&prior?{...visit,date:prior.date||null,source:prior.source||visit.source}:visit;
-    }),
+    visits:mergeCarePlanVisits(canonical.carePlan.visits,savedPlan.visits,savedSchemaVersion),
     careTeam:mergeCareTeam(savedPlan.careTeam||canonical.carePlan?.careTeam||[]),
     questions:Array.isArray(savedPlan.questions)?structuredClone(savedPlan.questions):structuredClone(canonical.carePlan?.questions||[]),
   };
@@ -613,10 +612,10 @@ function renderSharedStatus(){
     renderAll();
   };
 
-  for(const selector of ['#openJournalComposer','#journalAddButton','#homeMedicationButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
-    const node=q(selector);if(node)node.disabled=!ownerCanEdit;
+  for(const selector of ['#openJournalComposer','#journalAddButton','#homeMedicationButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#appointmentAddButton','#appointmentSaveButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
+    const node=q(selector);if(node)node.disabled=!ownerCanEdit||(selector==='#appointmentSaveButton'&&appointmentSaving);
   }
-  qa('[data-edit-observation],[data-edit-medication],[data-edit-cost],[data-question-observation],[data-question-status]').forEach(node=>node.disabled=!ownerCanEdit);
+  qa('[data-edit-appointment],[data-edit-observation],[data-edit-medication],[data-edit-cost],[data-question-observation],[data-question-status]').forEach(node=>node.disabled=!ownerCanEdit);
 }
 
 // Navigation is URL/UI state only. It never writes the clinical record.
@@ -1058,13 +1057,14 @@ function bindForms(){
   });
 
   q('#carePlanForm').addEventListener('submit',async event=>{
-    event.preventDefault();const fd=new FormData(event.currentTarget);
+    event.preventDefault();if(!ownerCanEdit)return;const fd=new FormData(event.currentTarget);
     const instructions=String(fd.get('vetCallInstructions')||'').trim(),source=String(fd.get('vetCallSource')||'').trim();
     if(instructions&&!source)return toast('Add the vet instruction source or date',true);
-    state.carePlan.visits.forEach(v=>{const date=String(fd.get(v.id)||'')||null;if(date!==v.date){v.date=date;v.source=date?'Owner-entered appointment update':'Owner marked date TBD';}});
+    const before={instructions:state.carePlan.vetCallInstructions,source:state.carePlan.vetCallSource};
     state.carePlan.vetCallInstructions=instructions;
     state.carePlan.vetCallSource=source;
-    if(!await saveChanges())return;renderUpcomingCare();toast('Care plan saved');
+    if(!await saveChanges()){state.carePlan.vetCallInstructions=before.instructions;state.carePlan.vetCallSource=before.source;return;}
+    renderAll();toast('Vet instructions saved');
   });
 
   q('#costCorrectionForm').addEventListener('submit',async event=>{
@@ -1267,15 +1267,123 @@ function renderCareTeam(){
   if(els.careTeamFields)els.careTeamFields.innerHTML=team.map(contact=>`<section class="care-team-edit-card ${contact.kind==='emergency'?'emergency':''}"><div class="care-team-edit-head"><div><div class="care-team-edit-title">${esc(contact.name||(contact.kind==='emergency'?'Emergency hospital':'Provider'))}</div><div class="care-team-edit-role">${esc(contact.role)}</div></div>${contact.kind==='emergency'?`<span class="chip ${emergencyReady?'info':'warn'}">${emergencyReady?'plan ready':'complete this'}</span>`:''}</div><div class="care-team-edit-grid"><label class="field"><span>Provider name</span><input name="${esc(contact.id)}-name" value="${esc(contact.name||'')}" placeholder="${contact.kind==='emergency'?'Emergency hospital name':'Provider name'}"></label><label class="field"><span>Phone</span><input name="${esc(contact.id)}-phone" type="tel" value="${esc(contact.phone||'')}" placeholder="Phone number"></label><label class="field wide"><span>Address</span><input name="${esc(contact.id)}-address" value="${esc(contact.address||'')}" placeholder="Street address, city, state"></label><label class="field wide"><span>After-hours / call instructions</span><input name="${esc(contact.id)}-afterHours" value="${esc(contact.afterHours||'')}" placeholder="Who to call or where to go after hours"></label><label class="field wide"><span>Notes</span><input name="${esc(contact.id)}-notes" value="${esc(contact.notes||'')}" placeholder="Department, doctor, entrance, parking, etc."></label></div></section>`).join('');
 }
 
+// Planned appointments are separate from documented treatments and test results.
+// Preserve custom IDs and all saved fields when refreshing the canonical seed.
+function mergeCarePlanVisits(canonicalVisits=[],savedVisits=[],savedSchemaVersion=0){
+  const saved=Array.isArray(savedVisits)?savedVisits:[];
+  const merged=canonicalVisits.flatMap(visit=>{
+    const matches=saved.filter(prior=>prior?.id===visit.id);
+    return savedSchemaVersion>=7&&matches.length?matches.map(prior=>({...structuredClone(visit),...structuredClone(prior),date:prior.date||null,source:prior.source||visit.source})):[structuredClone(visit)];
+  });
+  for(const visit of saved){
+    if(!canonicalVisits.some(row=>row.id===visit?.id))merged.push(structuredClone(visit));
+  }
+  return merged;
+}
+
+function appointmentGroups(visits=[],today=todayIso()){
+  const sorted=[...visits].sort((a,b)=>String(a.date||'9999').localeCompare(String(b.date||'9999'))||String(a.time||'').localeCompare(String(b.time||''))||String(a.label||'').localeCompare(String(b.label||'')));
+  return {upcoming:sorted.filter(v=>v.date&&v.date>=today),past:sorted.filter(v=>v.date&&v.date<today).reverse(),undated:sorted.filter(v=>!v.date)};
+}
+function appointmentWhen(visit){
+  const match=/^(\d{2}):(\d{2})$/.exec(visit.time||'');
+  const time=match?`${Number(match[1])%12||12}:${match[2]} ${Number(match[1])<12?'AM':'PM'}`:'';
+  return `${visit.date?fmtDate(visit.date):'Date TBD'}${time?` · ${time}`:''}`;
+}
+function applyAppointment(values,draft){
+  if(!ownerCanEdit)throw Error('Only the owner device can change appointments.');
+  if(!draft?.id)throw Error('Open the appointment again before saving.');
+  const label=String(values.label||'').trim(),date=String(values.date||'').trim()||null,time=String(values.time||'').trim()||null;
+  if(!label||label.length>160)throw Error('Enter an appointment name of 160 characters or fewer.');
+  if(date&&(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(`${date}T12:00:00Z`))||new Date(`${date}T12:00:00Z`).toISOString().slice(0,10)!==date))throw Error('Choose a valid appointment date.');
+  if(time&&(!date||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)))throw Error('Choose a date and valid appointment time, or leave the time blank.');
+  const source=String(values.source||'').trim()||'Owner-entered appointment';
+  if(source.length>300)throw Error('Keep the appointment source to 300 characters or fewer.');
+  const visits=state.carePlan.visits,matches=visits.filter(v=>v.id===draft.id);
+  if(matches.length>1)throw Error('This appointment has a duplicate ID. No changes were made.');
+  const existing=matches[0];
+  if(!draft.isNew&&(!existing||JSON.stringify(existing)!==JSON.stringify(draft.before)))throw Error('This appointment changed while you were editing. Close and reopen it to review the latest values.');
+  const fields={label,date,time,source};
+  if(draft.isNew&&existing){
+    if(Object.entries(fields).every(([key,value])=>(existing[key]??null)===value))return false;
+    throw Error('This appointment was already saved. Close and reopen it to edit.');
+  }
+  if(draft.isNew&&visits.some(v=>String(v.label||'').trim().toLowerCase()===label.toLowerCase()&&(v.date||null)===date&&(v.time||null)===time))throw Error('That appointment is already listed. Edit the existing appointment instead.');
+  if(existing&&Object.entries(fields).every(([key,value])=>(existing[key]??null)===value))return false;
+  const before=existing?structuredClone(existing):null;
+  const after={...(before||{}),id:draft.id,...fields};
+  if(existing)visits[visits.indexOf(existing)]=after;else visits.push(after);
+  state.recordCorrections.push({collection:'carePlanVisits',id:draft.id,before,after:structuredClone(after),at:new Date().toISOString()});
+  return true;
+}
+
+function openAppointmentDialog(id=''){
+  if(!ownerCanEdit)return toast('Only the owner device can change appointments.',true);
+  if(appointmentSaving)return;
+  const matches=id?(state.carePlan?.visits||[]).filter(v=>v.id===id):[];
+  if(id&&matches.length!==1)return toast('Appointment not found or its ID is not unique. No changes were made.',true);
+  const existing=matches[0];
+  appointmentDraft={id:existing?.id||uid('visit'),isNew:!existing,before:existing?structuredClone(existing):null};
+  const form=q('#appointmentForm');form.reset();
+  for(const [key,value] of Object.entries({editId:appointmentDraft.id,label:existing?.label||'',date:existing?.date||'',time:existing?.time||'',source:existing?.source||''}))form.elements[key].value=value;
+  q('#appointmentTitle').textContent=existing?'Edit appointment':'Add appointment';
+  q('#appointmentDialog').showModal();form.elements.label.focus();
+}
+function bindAppointments(){
+  q('#appointmentAddButton').addEventListener('click',()=>openAppointmentDialog());
+  document.addEventListener('click',event=>{
+    const button=event.target.closest('[data-edit-appointment]');
+    if(button&&!button.disabled)openAppointmentDialog(button.dataset.editAppointment);
+  });
+  q('#appointmentDialog').addEventListener('close',()=>{appointmentDraft=null;});
+  q('#appointmentForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(!ownerCanEdit||appointmentSaving||!appointmentDraft)return;
+    const form=event.currentTarget,fd=new FormData(form),draft=structuredClone(appointmentDraft);
+    const values=Object.fromEntries(['label','date','time','source'].map(key=>[key,fd.get(key)]));
+    const transactionState=state,beforeState=structuredClone(state);
+    let changed=false,ownAudit=null,persisted=false;
+    appointmentSaving=true;q('#appointmentSaveButton').disabled=true;
+    try{
+      changed=applyAppointment(values,draft);
+      if(changed)ownAudit=state.recordCorrections.at(-1);
+      if(changed){
+        if(!await saveChanges())throw Error('Appointment was not saved. Your previous record is unchanged; please try again.');
+        persisted=true;
+      }
+      // Do not close a newer dialog or navigate after an interrupted save.
+      if(appointmentDraft?.id===draft.id)q('#appointmentDialog').close();
+      renderAll();toast(changed?'Appointment saved; earlier values remain in history.':'No appointment changes to save.');
+    }catch(error){
+      if(changed&&!persisted&&state===transactionState){
+        const index=state.carePlan.visits.findIndex(v=>v.id===draft.id);
+        if(index>=0&&JSON.stringify(state.carePlan.visits[index])===JSON.stringify(ownAudit.after)){
+          if(ownAudit.before)state.carePlan.visits[index]=structuredClone(ownAudit.before);else state.carePlan.visits.splice(index,1);
+        }
+        const auditIndex=state.recordCorrections.indexOf(ownAudit);
+        if(auditIndex>=0)state.recordCorrections.splice(auditIndex,1);
+        // Other concurrent forms may have saved their own independent changes.
+        if(JSON.stringify({...state,_savedAt:null})===JSON.stringify({...beforeState,_savedAt:null}))state._savedAt=beforeState._savedAt;
+      }
+      if(!persisted)renderAll();
+      toast(persisted?'Appointment saved, but the display could not refresh. Reopen this page to see it.':error.message||'Appointment not saved.',true);
+    }finally{appointmentSaving=false;q('#appointmentSaveButton').disabled=!ownerCanEdit;}
+  });
+}
+
 function renderUpcomingCare(){
-  const plan=state.carePlan||{visits:[]};
-  els.upcomingCare.innerHTML=`<div class="care-plan-list">${(plan.visits||[]).map(v=>`<div class="care-plan-row"><strong>${esc(v.label)}</strong><span>${v.date?fmtDate(v.date):'TBD'}</span></div>`).join('')}</div><p class="medication-note"><strong>When to call:</strong> ${plan.vetCallInstructions?esc(plan.vetCallInstructions):'Awaiting Roger’s veterinarian’s instructions.'}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`;
-  const nextVisits=(plan.visits||[]).filter(v=>v.date&&v.date>=todayIso()).sort((a,b)=>a.date.localeCompare(b.date));
-  const next=nextVisits[0],homeVisit=q('#homeNextVisit');
-  if(homeVisit)homeVisit.innerHTML=`${next?`<div class="next-visit"><strong>${esc(next.label)}</strong><span>${next.date===todayIso()?'Today · ':''}${fmtDate(next.date)}</span><small>${esc(next.source||'Source not recorded')}</small></div>`:'<p class="empty-state">No upcoming dated appointment is saved. Check the care plan for dates still to be confirmed.</p>'}${plan.vetCallInstructions?`<p class="medication-note home-vet-instructions"><strong>When to call:</strong> ${esc(plan.vetCallInstructions)}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`:''}`;
-  q('#carePlanFields').innerHTML=(plan.visits||[]).map(v=>`<label class="field"><span>${esc(v.label)}</span><input type="date" name="${esc(v.id)}" value="${esc(v.date||'')}"></label>`).join('');
-  q('#vetCallInstructions').value=plan.vetCallInstructions||'';
-  q('#vetCallSource').value=plan.vetCallSource||'';
+  const plan=state.carePlan||{visits:[]},groups=appointmentGroups(plan.visits||[]),pastOpen=Boolean(q('#pastAppointments')?.open);
+  const row=v=>`<div class="care-plan-row appointment-row"><div><strong>${esc(v.label)}</strong><span>${esc(appointmentWhen(v))}</span><small>${esc(v.source||'Source not recorded')}</small></div><button class="text-button" type="button" data-edit-appointment="${esc(v.id)}" ${ownerCanEdit?'':'disabled'}>Edit</button></div>`;
+  els.upcomingCare.innerHTML=`<h3>Upcoming appointments</h3><div class="care-plan-list">${groups.upcoming.map(row).join('')||'<p class="empty-state">No upcoming dated appointments saved.</p>'}</div>${groups.undated.length?`<h3>Date to be confirmed</h3><div class="care-plan-list">${groups.undated.map(row).join('')}</div>`:''}${groups.past.length?`<details id="pastAppointments" class="past-appointments" ${pastOpen?'open':''}><summary>Earlier scheduled dates (${groups.past.length}) · preserved</summary>${groups.past.map(row).join('')}</details>`:''}<p class="field-help">Past dates stay in your record automatically. Scheduled care does not confirm that a visit happened. Times are the appointment's local time.</p>`;
+  const next=groups.upcoming[0],homeVisit=q('#homeNextVisit');
+  if(homeVisit)homeVisit.innerHTML=`${next?`<div class="next-visit"><strong>${esc(next.label)}</strong><span>${next.date===todayIso()?'Today · ':''}${esc(appointmentWhen(next))}</span><small>${esc(next.source||'Source not recorded')}</small></div>`:'<p class="empty-state">No upcoming dated appointment is saved. Check the care plan for dates still to be confirmed.</p>'}${plan.vetCallInstructions?`<p class="medication-note home-vet-instructions"><strong>When to call:</strong> ${esc(plan.vetCallInstructions)}${plan.vetCallSource?` <small>(${esc(plan.vetCallSource)})</small>`:''}</p>`:''}`;
+  // Do not overwrite unsaved instruction fields when an appointment/background render runs.
+  const form=q('#carePlanForm'),current=JSON.stringify([q('#vetCallInstructions').value,q('#vetCallSource').value]);
+  if(!form.dataset.loadedInstructions||current===form.dataset.loadedInstructions){
+    q('#vetCallInstructions').value=plan.vetCallInstructions||'';
+    q('#vetCallSource').value=plan.vetCallSource||'';
+  }
+  form.dataset.loadedInstructions=JSON.stringify([plan.vetCallInstructions||'',plan.vetCallSource||'']);
 }
 
 function renderProfile(){
@@ -2302,9 +2410,8 @@ function renderTimeline(){
   state.treatments.forEach(x=>events.push({date:x.date,kind:'clinical',source:x.source,title:`Vinblastine #${x.number} · ${x.doseMg} mg`,detail:`${x.doseMgM2} mg/m² · ${x.weightLb} lb · ${x.doseReason}`}));
   state.labs.forEach(x=>{ if(['Neutrophils','ALT','ALP'].includes(x.metric)) events.push({date:x.date,kind:'lab',source:x.source,title:`${x.metric}: ${x.displayValue||x.value} ${x.unit}`,detail:x.context}); });
   state.observations.forEach(x=>events.push({date:x.date,kind:'owner',source:'Owner observation',title:'Home observation',detail:x.notes}));
-  const planned=(state.carePlan?.visits||[]).filter(v=>v.date).sort((a,b)=>a.date.localeCompare(b.date));
-  const upcoming=planned.filter(v=>v.date>=todayIso()),past=planned.filter(v=>v.date<todayIso());
-  const plannedRow=v=>`<div class="care-plan-row"><div><strong>${esc(v.label)}</strong><small>${esc(v.source||'Source not recorded')}</small></div><span>${fmtDate(v.date)}</span></div>`;
+  const {upcoming,past}=appointmentGroups(state.carePlan?.visits||[]);
+  const plannedRow=v=>`<div class="care-plan-row"><div><strong>${esc(v.label)}</strong><small>${esc(v.source||'Source not recorded')}</small></div><span>${esc(appointmentWhen(v))}</span></div>`;
   const plannedRoot=q('#timelineUpcoming');
   if(plannedRoot){
     plannedRoot.hidden=timelineFilter==='owner';
@@ -3220,7 +3327,7 @@ function buildCareSummaryPdf(){
   else wrap('No open owner questions recorded.',9,false,8);
   heading('Care plan dates on file');
   wrap('These are saved scheduled dates; they do not confirm that a visit occurred.',9,false,8);
-  for(const v of plan.visits||[])wrap(`${v.label}: ${v.date?fmtDate(v.date):'TBD'}`,9,false,8);
+  for(const v of plan.visits||[])wrap(`${v.label}: ${appointmentWhen(v)}`,9,false,8);
   wrap(`When to call the vet: ${plan.vetCallInstructions||'Awaiting vet-specific instructions.'}`,9,false,8);
   wrap('Owner observations are reported separately from clinical records. Missing or unlogged days remain unknown. This snapshot supports discussion with the veterinary team; it does not diagnose cause.',9);
   // Notes and history can share a page when there is room for a useful start.
@@ -3282,7 +3389,7 @@ function buildCareSummaryHtml(){
   const courseRows=(state.medicationCourses||[]).map(c=>`<tr><td>${esc(medicationName(c.medicationId))}</td><td>${esc(medicationCourseSummary(c))}</td><td>${esc(c.dose||'Unknown')} · ${esc(c.frequency||'Frequency unknown')}</td><td>Original course note: ${esc(c.status)}<br><small>${esc(c.source)}</small></td></tr>`).join('');
   const prnRows=(state.medications||[]).filter(m=>!['med-prednisone','med-amoxicillin'].includes(m.id)).map(m=>{const a=medicationStats(m.id);return `<tr><td>${esc(m.name)}</td><td>${a.given.length} given; ${state.medicationAdministrations.filter(x=>x.medicationId===m.id&&x.status==='held').length} held</td><td>${a.last?fmtDate(a.last):'No dose logged'}</td><td>${esc(m.prescribedDose)}</td></tr>`;}).join('');
   const medicationEvents=state.medicationAdministrations.filter(a=>a.medicationId==='med-metronidazole').map(a=>`${fmtDate(a.date)}${a.time?' '+a.time:''}: ${a.dose} ${a.status} (${a.reason||'reason unrecorded'})`).join('; ');
-  const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${v.date?fmtDate(v.date):'Date TBD'}</strong> <small>(${esc(v.source||'Source unrecorded')})</small></li>`).join('');
+  const visits=(plan.visits||[]).map(v=>`<li>${esc(v.label)}: <strong>${esc(appointmentWhen(v))}</strong> <small>(${esc(v.source||'Source unrecorded')})</small></li>`).join('');
   const openQuestions=(plan.questions||[]).filter(question=>question.status!=='resolved');
   const questionRows=openQuestions.map(question=>`<li>${esc(question.text)}${question.source?.date?` <small>(from ${fmtDate(question.source.date)} journal entry)</small>`:''}</li>`).join('');
   const docs=documents.map(d=>`<li>${esc(d.name)} · ${fmtDate(d.date)} · ${esc(d.provider||d.type)}</li>`).join('');
