@@ -517,11 +517,25 @@ function renderSharedStatus(){
   status.className=`shared-status ${synced?'is-synced':'is-local'}`;
   status.innerHTML=`<strong>${esc(title)}</strong><span>${esc(message)}</span>${cloudUpdatedAt&&(synced||viewer)?`<small>Cloud updated: ${esc(new Date(cloudUpdatedAt).toLocaleString())}</small>`:''}${viewer?'<button type="button" class="secondary-button" data-check-cloud>Check for updates</button>':''}`;
 
-  controls.innerHTML=ownerCanEdit
-    ? `<div class="sync-summary ${synced?'is-synced':'is-local'}"><strong>${esc(title)}</strong><p>${esc(message)}</p>${cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}</div><button type="button" class="secondary-button" data-check-cloud>Sync now</button><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>`
-    : `<div class="sync-summary is-local"><strong>${esc(viewer?'View-only':'Owner sign-in needed')}</strong><p>${esc(message)}</p></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>`;
+  // Keep the sign-in DOM mounted during polling, focus, and auth callbacks.
+  // Replacing it discards the open disclosure, drafts, selection, and focus.
+  // The unused link stays only in its existing input, never in app/storage state.
+  const ownerMode=ownerCanEdit?'owner':'viewer';
+  if(controls.dataset.ownerMode!==ownerMode){
+    controls.innerHTML=ownerCanEdit
+      ? '<div class="sync-summary"></div><button type="button" class="secondary-button" data-check-cloud>Sync now</button><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">This is the editing device. Other devices can view Roger Care without signing in.</p><button id="signOutOwner" class="text-button" type="button">Sign out</button></details>'
+      : '<div class="sync-summary"></div><details class="sync-advanced"><summary>Owner sign-in</summary><p class="field-help">Only sign in here if this is the one device you want to use for editing Roger Care.</p><form id="ownerLogin"><label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label><button class="secondary-button" type="submit">Email me a sign-in link</button></form><form id="ownerLinkPaste"><label class="field"><span>Paste unused email link</span><input type="text" name="link" inputmode="url" autocomplete="off" spellcheck="false" required></label><button class="secondary-button" type="submit">Sign in with link</button></form></details>';
+    controls.dataset.ownerMode=ownerMode;
+  }
+  const summary=controls.querySelector('.sync-summary');
+  if(summary){
+    summary.className=`sync-summary ${synced?'is-synced':'is-local'}`;
+    summary.innerHTML=`<strong>${esc(ownerCanEdit?title:(viewer?'View-only':'Owner sign-in needed'))}</strong><p>${esc(message)}</p>${ownerCanEdit&&cloudUpdatedAt?`<p class="field-help">Cloud mirror updated ${esc(new Date(cloudUpdatedAt).toLocaleString())}.</p>`:''}`;
+  }
 
-  qa('[data-check-cloud]').forEach(button=>button.addEventListener('click',async()=>{
+  // Property handlers replace previous handlers on retained nodes; repeated
+  // status renders must not multiply email, verification, or sync requests.
+  qa('[data-check-cloud]').forEach(button=>{button.onclick=async()=>{
     if(cloudBusy)return toast('Cloud sync is already in progress.');
     if(!cloud)return toast('Cloud is unavailable. Please check your connection and try again.',true);
     const actionButtons=qa('[data-check-cloud]');
@@ -558,9 +572,10 @@ function renderSharedStatus(){
     }finally{
       qa('[data-check-cloud]').forEach(node=>{node.disabled=false;node.textContent=ownerCanEdit?'Sync now':'Check for updates';});
     }
-  }));
+  };});
 
-  q('#ownerLogin')?.addEventListener('submit',async event=>{
+  const login=q('#ownerLogin');
+  if(login)login.onsubmit=async event=>{
     event.preventDefault();
     const email=event.currentTarget.elements.email.value.trim();
     const {error}=await cloud.auth.signInWithOtp({email,options:{emailRedirectTo:SITE_URL}});
@@ -569,9 +584,10 @@ function renderSharedStatus(){
       ? (emailLimit?'Email limit reached. Wait an hour after the last email, then request one new link.':'Sign-in email could not be sent. Please try again later.')
       : 'Copy the unused sign-in link from the email and paste it here.',
       Boolean(error));
-  });
+  };
 
-  q('#ownerLinkPaste')?.addEventListener('submit',async event=>{
+  const linkPaste=q('#ownerLinkPaste');
+  if(linkPaste)linkPaste.onsubmit=async event=>{
     event.preventDefault();
     const input=event.currentTarget.elements.link;
     let credentials;
@@ -586,15 +602,16 @@ function renderSharedStatus(){
     await initializeCloudMode();
     renderAll();
     toast(ownerCanEdit?'Owner device connected. Changes will sync automatically.':'Signed in, but this account does not have owner access.');
-  });
+  };
 
-  q('#signOutOwner')?.addEventListener('click',async()=>{
+  const signOut=q('#signOutOwner');
+  if(signOut)signOut.onclick=async()=>{
     await cloud.auth.signOut();
     ownerSession=null;
     ownerCanEdit=false;
     if(!unpublishedLocal)await readCloudViewer();
     renderAll();
-  });
+  };
 
   for(const selector of ['#openJournalComposer','#journalAddButton','#homeMedicationButton','#medicationAddButton','#costAddButton','#profilePhotoButton','#carePlanForm button[type=submit]','#careTeamForm button[type=submit]','#questionForm button[type=submit]','#wellbeingForm button[type=submit]']){
     const node=q(selector);if(node)node.disabled=!ownerCanEdit;
