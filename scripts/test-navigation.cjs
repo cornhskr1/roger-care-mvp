@@ -303,7 +303,7 @@ if(require.main===module)(async()=>{
       const defaultRange=await page.evaluate(()=>{const range=resolveCareSnapshotRange();return {...range,span:daysBetween(range.start,range.end),latest:latestCareActivityDate()};});
       assert.equal(defaultRange.span,13,'Last 14 days is inclusive');
       assert.equal(defaultRange.end,defaultRange.latest,'Default period ends at latest recorded activity');
-      assert.equal(await page.locator('#careSnapshotPreview .care-snapshot-narrative > p').first().textContent(),await page.evaluate(()=>careSnapshotNarrative(careSnapshotData())[0]),'Conversational paragraph is first');
+      assert.equal(await page.locator('#careSnapshotPreview .care-snapshot-narrative > p').first().textContent(),await page.evaluate(()=>careSnapshotNarrative(careSnapshotData(),{brief:true}).lead),'Short snapshot lead is first');
       await page.locator('#careSnapshotPreview .care-snapshot-narrative [data-nav="journal/trends"]').click();
       assert(await page.locator('#journal-panel-trends').isVisible(),'Snapshot opens the existing trend chart');
       assert.equal(await page.locator('#comparePrimary').inputValue(),'weight','Trend shortcut preserves the selected primary metric');

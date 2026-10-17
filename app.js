@@ -3103,7 +3103,7 @@ function careSnapshotData(){
     appetiteText,energyText,nauseaText,stoolText,vomitingText,weightText,medicationText,clinicalText,questions
   };
 }
-function careSnapshotNarrative(snapshot){
+function careSnapshotNarrative(snapshot,{brief=false}={}){
   const calendarDays=Math.max(1,daysBetween(snapshot.start,snapshot.end)+1);
   const dateCount=rows=>new Set(rows.map(row=>typeof row==='string'?row:row.date)).size;
   const dense=snapshot.rows.length>=Math.ceil(calendarDays*.75);
@@ -3117,7 +3117,8 @@ function careSnapshotNarrative(snapshot){
     :snapshot.range.mode==='visit'?`Since the last documented visit (${fmtDate(snapshot.start)} through ${fmtDate(snapshot.end)})`
     :calendarDays===14?`Over these two weeks (${fmtDate(snapshot.start)} through ${fmtDate(snapshot.end)})`
     :`From ${fmtDate(snapshot.start)} through ${fmtDate(snapshot.end)}`;
-  const sentences=[],review=[];
+  const sentences=[],review=[],points={food:[],gut:[],energy:[],nausea:[],medication:[]};
+  let timingNote='';
   if(!snapshot.rows.length)sentences.push('I have no home observations recorded.');
   else{
     const daily=[];
@@ -3153,6 +3154,7 @@ function careSnapshotNarrative(snapshot){
     else daily.push(otherWater.length?'water intake needs the dated wording below':'water intake was not specifically recorded');
     if(otherWater.length)review.push(`Water intake notes to review: ${otherWater.map(row=>`${fmtDate(row.date)}: ${row.values.map(value=>`“${value}”`).join('; ')}`).join('. ')}.`);
     sentences.push(daily.join(', and ')+'.');
+    points.food=daily.map(text=>text+'.');
 
     const gut=[],uncertainDates=new Set(snapshot.noteReviews.map(note=>note.date));
     const describedStoolDays=snapshot.characterizedStoolDays.filter(row=>!uncertainDates.has(row.date));
@@ -3166,6 +3168,7 @@ function careSnapshotNarrative(snapshot){
         &&snapshot.vomitingNoneDays.length>=Math.ceil(calendarDays*.75)&&describedStoolDays.length>=Math.ceil(calendarDays*.75);
       const text=reassuring?'My entries describe no vomiting or loose stool':gut.join(', and ');
       sentences.push(text.charAt(0).toUpperCase()+text.slice(1)+'.');
+      points.gut=[text+'.'];
     }
 
     if(snapshot.energyReduced.length){
@@ -3185,14 +3188,32 @@ function careSnapshotNarrative(snapshot){
       const latest=snapshot.energyRows.at(-1);
       if(snapshot.energyNormal.includes(latest))energy+=`, with usual energy recorded again on ${fmtDate(latest.date)}`;
       sentences.push(energy+'.');
-    }else if(snapshot.energyNormal.length)sentences.push(`His energy was at his usual level ${when(snapshot.energyNormal)}.`);
-    if(snapshot.energyHigher.length)sentences.push(`I recorded higher energy ${changedWhen(snapshot.energyHigher)}.`);
+      const allDays=dates.length===calendarDays&&snapshot.rows.length===calendarDays;
+      let shortEnergy=allDays&&calendarDays===2?'Lower energy both days':`Lower energy on ${dates.length} day${dates.length===1?'':'s'}`;
+      if(!allDays&&(!dense||dates.length<=3))shortEnergy+=` (${careSnapshotDateList(dates)})`;
+      if(snapshot.energyNormal.includes(latest))shortEnergy+=`. Usual energy was recorded again on ${fmtDate(latest.date)}`;
+      points.energy.push(shortEnergy+'.');
+      if(window)timingNote=`${window.overlap?`${window.overlap} low-energy day${window.overlap===1?'':'s'} overlapped`:'No low-energy days fell within'} the chart’s earlier nausea window. This timing does not explain the cause.`;
+    }else if(snapshot.energyNormal.length){sentences.push(`His energy was at his usual level ${when(snapshot.energyNormal)}.`);points.energy.push(`Usual energy ${when(snapshot.energyNormal)}.`);}
+    if(snapshot.energyHigher.length){sentences.push(`I recorded higher energy ${changedWhen(snapshot.energyHigher)}.`);points.energy.push(`Higher energy ${changedWhen(snapshot.energyHigher)}.`);}
     if(snapshot.nauseaDays.length){
       const behaviors=new Intl.ListFormat('en',{style:'long',type:'conjunction'}).format(snapshot.nauseaTop.map(item=>item.label.replace(/ \/ /g,' or ')));
       sentences.push(snapshot.nauseaTop.length
         ?`I noticed ${behaviors} ${changedWhen(snapshot.nauseaDays)}.`
         :`My notes mention nausea signs ${changedWhen(snapshot.nauseaDays)}.`);
     }else if(snapshot.nauseaNoneDays.length)sentences.push(`I specifically noted no nausea signs ${when(snapshot.nauseaNoneDays)}.`);
+    // Only controlled behavior labels belong in generated prose. Keep dictated
+    // free text intact in its own source block, never splice it into a sentence.
+    const knownLabels=new Set(Object.values(NAUSEA_SIGN_LABELS));
+    const known=snapshot.nauseaTop.filter(item=>knownLabels.has(item.label));
+    for(const item of known){
+      const days=snapshot.nauseaDays.filter(row=>row.observations.some(o=>nauseaLabels(o).includes(item.label)));
+      points.nausea.push(`${item.label.replace(/ \/ /g,' or ')} noted ${when(days)}.`);
+    }
+    const otherNauseaDays=snapshot.nauseaDays.filter(row=>row.observations.some(o=>String(o.nauseaOther||'').trim()||(o.nauseaSigns||[]).some(value=>!NAUSEA_SIGN_LABELS[value])));
+    if(otherNauseaDays.length)points.nausea.push(`Other nausea notes ${changedWhen(otherNauseaDays)}; original wording is in recorded details.`);
+    else if(snapshot.nauseaDays.length&&!known.length)points.nausea.push(`Nausea signs noted ${changedWhen(snapshot.nauseaDays)}.`);
+    if(snapshot.nauseaNoneDays.length)points.nausea.push(`No nausea signs noted ${when(snapshot.nauseaNoneDays)}.`);
   }
   // Count dates, not dose rows or overlapping owner-confirmed course rows.
   // Same-date nausea/use is timing only; it does not establish treatment benefit.
@@ -3200,6 +3221,7 @@ function careSnapshotNarrative(snapshot){
   if(cereniaDates.length){
     const nauseaDates=new Set(snapshot.nauseaDates),overlap=cereniaDates.filter(date=>nauseaDates.has(date)).length;
     sentences.push(`Cerenia was recorded as given on ${cereniaDates.length} day${cereniaDates.length===1?'':'s'}${dense?'':` (${careSnapshotDateList(cereniaDates)})`}${overlap===cereniaDates.length?' when nausea signs were noted':overlap?`, including ${overlap} day${overlap===1?'':'s'} with nausea signs`:''}.`);
+    points.medication.push(sentences.at(-1));
   }
   const first=sentences.shift()||'I have no home observations recorded.';
   const paragraphs=[`${period}, ${dense?'my notes show that ':''}${first.startsWith('I ')?first:first.charAt(0).toLowerCase()+first.slice(1)}${sentences.length?' '+sentences.join(' '):''}`.replace(/\s+([,.])/g,'$1').replace(/ {2,}/g,' ')];
@@ -3216,6 +3238,35 @@ function careSnapshotNarrative(snapshot){
   if(review.length)paragraphs.push(review.join(' '));
   if(snapshot.energyReduced.length&&snapshot.energyNauseaTiming.window)paragraphs.push('The chart window reflects prior first-week owner observations. This timing comparison does not establish the cause of lower energy.');
   paragraphs.push(`${snapshot.rows.length<calendarDays?'There are gaps in my notes; those days are unknown. ':''}Symptoms I did not specifically record remain unknown.`);
+  if(brief){
+    // Presentation only: the original narrative and all source calculations
+    // remain unchanged for exports and the complete recorded-detail cards.
+    const plain=text=>{
+      let value=text.replace(/^his appetite was not specifically recorded/i,'Appetite was not recorded').replace(/^his appetite was /i,'Appetite was ')
+        .replace(/^water intake was normal/i,'Drinking was normal').replace(/^water intake was not specifically recorded/i,'Drinking was not recorded')
+        .replace(/^I specifically noted no vomiting/i,'No vomiting noted').replace(/^I recorded (\d+) vomiting/i,'$1 vomiting')
+        .replace(/loose stool or diarrhea was described or scored/g,'loose stool or diarrhea noted')
+        .replace(/^My entries describe no vomiting or loose stool/i,'No vomiting or loose stool noted')
+        .replace(/\s+([,.])/g,'$1').replace(/ {2,}/g,' ').trim();
+      if(snapshot.start.slice(0,4)===snapshot.end.slice(0,4))value=value.replace(new RegExp(', '+snapshot.start.slice(0,4),'g'),'');
+      return value.charAt(0).toUpperCase()+value.slice(1);
+    };
+    const rawNotes=[];
+    for(const row of snapshot.observations){
+      const texts=[row.nauseaOther,...(row.nauseaSigns||[]).filter(value=>!NAUSEA_SIGN_LABELS[value])];
+      for(const text of texts)if(typeof text==='string'&&text.trim()&&!rawNotes.some(note=>note.date===row.date&&note.text===text))rawNotes.push({date:row.date,text});
+    }
+    const nauseaDetails=[];
+    const detailLabels=snapshot.nauseaTop.filter(item=>Object.values(NAUSEA_SIGN_LABELS).includes(item.label)).map(item=>item.label);
+    if(snapshot.nauseaDays.length)nauseaDetails.push(`Nausea-associated behaviors on ${careSnapshotDateList(snapshot.nauseaDays)}${detailLabels.length?`: ${detailLabels.join('; ')}`:''}.`);
+    if(snapshot.nauseaNoneDays.length)nauseaDetails.push(`No nausea signs observed on ${careSnapshotDateList(snapshot.nauseaNoneDays)}.`);
+    if(rawNotes.length)nauseaDetails.push('Original wording appears below.');
+    const lead=snapshot.rows.length?`${snapshot.rows.length===1?'1 day':`${snapshot.rows.length} days`} with home notes.`:'No home observations recorded for this period.';
+    return {lead,points:Object.values(points).filter(group=>group.length).map(group=>group.map(plain).join(' ')),
+      important:urgent.length?`Important: ${urgent.join('; ')}.`:'',
+      review:review.map(text=>text.replace(/^Water intake notes to review:/,'Drinking notes to review:').replace(/^Some wording in my notes needs review:/,'Notes to review:')),
+      timingNote,unknown:'Days and symptoms not recorded are unknown.',rawNotes,nauseaDetail:nauseaDetails.join(' ')||'Nausea signs were not recorded in this period.'};
+  }
   return paragraphs;
 }
 
@@ -3241,9 +3292,10 @@ function renderCareSnapshotPreview(){
   let snapshot;
   try{snapshot=careSnapshotData();}catch(error){root.innerHTML=`<div class="alert">${esc(error.message||'Choose a valid Care Snapshot date range.')}</div>`;return;}
   const range=snapshot.start===snapshot.end?fmtDate(snapshot.start):`${fmtDate(snapshot.start)} – ${fmtDate(snapshot.end)}`;
-  const narrative=careSnapshotNarrative(snapshot);
-  const items=[['APPETITE',snapshot.appetiteText],['ENERGY',snapshot.energyText],['NAUSEA-ASSOCIATED',snapshot.nauseaText],['GI / STOOL',snapshot.stoolText],['VOMITING',snapshot.vomitingText],['MEDICATIONS',snapshot.medicationText]];
-  root.innerHTML=`<div class="care-snapshot-period"><div><strong>${esc(snapshot.range.label)}</strong><span>${esc(range)} · ${esc(snapshot.range.context)} · ${snapshot.rows.length} day${snapshot.rows.length===1?'':'s'} with owner observations</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><section class="care-snapshot-narrative"><div class="care-snapshot-label">HOW ROGER IS DOING</div>${narrative.map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}<button type="button" class="text-button" data-nav="journal/trends">Open trend chart</button></section><div class="care-snapshot-note">Generated from the selected record. Please add your overall impression, how this compares with last time, and whether medication seemed to help; the app does not infer these. Missing or unlogged symptoms remain unknown.</div>${careSnapshotOwnerNotesHtml(snapshot,{interactive:true})}<details class="care-snapshot-details"><summary>Recorded details &amp; medication context</summary><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div><p class="care-snapshot-note">${esc(snapshot.weightText)} ${esc(snapshot.clinicalText)}</p></details>`;
+  const brief=careSnapshotNarrative(snapshot,{brief:true});
+  const context=snapshot.range.mode==='custom'||snapshot.range.mode==='7days'||snapshot.range.mode==='treatment'?'':snapshot.range.context;
+  const items=[['APPETITE',snapshot.appetiteText],['ENERGY',snapshot.energyText],['NAUSEA-ASSOCIATED',brief.nauseaDetail],['GI / STOOL',snapshot.stoolText],['VOMITING',snapshot.vomitingText],['MEDICATIONS',snapshot.medicationText]];
+  root.innerHTML=`<div class="care-snapshot-period"><div><strong>${esc(snapshot.range.label)}</strong><span>${esc(range)}${context?` · ${esc(context)}`:''}</span></div><span class="chip info">${snapshot.questions.length} open question${snapshot.questions.length===1?'':'s'}</span></div><section class="care-snapshot-narrative"><div class="care-snapshot-label">HOW ROGER IS DOING</div><p class="care-snapshot-lead">${esc(brief.lead)}</p>${brief.important?`<p class="care-snapshot-important">${esc(brief.important)}</p>`:''}${brief.points.length?`<ul class="care-snapshot-points">${brief.points.map(point=>`<li>${esc(point)}</li>`).join('')}</ul>`:''}${brief.review.map(text=>`<p class="care-snapshot-review">${esc(text)}</p>`).join('')}${brief.timingNote?`<p class="care-snapshot-context">${esc(brief.timingNote)}</p>`:''}<p class="care-snapshot-context">${esc(brief.unknown)}</p><button type="button" class="text-button" data-nav="journal/trends">Open trend chart</button></section>${careSnapshotOwnerNotesHtml(snapshot,{interactive:true})}<details class="care-snapshot-details"><summary>Recorded details &amp; medication context</summary><div class="care-snapshot-grid">${items.map(([label,value])=>`<div class="care-snapshot-item"><div class="care-snapshot-label">${label}</div><div class="care-snapshot-value">${esc(value)}</div></div>`).join('')}</div>${brief.rawNotes.length?`<section class="care-snapshot-source-notes"><h3>Original nausea notes</h3>${brief.rawNotes.map(note=>`<div class="care-snapshot-source-note"><strong>${esc(fmtDate(note.date))}</strong><p>${esc(note.text)}</p></div>`).join('')}</section>`:''}<p class="care-snapshot-note">${esc(snapshot.weightText)} ${esc(snapshot.clinicalText)}</p></details>`;
 }
 
 function pdfPlain(value){
