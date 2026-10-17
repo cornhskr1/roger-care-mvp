@@ -573,3 +573,15 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a2
 .appointment-row button{min-height:44px;flex-shrink:0}
 #upcomingCare h3{font-size:15px;margin:20px 0 8px}
 .timeline-upcoming .care-plan-row>span{white-space:normal;text-align:right}
+
+/* Short snapshot overview; exact details and original wording remain available. */
+.care-snapshot-narrative .care-snapshot-lead{font-size:14px;font-weight:650;line-height:1.5;margin-bottom:10px}
+.care-snapshot-points{padding-left:20px;margin:0}
+.care-snapshot-points li{font-size:14px;line-height:1.55;font-weight:400;padding-left:2px;margin:9px 0}
+.care-snapshot-narrative .care-snapshot-important{font-size:14px;font-weight:750;border-left:3px solid var(--red);padding-left:9px;margin:10px 0}
+.care-snapshot-narrative .care-snapshot-review{font-size:13px;font-weight:400;line-height:1.5;border-left:3px solid var(--gold);padding-left:9px}
+.care-snapshot-narrative .care-snapshot-context{font-size:12px;font-weight:400;line-height:1.5;color:var(--muted);margin-top:12px}
+.care-snapshot-period span{font-size:12px;line-height:1.5}
+.care-snapshot-source-notes h3{font-size:14px;margin:16px 0 8px}
+.care-snapshot-source-note{border-top:1px solid var(--line);padding:10px 0;font-size:12px}
+.care-snapshot-source-note p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;margin:7px 0}
