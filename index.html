@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=47">
+  <link rel="stylesheet" href="styles.css?v=48">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -342,8 +342,21 @@
           <div class="snapshot-share-actions">
             <button id="shareCareSummary" class="primary-button" type="button">Share Care Snapshot</button>
             <button id="downloadCareSummary" class="secondary-button" type="button">Download PDF</button>
-            <button id="printCareSummary" class="text-button" type="button">Print complete record</button>
           </div>
+          <p class="field-help">This is a short visit update, not the complete record.</p>
+        </section>
+        <section id="completeTreatmentReport" class="card complete-treatment-report">
+          <div class="section-kicker">FULL RECORDED HISTORY</div>
+          <h2>Complete treatment report</h2>
+          <p class="body-copy">All recorded dates, including medications, weight history, lab results and original daily notes. The snapshot period above does not limit this report.</p>
+          <label class="report-financial-option"><input id="completeReportIncludeCosts" type="checkbox"><span>Include financial ledgers</span></label>
+          <p class="field-help">Adds bills and medication purchase allocations. Original clinical and source notes stay unchanged and may mention costs.</p>
+          <div class="complete-report-actions">
+            <button id="previewCompleteReport" class="primary-button" type="button">Preview complete report</button>
+            <button id="printCareSummary" class="secondary-button" type="button">Print / save PDF</button>
+            <button id="downloadCompleteReport" class="text-button" type="button">Download report (HTML)</button>
+          </div>
+          <p class="field-help">The report opens in a new window. Use Print to save a PDF, or download the HTML file to open in a browser. Uploaded source files stay on their device; this report lists available files but does not attach them.</p>
         </section></section>
     </main>
 
@@ -547,6 +560,7 @@
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=3" defer></script>
-  <script src="app.js?v=68" defer></script>
+  <script src="handoff-report.js?v=1" defer></script>
+  <script src="app.js?v=69" defer></script>
 </body>
 </html>

@@ -585,3 +585,10 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a2
 .care-snapshot-source-notes h3{font-size:14px;margin:16px 0 8px}
 .care-snapshot-source-note{border-top:1px solid var(--line);padding:10px 0;font-size:12px}
 .care-snapshot-source-note p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;margin:7px 0}
+
+.complete-treatment-report{margin-top:18px}
+.complete-treatment-report h2{margin:6px 0 10px}
+.report-financial-option{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:650;font-size:14px}
+.report-financial-option input{width:20px;height:20px;flex:0 0 auto}
+.complete-report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 10px}
+.complete-report-actions button{min-height:44px;flex:1 1 200px}
