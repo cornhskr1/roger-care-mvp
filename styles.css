@@ -564,3 +564,12 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a2
 .care-snapshot-owner-note{padding:9px 0;border-bottom:1px solid var(--line)}
 .care-snapshot-owner-note>summary{font-size:12px;font-weight:750;cursor:pointer}
 .care-snapshot-owner-note-text{font-size:12px;line-height:1.5;margin-top:9px}
+
+/* Appointment editing is independent of completed clinical records. */
+.appointment-row{gap:12px;align-items:flex-start}
+.appointment-row>div{min-width:0;overflow-wrap:anywhere}
+.appointment-row span,.appointment-row small{display:block;margin-top:4px}
+.appointment-row small{color:var(--muted);font-size:11px;line-height:1.4}
+.appointment-row button{min-height:44px;flex-shrink:0}
+#upcomingCare h3{font-size:15px;margin:20px 0 8px}
+.timeline-upcoming .care-plan-row>span{white-space:normal;text-align:right}

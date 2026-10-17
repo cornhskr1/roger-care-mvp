@@ -66,9 +66,21 @@ function staticChecks() {
     assert(start>=0&&end>start,'Summary save branch boundaries exist');
     return source.slice(0,start)+'      /* reviewed summary save */\n'+source.slice(end);
   };
+  const withoutAppointmentSave = source => {
+    const start=source.indexOf("  q('#carePlanForm').addEventListener('submit'");
+    const end=source.indexOf("  q('#costCorrectionForm')",start);
+    assert(start>=0&&end>start,'Care plan save boundaries exist');
+    return source.slice(0,start)+'  /* Appointment dates now use an isolated audited editor; this form saves instructions only. */\n'+source.slice(end);
+  };
+  const withoutAppointmentMerge = source => {
+    const start=source.indexOf('    visits:');
+    const end=source.indexOf('    careTeam:',start);
+    assert(start>=0&&end>start,'Care plan visit merge boundaries exist');
+    return source.slice(0,start)+'    /* Preserve all saved appointment fields and custom visits. */\n'+source.slice(end);
+  };
   for(const name of protectedFunctions){
-    const actual=extract(afterApp,name),expected=extract(beforeApp,name);
-    assert.equal(name==='bindImport'?withoutSummarySave(actual):actual,name==='bindImport'?withoutSummarySave(expected):expected,name+' implementation unchanged outside the reviewed summary branch');
+    const normalize=name==='bindImport'?withoutSummarySave:name==='bindForms'?withoutAppointmentSave:name==='mergeCanonicalSeed'?withoutAppointmentMerge:value=>value;
+    assert.equal(normalize(extract(afterApp,name)),normalize(extract(beforeApp,name)),name+' unchanged outside reviewed summary/appointment branches');
   }
   for(const key of ['STORAGE_KEY','DOC_DB','DOC_STORE','RECOVERY_STORE','BACKUP_META_KEY','PENDING_CLOUD_KEY','SUPABASE_URL','SUPABASE_KEY','SITE_URL']) {
     const re=new RegExp(`const ${key} = [^;]+;`);
@@ -76,7 +88,7 @@ function staticChecks() {
   }
   const changed = execFileSync('git',['diff','--name-only','b2941ebb'],{cwd:root,encoding:'utf8'}).trim().split('\n');
   assert(!changed.some(p=>p.startsWith('data/')||p.startsWith('supabase/')), 'Seed/schema contracts unchanged');
-  return `${oldIds.length} pre-existing IDs retained; storage, migration, and sync implementations unchanged`;
+  return `${oldIds.length} pre-existing IDs retained; storage, migration, and sync protected outside reviewed appointment merge/save branches`;
 }
 function vmChecks() {
   // A small deterministic DOM model checks route/state mechanics. This does

@@ -10,7 +10,7 @@
   <title>Roger Care</title>
   <link rel="manifest" href="manifest.webmanifest?v=27">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=45">
+  <link rel="stylesheet" href="styles.css?v=46">
 </head>
 <body>
   <div id="app" class="app-shell">
@@ -243,15 +243,16 @@
             <button type="submit" class="secondary-button">Save care team & emergency plan</button>
           </form>
         </section></div><div id="more-panel-plan" data-more-panel="plan" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Appointments & instructions</h2></div><section class="card">
-          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Appointments & vet instructions</h2></div></div>
+          <div class="card-head"><div><div class="section-kicker">SCHEDULE & HISTORY</div><h2>Appointments & vet instructions</h2></div></div>
+          <button id="appointmentAddButton" type="button" class="primary-button">Add appointment</button>
           <div id="upcomingCare"></div>
         </section><section class="card">
-          <div class="card-head"><div><div class="section-kicker">UPCOMING CARE</div><h2>Confirm dates and call instructions</h2></div></div>
+          <div class="card-head"><div><div class="section-kicker">VET GUIDANCE</div><h2>Vet call instructions</h2></div></div>
           <form id="carePlanForm" class="form-stack">
-            <div id="carePlanFields" class="form-grid two"></div>
+            <p id="carePlanFields" class="field-help">Use Add appointment or Edit above for dates and times. Earlier scheduled dates remain preserved.</p>
             <label class="field"><span>When to call the vet (use the vet’s exact instructions)</span><textarea id="vetCallInstructions" name="vetCallInstructions" rows="3" placeholder="Awaiting Roger’s veterinarian’s guidance"></textarea></label>
             <label class="field"><span>Instruction source / date</span><input id="vetCallSource" name="vetCallSource" type="text" placeholder="K-State discharge instructions, date…"></label>
-            <button type="submit" class="secondary-button">Save care plan</button>
+            <button type="submit" class="secondary-button">Save vet instructions</button>
           </form>
         </section></div><div id="more-panel-documents" data-more-panel="documents" hidden><button type="button" class="text-button section-back" data-nav="more">← More</button><div class="page-title-row"><h2>Documents</h2></div><section class="card">
           <div class="card-head">
@@ -530,10 +531,22 @@
     </form>
   </dialog>
 
+  <dialog id="appointmentDialog" class="sheet-dialog">
+    <form id="appointmentForm" class="sheet-card">
+      <div class="sheet-handle"></div><div class="sheet-head"><div><div class="section-kicker">PLANNED CARE</div><h2 id="appointmentTitle">Add appointment</h2></div><button class="icon-button" type="button" data-close-dialog="appointmentDialog" aria-label="Close">×</button></div>
+      <input name="editId" type="hidden">
+      <label class="field"><span>Appointment</span><input name="label" type="text" maxlength="160" placeholder="Bloodwork, follow-up visit…" required></label>
+      <div class="form-grid two"><label class="field"><span>Date (blank if not confirmed)</span><input name="date" type="date"></label><label class="field"><span>Time (optional, appointment's local time)</span><input name="time" type="time"></label></div>
+      <label class="field"><span>Source / note (optional)</span><input name="source" type="text" maxlength="300" placeholder="Clinic confirmation, phone call…"></label>
+      <p class="medication-note">This updates the schedule only, not treatment or test records. Previous appointment values stay in correction history. Past appointments are kept automatically.</p>
+      <div class="sheet-actions"><button class="secondary-button" type="button" data-close-dialog="appointmentDialog">Cancel</button><button id="appointmentSaveButton" class="primary-button" type="submit">Save appointment</button></div>
+    </form>
+  </dialog>
+
   <template id="toastTemplate"><div class="toast" role="status"></div></template>
   <div id="toastRegion" class="toast-region" aria-live="polite"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2" defer></script>
   <script src="import-analysis.js?v=3" defer></script>
-  <script src="app.js?v=66" defer></script>
+  <script src="app.js?v=67" defer></script>
 </body>
 </html>
