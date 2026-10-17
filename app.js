@@ -2476,12 +2476,7 @@ function bindImport(){
     const before=structuredClone(state);
     try{
       if(draft.kind==='summary'){
-        const doseMg=Number(fd.get('doseMg')),doseMgM2=Number(fd.get('doseMgM2'));
-        if(![doseMg,doseMgM2].every(n=>Number.isFinite(n)&&n>0&&n<20))throw Error('Check the dose fields.');
-        const existing=state.treatments.find(x=>x.number===draft.number);
-        if(existing){recordCorrection('treatments',existing.id,{date,doseMg,doseMgM2,weightLb:draft.weightLb??existing.weightLb,source:`K-State patient summary · ${draft.filename}`});}
-        else state.treatments.push({id:`chemo-${draft.number}`,number:draft.number,date,drug:'Vinblastine',doseMg,doseMgM2,weightLb:draft.weightLb,prednisone:'See patient summary',doseReason:'See K-State patient summary',clinicalSummary:'Dose transcribed from Treatments Performed.',source:`K-State patient summary · ${draft.filename}`});
-        state.treatments.sort((a,b)=>a.number-b.number);
+        applyReviewedSummary(draft,{date,doseMg:fd.get('doseMg'),doseMgM2:fd.get('doseMgM2'),weight:fd.get('weight'),weightUnit:fd.get('weightUnit')});
       }else if(draft.kind==='lab'){
         for(const metric of ['Neutrophils','Hematocrit','Platelets']){
           const value=Number(fd.get(metric));
@@ -2517,6 +2512,50 @@ function bindImport(){
       importDraft=null;q('#analyzeForm').reset();renderAll();q('#importReview').innerHTML='<p class="privacy-note">Reviewed values saved. The timeline, charts, and costs now use the same record. Check Home for shared sync status.</p>';
     }catch(error){state=before;renderAll();toast(error.message||'Import not saved.',true);}
   });
+}
+
+function summaryTreatmentMatch(draft){
+  const matches=state.treatments.filter(x=>Number(x.number)===draft.number);
+  if(matches.length>1)throw Error('More than one treatment has this number. Resolve the existing records before importing this summary.');
+  if(matches.length&&(!matches[0].id||state.treatments.filter(x=>x.id===matches[0].id).length!==1))throw Error('This treatment has a missing or duplicate ID. Resolve the existing records before importing this summary.');
+  if(!matches.length&&state.treatments.some(x=>x.id===`chemo-${draft.number}`))throw Error('This treatment ID is already in use. Resolve the existing records before importing this summary.');
+  return matches[0]||null;
+}
+
+function applyReviewedSummary(draft,values){
+  const {date}=values,doseMg=Number(values.doseMg),doseMgM2=Number(values.doseMgM2);
+  if(!Number.isInteger(draft.number)||draft.number<1||draft.number>8)throw Error('Check the treatment number.');
+  if(![doseMg,doseMgM2].every(n=>Number.isFinite(n)&&n>0&&n<20))throw Error('Check the dose fields.');
+  const existing=summaryTreatmentMatch(draft);
+  const weightLb=RogerImport.weightToLb(values.weight,values.weightUnit);
+  const update={date,doseMg,doseMgM2};
+  // A weight-only correction must not relabel the dose or other clinical facts.
+  if(!existing||existing.date!==date||Number(existing.doseMg)!==doseMg||Number(existing.doseMgM2)!==doseMgM2)update.source=`K-State patient summary · ${draft.filename}`;
+  if(weightLb!==null){
+    update.weightLb=weightLb;
+    update.weightReview={
+      source:draft.weightExtraction?.status==='extracted'&&Number(values.weight)===draft.weightExtraction.value&&values.weightUnit===draft.weightExtraction.unit?'pdf-extracted-owner-reviewed':'owner-entered',
+      value:Number(values.weight),unit:values.weightUnit,weightLb,
+      extracted:draft.weightExtraction?.status==='extracted'?structuredClone(draft.weightExtraction):null,filename:draft.filename
+    };
+  }
+  // A blank review deliberately omits both weight and its provenance. A prior
+  // measurement (and every unrelated field) survives in the correction merge.
+  if(existing){
+    if(Object.entries(update).some(([key,value])=>JSON.stringify(existing[key])!==JSON.stringify(value)))recordCorrection('treatments',existing.id,update);
+  }else{
+    state.treatments.push({id:`chemo-${draft.number}`,number:draft.number,drug:'Vinblastine',weightLb:null,prednisone:'See patient summary',doseReason:'See K-State patient summary',clinicalSummary:'Dose transcribed from Treatments Performed.',...update});
+  }
+  state.treatments.sort((a,b)=>a.number-b.number);
+}
+
+function summaryWeightFields(draft,existing){
+  const extracted=draft.weightExtraction?.status==='extracted'?draft.weightExtraction:null;
+  const known=existing?.weightLb!=null&&Number(existing.weightLb)>0;
+  const missing=draft.weightExtraction?.status==='ambiguous'?'The PDF’s weight readings are conflicting or invalid.':'Weight was not found with a clear lb/kg unit in the PDF.';
+  const help=extracted?`Read from PDF: ${extracted.evidence}. Correct the value or unit if needed.`:`${missing} Add it manually if you can verify it.`;
+  const blank=known?`Leave blank to keep the existing ${existing.weightLb} lb and its source.`:'Leave blank to keep weight unknown; blank is never saved as zero.';
+  return `<div class="form-grid two"><label class="field"><span>Weight (optional)</span><input name="weight" type="number" step="any" min="0" value="${extracted?extracted.value:''}" aria-describedby="importWeightHelp"></label><label class="field"><span>Weight unit</span><select name="weightUnit"><option value="lb" ${extracted?.unit!=='kg'?'selected':''}>lb</option><option value="kg" ${extracted?.unit==='kg'?'selected':''}>kg</option></select></label></div><p id="importWeightHelp" class="${extracted?'field-help':'alert'}">${esc(help)} ${esc(blank)} Kilograms are stored as pounds, rounded to 0.01 lb. Manually added or corrected weight is labeled owner-entered.</p>`;
 }
 
 function invoiceExpectedAmounts(draft){
@@ -2559,17 +2598,17 @@ function invoiceCostMatch(draft){
 function renderImportReview(){
   const d=importDraft;if(!d)return;
   let match;
-  try{match=d.kind==='summary'?state.treatments.find(x=>x.number===d.number):d.kind==='lab'?state.labs.find(x=>x.date===d.date&&x.metric==='Neutrophils'):invoiceCostMatch(d);}
+  try{match=d.kind==='summary'?summaryTreatmentMatch(d):d.kind==='lab'?state.labs.find(x=>x.date===d.date&&x.metric==='Neutrophils'):invoiceCostMatch(d);}
   catch(error){q('#importReview').innerHTML=`<p class="alert">${esc(error.message)}</p>`;return;}
-  const current=match?(d.kind==='summary'?`Existing: ${fmtDate(match.date)} · ${match.doseMg} mg · ${match.doseMgM2} mg/m²`:d.kind==='lab'?`Existing neutrophils: ${match.value} K/µL on ${fmtDate(match.date)}`:`Existing: ${fmtDate(match.date)} · ${money(match.amountPaid)}`):'No matching record yet';
+  const current=match?(d.kind==='summary'?`Existing: ${fmtDate(match.date)} · ${match.doseMg} mg · ${match.doseMgM2} mg/m² · ${Number(match.weightLb)>0?`${match.weightLb} lb`:'weight unknown'}`:d.kind==='lab'?`Existing neutrophils: ${match.value} K/µL on ${fmtDate(match.date)}`:`Existing: ${fmtDate(match.date)} · ${money(match.amountPaid)}`):'No matching record yet';
   const invoiceMatch=match&&['invoice','optimumInvoice'].includes(d.kind)&&invoiceAmountMatchesCost(d,match);
   const surchargeMatch=match&&invoiceSurchargeMatch(d,match);
-  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):invoiceMatch);
+  const already=match&&match.date===d.date&&(d.kind==='summary'?Number(match.doseMg)===d.doseMg&&Number(match.doseMgM2)===d.doseMgM2&&d.weightLb!=null&&Math.abs(Number(match.weightLb)-d.weightLb)<.005:d.kind==='lab'?['Neutrophils','Hematocrit','Platelets'].every(metric=>Number(state.labs.find(x=>x.date===d.date&&x.metric===metric)?.value)===d.values[metric]):invoiceMatch);
   const reviewAmount=surchargeMatch?Number(match.amountPaid):Number(d.amountPaid);
   const optimumHelp=d.kind==='optimumInvoice'?(surchargeMatch?(()=>{const fee=Number(match.amountPaid)-Number(d.invoiceAmount??d.amountPaid);return `<p class="field-help">The invoice shows ${money(d.invoiceAmount??d.amountPaid)} due, a credit-card payment, and a ${money(d.invoiceBalance||0)} balance. The existing ${money(match.amountPaid)} cost matches the stated ${Math.round(Number(d.surchargeRate||0)*10000)/100}% card surcharge (${money(fee)}). No duplicate cost will be added.</p>`;})():d.paymentUnconfirmed?`<p class="field-help">This Optimum invoice does not show enough payment evidence to treat the amount as paid automatically. Confirm payment before adding it to owner-paid totals.</p>`:`<p class="field-help">This Optimum invoice shows the amount due as paid and the invoice balance as ${money(d.invoiceBalance||0)}.</p>`):'';
   const categoryField=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?`<label class="field"><span>Cost category</span><select name="category">${[['mixed_surgery_dental','Surgery + dental day'],['monitoring','Monitoring'],['diagnosis','Diagnosis'],['staging','Initial staging'],['treatment','Treatment'],['restaging','Restaging'],['medication','Medication'],['mixed','Mixed care'],['other','Other']].map(([value,label])=>`<option value="${value}" ${d.category===value?'selected':''}>${label}</option>`).join('')}</select></label>`:'';
   const paymentConfirm=d.kind==='optimumInvoice'&&d.paymentUnconfirmed?'<label class="import-check"><input type="checkbox" name="paymentConfirmed" value="yes" required> I paid this amount</label>':'';
-  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${surchargeMatch?'Recorded paid amount':d.paymentUnconfirmed?'Invoice amount due':'Invoice amount paid'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${reviewAmount.toFixed(2)}" required></label>${categoryField}${optimumHelp}${paymentConfirm}${d.kind==='invoice'?`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`:''}`;
+  const fields=d.kind==='summary'?`<div class="form-grid two"><label class="field"><span>Vinblastine administered (mg)</span><input name="doseMg" type="number" step="0.01" min="0.01" value="${d.doseMg}" required></label><label class="field"><span>Dose per body area (mg/m²)</span><input name="doseMgM2" type="number" step="0.01" min="0.01" value="${d.doseMgM2}" required></label></div><p class="field-help">The administered dose comes from “Treatments Performed.” Billing lines never set this value.</p>${summaryWeightFields(d,match)}`:d.kind==='lab'?`<div class="form-grid two">${['Neutrophils','Hematocrit','Platelets'].map(metric=>`<label class="field"><span>${metric} (${metric==='Hematocrit'?'%':'K/µL'})</span><input name="${metric}" type="number" step="0.01" min="0" value="${d.values[metric]}" required></label>`).join('')}</div><p class="field-help">Only the current-result column is proposed. Older columns in the PDF are not imported again.</p>`:`<label class="field"><span>${surchargeMatch?'Recorded paid amount':d.paymentUnconfirmed?'Invoice amount due':'Invoice amount paid'}</span><input name="amountPaid" type="number" step="0.01" min="0" value="${reviewAmount.toFixed(2)}" required></label>${categoryField}${optimumHelp}${paymentConfirm}${d.kind==='invoice'?`<p class="field-help">${d.cereniaQuantity?`${d.cereniaQuantity} Cerenia tablets · ${money(d.cereniaPaid)} within this total. `:''}The invoice’s vinblastine lines are billing entries, not administered doses.</p>`:''}`;
   q('#importReview').innerHTML=`<form id="importConfirm" class="form-stack"><h3>${d.kind==='summary'?`Chemo #${d.number} · administered dose`:d.kind==='lab'?'CBC · current results':`Invoice #${esc(d.invoiceNumber)} · ${d.paymentUnconfirmed?'amount due':'paid cost'}`}</h3><p class="item-meta">${esc(d.filename)}<br>${esc(d.evidence)}</p><p class="privacy-note">${esc(current)}${already?' · Values already reconcile; saving only links the reviewed source.':''}</p><label class="field"><span>Visit date</span><input name="date" type="date" value="${esc(d.date)}" required></label>${fields}<label class="import-check"><input type="checkbox" required> I checked these values against the PDF</label><button class="primary-button" type="submit">Save reviewed values</button></form>`;
 }
 

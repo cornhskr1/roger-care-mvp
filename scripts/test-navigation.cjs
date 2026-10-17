@@ -51,14 +51,25 @@ function staticChecks() {
   assert.deepEqual(newIds.filter((id,i)=>newIds.indexOf(id)!==i), [], 'No duplicate IDs');
   const beforeApp=execFileSync('git',['show','b2941ebb:app.js'],{cwd:root,encoding:'utf8'});
   const afterApp=fs.readFileSync(path.join(root,'app.js'),'utf8');
-  const protectedFunctions=['mergeCanonicalSeed','migrateState','persist','saveChanges','connectCloud','initializeCloudMode','checkOwner','cloudRecord','readCloudMetadata','readCloudViewer','publishCloudMirror','parseOwnerSignInLink','loadState','bindForms','bindImport','bindProfilePhoto','readBackupMeta','renderBackupStatus','openDocDb','latestRecoverySnapshot','saveRecoverySnapshot','saveDocument','replaceDocuments','loadDocuments','renderDocuments','openDocument'];
+  const protectedFunctions=['mergeCanonicalSeed','migrateState','persist','saveChanges','connectCloud','initializeCloudMode','checkOwner','cloudRecord','readCloudMetadata','readCloudViewer','publishCloudMirror','parseOwnerSignInLink','loadState','bindForms','bindImport','readImportPdf','bindProfilePhoto','readBackupMeta','renderBackupStatus','openDocDb','latestRecoverySnapshot','saveRecoverySnapshot','saveDocument','replaceDocuments','loadDocuments','renderDocuments','openDocument'];
   const extract = (source,name) => {
     const start=source.search(new RegExp(`(?:async )?function ${name}\\(`));
     assert(start>=0, name+' exists');
     const next=source.slice(start+1).search(/\n(?:async )?function /);
     return source.slice(start,next<0?source.length:start+1+next);
   };
-  for(const name of protectedFunctions) assert.equal(extract(afterApp,name),extract(beforeApp,name),name+' implementation unchanged');
+  // Only the summary save branch is allowed to change for reviewed weight.
+  // Keep the lab/invoice branches, authorization and save/rollback flow guarded.
+  const withoutSummarySave = source => {
+    const start=source.indexOf("      if(draft.kind==='summary'){");
+    const end=source.indexOf("      }else if(draft.kind==='lab'){",start);
+    assert(start>=0&&end>start,'Summary save branch boundaries exist');
+    return source.slice(0,start)+'      /* reviewed summary save */\n'+source.slice(end);
+  };
+  for(const name of protectedFunctions){
+    const actual=extract(afterApp,name),expected=extract(beforeApp,name);
+    assert.equal(name==='bindImport'?withoutSummarySave(actual):actual,name==='bindImport'?withoutSummarySave(expected):expected,name+' implementation unchanged outside the reviewed summary branch');
+  }
   for(const key of ['STORAGE_KEY','DOC_DB','DOC_STORE','RECOVERY_STORE','BACKUP_META_KEY','PENDING_CLOUD_KEY','SUPABASE_URL','SUPABASE_KEY','SITE_URL']) {
     const re=new RegExp(`const ${key} = [^;]+;`);
     assert.equal(afterApp.match(re)?.[0],beforeApp.match(re)?.[0], key+' unchanged');
