@@ -8,6 +8,49 @@
     return short?`${short[3].length===2?'20'+short[3]:short[3]}-${short[1].padStart(2,'0')}-${short[2].padStart(2,'0')}`:null;
   };
   const num=value=>Number(String(value).replace(/,/g,''));
+  // Explicit units only. Blank means unknown, never zero or a request to erase.
+  function weightToLb(value,unit){
+    const raw=String(value??'').trim(),normalizedUnit=String(unit||'').toLowerCase();
+    if(!raw)return null;
+    if(!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(raw)||!['kg','lb','lbs'].includes(normalizedUnit))throw Error('Enter a positive weight and choose lb or kg.');
+    const amount=Number(raw),pounds=normalizedUnit==='kg'?Math.round(amount/0.45359237*100)/100:amount;
+    if(!Number.isFinite(pounds)||pounds<=0)throw Error('Enter a positive weight and choose lb or kg.');
+    return pounds;
+  }
+  function summaryWeight(text){
+    const readings=[];
+    // Keep this deliberately narrow: an explicit weight label or "weighed",
+    // a decimal measurement and its unit. Never infer units from a bare number.
+    const labeled=/(?:\bweighed|(?:^|[\n;])\s*(?:(?:body|current)\s+)?weight)\s*:?\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\b(?![\w/])(?:\s*\(\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\s*\))?/gi;
+    const unitLabel=/(?:^|[\n;])\s*(?:(?:body|current)\s+)?weight\s*\(\s*(kg|lbs?)\s*\)\s*:?\s*(\d+(?:\.\d+)?|\.\d+)(?=$|[\s;)])/gi;
+    let invalid=false;
+    const add=(value,unit,evidence,pairedValue,pairedUnit)=>{
+      try{
+        let weightLb=weightToLb(value,unit);
+        if(pairedValue!==undefined){
+          const pairedLb=weightToLb(pairedValue,pairedUnit);
+          // Both printed units must agree within ordinary reporting rounding.
+          if(/^kg$/i.test(unit)===/^kg$/i.test(pairedUnit)||Math.abs(weightLb-pairedLb)>.5){invalid=true;return;}
+          if(/^lbs?$/i.test(pairedUnit)){value=pairedValue;unit=pairedUnit;weightLb=pairedLb;}
+        }
+        readings.push({value:Number(value),unit:/^lbs?$/i.test(unit)?'lb':'kg',weightLb,evidence:evidence.trim()});
+      }catch(_){invalid=true;}
+    };
+    for(const match of text.matchAll(labeled)){
+      const prefix=text.slice(0,match.index).split(/[\n.!?;]/).at(-1);
+      const suffix=text.slice(match.index+match[0].length).split(/[\n.!?;]/)[0];
+      if(/^weighed/i.test(match[0])&&/\b(previous(?:ly)?|last|formerly|historical|prior)\b|\b\d+\s*(?:days?|weeks?|months?)\s+ago\b/i.test(`${prefix} ${suffix}`))continue;
+      if(match[3]===undefined&&/^\s*\(\s*[-+]?\d/.test(text.slice(match.index+match[0].length))){invalid=true;continue;}
+      add(match[1],match[2],match[0],match[3],match[4]);
+    }
+    for(const match of text.matchAll(unitLabel)){
+      const suffix=text.slice(match.index+match[0].length).match(/^[ \t]*(kg|lbs?|kilograms?|pounds?|mg|g|oz)\b(\/)?/i);
+      if(suffix&&(!/^(kg|lbs?)$/i.test(suffix[1])||/^kg$/i.test(match[1])!==/^kg$/i.test(suffix[1])||suffix[2])){invalid=true;continue;}
+      add(match[2],match[1],match[0]+(suffix?.[0]||''));
+    }
+    if(invalid||readings.some(reading=>Math.abs(reading.weightLb-readings[0].weightLb)>.01))return {status:'ambiguous'};
+    return readings.length?{status:'extracted',...readings[0]}:{status:'missing'};
+  }
   function analyze(text,kind,filename=''){
     const normalized=String(text||'').replace(/[\u00a0\u202f]/g,' ').replace(/²/g,'2');
     const isLab=kind==='lab',isOptimum=kind==='optimumInvoice';
@@ -48,8 +91,8 @@
       const ordinal=section.match(/treatment\s*#\s*(\d+)\s*of\s*8/i)||normalized.match(/vinblastine treatment\s*#\s*(\d+)\s*\/\s*8/i);
       if(!dose||!ordinal)throw Error('The administered dose or treatment number is unclear. No changes were made.');
       if(num(ordinal[1])<1||num(ordinal[1])>8)throw Error('The treatment number is outside Roger’s 8-dose course. No changes were made.');
-      const weight=normalized.match(/weighed\s*\d+(?:\.\d+)?\s*kg\s*\(\s*(\d+(?:\.\d+)?)\s*lb\s*\)/i);
-      return {kind,date,number:num(ordinal[1]),doseMg:num(dose[1]),doseMgM2:num(dose[2]),weightLb:weight?num(weight[1]):null,filename,evidence:dose[0]};
+      const weightExtraction=summaryWeight(normalized);
+      return {kind,date,number:num(ordinal[1]),doseMg:num(dose[1]),doseMgM2:num(dose[2]),weightLb:weightExtraction.weightLb??null,weightExtraction,filename,evidence:dose[0]};
     }
     if(kind==='invoice'){
       const invoice=normalized.match(/Invoice\s*#\s*(\d+)/i);
@@ -61,7 +104,7 @@
     }
     throw Error('Select K-State patient summary or invoice. No changes were made.');
   }
-  const api={analyze,dateFromText};
+  const api={analyze,dateFromText,weightToLb,summaryWeight};
   if(typeof module==='object'&&module.exports)module.exports=api;
   root.RogerImport=api;
 })(typeof window!=='undefined'?window:globalThis);
