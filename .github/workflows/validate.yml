@@ -21,6 +21,7 @@ jobs:
           node --check app.js
           node --check sw.js
           node --check import-analysis.js
+          node --check handoff-report.js
       - name: Test navigation and care-summary safety
         run: |
           node scripts/test-navigation.cjs
@@ -30,6 +31,7 @@ jobs:
           node scripts/test-import-weight.cjs
           node scripts/test-appointments.cjs
           node scripts/test-snapshot-readability.cjs
+          node scripts/test-complete-report.cjs
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('data/seed.json','utf8')); console.log('seed.json OK')"
       - name: Verify required app assets
@@ -37,13 +39,15 @@ jobs:
           test -f index.html
           test -f styles.css
           test -f app.js
+          test -f handoff-report.js
           test -f manifest.webmanifest
           test -f sw.js
           test -f icons/icon.svg
       - name: Install isolated browser test tools
         run: |
           npm install --no-save --package-lock=false playwright@1.62.1
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
+          sudo apt-get install -y poppler-utils fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
       - name: Check desktop and phone navigation with synthetic records
         env:
           QA_SCREENSHOT_DIR: qa-screenshots
@@ -62,6 +66,14 @@ jobs:
         env:
           QA_SCREENSHOT_DIR: qa-screenshots
         run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-snapshot-readability.cjs --browser
+      - name: Verify complete report and PDF preservation with synthetic records
+        env:
+          QA_SCREENSHOT_DIR: qa-screenshots
+        run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-complete-report.cjs --browser
+      - name: Verify complete report phone flow in WebKit
+        env:
+          QA_SCREENSHOT_DIR: qa-screenshots
+        run: node scripts/test-complete-report.cjs --browser --webkit
       - name: Verify live-record refresh and service-worker upgrades with synthetic records
         run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-service-worker.cjs --browser
       - name: Retain synthetic UI screenshots

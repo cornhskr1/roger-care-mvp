@@ -1779,6 +1779,50 @@ function chartCourseEnd(course){
   while(dates.has(addDays(end,1)))end=addDays(end,1);
   return end;
 }
+// Report generation reads the loaded record and local document metadata only.
+// It never saves, restores, synchronizes, or changes a clinical record.
+async function readCompleteReportDocuments(){
+  try{
+    const db=await openDocDb();
+    const rows=await new Promise((resolve,reject)=>{
+      const request=db.transaction(DOC_STORE,'readonly').objectStore(DOC_STORE).getAll();
+      request.onsuccess=()=>resolve(request.result||[]);
+      request.onerror=()=>reject(request.error);
+    });
+    return {rows,status:'available'};
+  }catch(_){return {rows:[],status:'unavailable'};}
+}
+function buildCompleteTreatmentReport({includeFinancialLedgers=false,generatedAt=new Date().toISOString(),documentIndex={rows:documents,status:'unverified'}}={}){
+  if(typeof RogerHandoff==='undefined')throw Error('Complete report module is unavailable.');
+  const model=RogerHandoff.buildModel(state,documentIndex.rows,{
+    includeFinancialLedgers,generatedAt,documentIndexStatus:documentIndex.status,
+    recordSavedAt:state?._savedAt||null,sharedUpdatedAt:cloudUpdatedAt,
+    unpublishedLocal:Boolean(unpublishedLocal)
+  });
+  return RogerHandoff.renderHtml(model);
+}
+async function openCompleteTreatmentReport({print=false}={}){
+  const includeFinancialLedgers=Boolean(q('#completeReportIncludeCosts').checked);
+  // Open directly from the tap before asynchronous local metadata reads so
+  // mobile browsers can honor the user's requested new window.
+  let reportWindow;
+  try{reportWindow=window.open('','_blank');}catch(_){}
+  if(!reportWindow){toast('The browser blocked the report window. Use Download report (HTML), then open that file.',true);return;}
+  try{
+    reportWindow.opener=null;
+    reportWindow.document.write('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Preparing report</title><p>Preparing the complete treatment report…</p>');
+    reportWindow.document.close();
+    const documentIndex=await readCompleteReportDocuments();
+    const html=buildCompleteTreatmentReport({includeFinancialLedgers,documentIndex});
+    reportWindow.document.open();reportWindow.document.write(html);reportWindow.document.close();
+    reportWindow.focus();
+    if(print)setTimeout(()=>{try{reportWindow.print();}catch(_){toast('The report is open. Use your browser’s Print option to save a PDF.',true);}},300);
+  }catch(_){
+    if(!reportWindow.closed){reportWindow.document.open();reportWindow.document.write('<!doctype html><title>Report unavailable</title><p>The report could not be created. Your records have not changed.</p>');reportWindow.document.close();}
+    toast('Could not create the complete treatment report. Your records have not changed.',true);
+  }
+}
+
 function careSnapshotDateList(rows){
   const dates=[...new Set(rows.map(row=>typeof row==='string'?row:row.date))].filter(Boolean).sort();
   const spans=[];
@@ -2761,7 +2805,17 @@ function bindExports(){
     }catch(error){if(error?.name!=='AbortError')toast('Could not share the Care Snapshot. Try Download PDF instead.',true);}
   });
   q('#downloadCareSummary').addEventListener('click',()=>{try{downloadText('roger-care-snapshot.pdf',buildCareSummaryPdf(),'application/pdf');toast('Care Snapshot PDF downloaded');}catch(_){toast('Could not create the Care Snapshot PDF. Check the selected date range.',true);}});
-  q('#printCareSummary').addEventListener('click',()=>{try{const html=buildCareSummaryHtml(),w=window.open('','_blank');if(!w)return toast('Pop-up blocked. Use Download instead.',true);w.document.write(html);w.document.close();w.focus();setTimeout(()=>w.print(),300);}catch(_){toast('Could not create the complete record. Check the selected date range.',true);}});
+  q('#previewCompleteReport').addEventListener('click',()=>openCompleteTreatmentReport());
+  q('#printCareSummary').addEventListener('click',()=>openCompleteTreatmentReport({print:true}));
+  q('#downloadCompleteReport').addEventListener('click',async()=>{
+    const includeFinancialLedgers=Boolean(q('#completeReportIncludeCosts').checked);
+    try{
+      const documentIndex=await readCompleteReportDocuments();
+      const html=buildCompleteTreatmentReport({includeFinancialLedgers,documentIndex});
+      downloadText('roger-complete-treatment-report.html',html,'text/html;charset=utf-8');
+      toast('Complete treatment report downloaded. Open the HTML file in a browser.');
+    }catch(_){toast('Could not create the complete treatment report. Your records have not changed.',true);}
+  });
   q('#exportBackup').addEventListener('click',async()=>{
     try{await loadDocuments();const packed=await Promise.all(documents.map(async d=>{
       const {file,...metadata}=d;return {...metadata,dataUrl:await blobToDataUrl(file)};
