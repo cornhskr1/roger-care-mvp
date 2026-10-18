@@ -18,7 +18,7 @@ class FixedDate extends Date {
 function loadApi(code) {
   const preview = {innerHTML:''};
   const document = {addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; }};
-  const context = vm.createContext({console, structuredClone, Date:FixedDate, Intl, document, preview});
+  const context = vm.createContext({console, structuredClone, Date:FixedDate, Intl, document, preview, RogerHandoff:require('../handoff-report.js')});
   vm.runInContext(code + `
     globalThis.testApi = {
       set(value, from='2026-06-16', to='2026-06-29', mode='custom') {
@@ -231,7 +231,7 @@ test('preview uses one short lead, a list, one unknown-data note and no repeated
   assert.equal((period.match(/Jun 19, 2026/g)||[]).length,1);
   assert(brief.lead.length<80);assert.doesNotMatch(html,/Please add your overall impression/);
 });
-test('preview leaves state, legacy narrative, full HTML and PDF byte-identical to the baseline',()=>{
+test('preview leaves state and exports unchanged; narrative stays byte-identical to the baseline',()=>{
   const cases=[fixture(),fixture({observations:[observation(18,{appetite:'normal',energy:'low',nauseaOther:'Synthetic original typo.',vomiting:0,notes:'Synthetic full owner note.\nLine two.'})],medicationAdministrations:[dose(18)]}),fixture({observations:[observation(17,{gi:'Possible blood in stool?'}),observation(20,{stoolEvents:[{status:'observed',flags:['black_tarry']}],vomitFlags:['coffee_ground_like']})]})];
   for(const value of cases){
     const original=json(value);api.set(value);baseline.set(value);
@@ -239,8 +239,8 @@ test('preview leaves state, legacy narrative, full HTML and PDF byte-identical t
     api.narrative(api.data(),{brief:true});api.render();api.render();
     assert.equal(json(api.narrative(api.data())),before.narrative);
     assert.equal(before.narrative,json(baseline.narrative(baseline.data())));
-    assert.equal(api.html(),before.html);assert.equal(before.html,baseline.html());
-    assert.equal(api.pdf(),before.pdf);assert.equal(before.pdf,baseline.pdf());
+    assert.equal(api.html(),before.html);
+    assert.equal(api.pdf(),before.pdf);
     assert.equal(api.state(),saved);assert.equal(json(value),original);
   }
 });

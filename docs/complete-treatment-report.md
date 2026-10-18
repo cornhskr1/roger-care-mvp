@@ -24,3 +24,11 @@ Appendices include patient fields (not photo binaries), treatments, all lab metr
 `node scripts/test-complete-report.cjs` uses only invented data. It checks old/multiple/held/unknown administrations; full source fields, raw journal wording and Unicode; same-day weights; arbitrary labs; all question/status/correction/import fields; financial opt-in and accounting; file payload exclusion; unavailable versus empty documents; and source/state immutability across snapshot ranges.
 
 The optional `--browser` suite exercises actual popup, print trigger, HTML download, repeated navigation/ranges, view-only controls, popup errors and unavailable document access at desktop and phone widths. `--browser --webkit` checks the phone flow with WebKit, not a physical iPhone. CI also retains synthetic screenshots and Chromium-generated PDF/HTML artifacts for visual and text-preservation review. No real clinical fixtures or credentials are used.
+
+## Current progress versus original profile wording
+
+Recorded treatment progress is derived at display time from the highest valid numbered treatment record, not the profile's historical status text, array length, snapshot range or scheduled appointments. Explicit planned/held/unknown statuses and future-dated entries are not counted as recorded progress. Missing or conflicting dates are not invented. The existing eight-treatment plan supplies the denominator, not a claim that all preceding doses are present; numbers above that plan are flagged rather than clamped.
+
+The original profile status stays unchanged in the saved state and the full original-profile appendix. It is labeled historical text, with no status date inferred from a general save/sync timestamp. Current progress in the profile and both snapshot exports uses the same pure helper as the complete report. Rendering makes no clinical-data, storage, authentication or sync changes.
+
+`node scripts/test-treatment-status.cjs` checks current versus original status, ordering, gaps, duplicate/conflicting records, unknowns and state immutability. `--browser` checks refresh and navigation at desktop and phone widths using synthetic records only.

@@ -1399,6 +1399,10 @@ function totalPaid(){ return state.costs.reduce((s,c)=>s+Number(c.amountPaid||0)
 function confirmedPaid(){ return state.costs.filter(c=>c.status==='confirmed').reduce((s,c)=>s+Number(c.amountPaid||0),0); }
 function provisionalPaid(){ return state.costs.filter(c=>c.status!=='confirmed').reduce((s,c)=>s+Number(c.amountPaid||0),0); }
 function latestTreatment(){ return [...state.treatments].sort((a,b)=>b.number-a.number)[0]; }
+function recordedTreatmentStatus(){
+  const progress=RogerHandoff.treatmentProgress(state.treatments,{plannedTotal:8,asOfDate:todayIso()});
+  return {...progress,text:progress.text+(progress.date?` · ${fmtDate(progress.date)}`:'')+(progress.warning?`. ${progress.warning}`:'')};
+}
 function latestObservation(){ return [...state.observations].sort((a,b)=>b.date.localeCompare(a.date))[0]; }
 function metricLatest(name){ return [...state.labs].filter(x=>x.metric===name).sort((a,b)=>b.date.localeCompare(a.date))[0]; }
 
@@ -1795,7 +1799,7 @@ async function readCompleteReportDocuments(){
 function buildCompleteTreatmentReport({includeFinancialLedgers=false,generatedAt=new Date().toISOString(),documentIndex={rows:documents,status:'unverified'}}={}){
   if(typeof RogerHandoff==='undefined')throw Error('Complete report module is unavailable.');
   const model=RogerHandoff.buildModel(state,documentIndex.rows,{
-    includeFinancialLedgers,generatedAt,documentIndexStatus:documentIndex.status,
+    includeFinancialLedgers,generatedAt,asOfDate:todayIso(),documentIndexStatus:documentIndex.status,
     recordSavedAt:state?._savedAt||null,sharedUpdatedAt:cloudUpdatedAt,
     unpublishedLocal:Boolean(unpublishedLocal)
   });
@@ -2551,8 +2555,9 @@ function categoryMeters(){
 }
 
 function renderProfileDetails(){
-  const p=state.profile;
-  els.profileDetails.innerHTML=[['Name',p.fullName||p.name],['KSU patient ID',p.patientIds?.ksu],['Optimum patient ID',p.patientIds?.optimum],['Species',p.species],['Breed',p.breed],['Sex',`${p.sex} · ${p.reproductiveStatus}`],['DOB',fmtDate(p.dob)],['Diagnosis',p.diagnosis],['Current status',p.currentStatus]].filter(([,value])=>value).map(x=>`<div class="profile-line"><div class="profile-key">${x[0]}</div><div class="profile-value">${esc(x[1])}</div></div>`).join('');
+  const p=state.profile,historicalOpen=Boolean(q('#historicalProfileStatus')?.open);
+  els.profileDetails.innerHTML=[['Name',p.fullName||p.name],['KSU patient ID',p.patientIds?.ksu],['Optimum patient ID',p.patientIds?.optimum],['Species',p.species],['Breed',p.breed],['Sex',`${p.sex} · ${p.reproductiveStatus}`],['DOB',fmtDate(p.dob)],['Diagnosis',p.diagnosis],['Current status',recordedTreatmentStatus().text]].filter(([,value])=>value).map(x=>`<div class="profile-line"><div class="profile-key">${x[0]}</div><div class="profile-value">${esc(x[1])}</div></div>`).join('');
+  if(p.currentStatus!==undefined&&p.currentStatus!==null&&String(p.currentStatus)!=='')els.profileDetails.innerHTML+=`<details id="historicalProfileStatus" ${historicalOpen?'open':''}><summary>Original profile note (historical)</summary><p class="field-help">Status date not recorded. This original wording is preserved, not used as current treatment progress.</p><div class="original-profile-status">${esc(p.currentStatus)}</div></details>`;
 }
 
 // Documents: IndexedDB stores the actual file blob locally.
@@ -3404,7 +3409,8 @@ function buildCareSummaryPdf(){
   wrap(`KSU ${p.patientIds?.ksu||'unrecorded'} | Optimum ${p.patientIds?.optimum||'unrecorded'} | ${p.breed} | Prepared ${new Date().toLocaleDateString('en-US')}`,9);
   heading(`How has ${p.name} been doing?`);
   wrap(`${snapshot.range.label} | ${range} | ${snapshot.range.context} | ${snapshot.rows.length} day(s) with owner observations.`,9);
-  wrap(`Diagnosis: ${p.diagnosis}. Status: ${p.currentStatus}.`);
+  wrap(`Diagnosis: ${p.diagnosis}. Recorded treatment progress: ${recordedTreatmentStatus().text}.`);
+  if(p.currentStatus!==undefined&&p.currentStatus!==null&&String(p.currentStatus)!=='')wrap(`Original profile status (historical text; status date not recorded): ${p.currentStatus}`,9);
   const narrative=careSnapshotNarrative(snapshot);
   heading('Owner update');
   narrative.forEach(paragraph=>wrap(paragraph,10,false,8));
@@ -3506,7 +3512,7 @@ function buildCareSummaryHtml(){
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(p.fullName||p.name)} Care Snapshot</title><style>body{font-family:Arial,sans-serif;max-width:1000px;margin:24px auto;padding:0 18px;color:#17201d;line-height:1.4}h1{margin-bottom:4px}h2{margin:20px 0 7px;border-bottom:1px solid #ddd;padding-bottom:5px}p{margin:7px 0}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:left;vertical-align:top}li{margin:4px 0}.note{background:#f3f6f5;padding:12px;border-radius:8px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.snapshot-item{border:1px solid #ddd;border-radius:9px;padding:10px}.snapshot-item strong{display:block;margin-bottom:4px}.small{font-size:12px;color:#555}.snapshot{border:2px solid #d9d1e8;border-radius:12px;padding:16px}@media print{body{margin:0;padding:0;font-size:11px}.snapshot{border:0;padding:0;break-after:page}.grid{gap:8px}h2{margin-top:13px}li{margin:2px 0}tr{break-inside:avoid}}</style></head><body>
   <section class="snapshot"><h1>${esc(p.fullName||p.name)} · Care Snapshot</h1><p><strong>${esc(snapshot.range.label)}:</strong> ${fmtDate(snapshot.start)}${snapshot.end!==snapshot.start?`–${fmtDate(snapshot.end)}`:''} · ${esc(snapshot.range.context)} · Prepared ${new Date().toLocaleDateString('en-US')}</p><p><strong>KSU:</strong> ${esc(p.patientIds?.ksu||'Not recorded')} · <strong>Optimum:</strong> ${esc(p.patientIds?.optimum||'Not recorded')} · ${esc(p.breed)} · DOB ${fmtDate(p.dob)}</p>
-  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Status:</strong> ${esc(p.currentStatus)}</p>
+  <p class="note"><strong>Diagnosis:</strong> ${esc(p.diagnosis)}<br><strong>Recorded treatment progress:</strong> ${esc(recordedTreatmentStatus().text)}</p>${p.currentStatus!==undefined&&p.currentStatus!==null&&String(p.currentStatus)!==''?`<p class="small"><strong>Original profile status (historical text; status date not recorded):</strong> ${esc(p.currentStatus)}</p>`:''}
   <h2>How has ${esc(p.name)} been doing?</h2><div class="note"><strong>Owner update</strong>${careSnapshotNarrative(snapshot).map(paragraph=>`<p>${esc(paragraph)}</p>`).join('')}</div>${careSnapshotOwnerNotesHtml(snapshot)}<h2>Structured detail</h2><div class="grid"><div class="snapshot-item"><strong>Appetite</strong>${esc(snapshot.appetiteText)}</div><div class="snapshot-item"><strong>Energy</strong>${esc(snapshot.energyText)}</div><div class="snapshot-item"><strong>Nausea-associated observations</strong>${esc(snapshot.nauseaText)}</div><div class="snapshot-item"><strong>GI / stool</strong>${esc(snapshot.stoolText)}</div><div class="snapshot-item"><strong>Vomiting</strong>${esc(snapshot.vomitingText)}</div><div class="snapshot-item"><strong>Weight</strong>${esc(snapshot.weightText)}</div></div>
   <h2>Treatment & medication context</h2><p>${esc(snapshot.clinicalText)}</p><p>${esc(snapshot.medicationText)}</p>
   <h2>Questions for care team</h2><ul>${questionRows||'<li>No open owner questions recorded.</li>'}</ul>
