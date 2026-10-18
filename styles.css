@@ -592,3 +592,6 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #a2
 .report-financial-option input{width:20px;height:20px;flex:0 0 auto}
 .complete-report-actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 10px}
 .complete-report-actions button{min-height:44px;flex:1 1 200px}
+
+/* Original profile wording is history, never the current progress summary. */
+#historicalProfileStatus{margin-top:14px;font-size:13px}#historicalProfileStatus summary{cursor:pointer;color:var(--muted)}.original-profile-status{white-space:pre-wrap;overflow-wrap:anywhere}.profile-value{min-width:0;overflow-wrap:anywhere}

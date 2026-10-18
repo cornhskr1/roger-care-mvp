@@ -32,6 +32,7 @@ jobs:
           node scripts/test-appointments.cjs
           node scripts/test-snapshot-readability.cjs
           node scripts/test-complete-report.cjs
+          node scripts/test-treatment-status.cjs
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('data/seed.json','utf8')); console.log('seed.json OK')"
       - name: Verify required app assets
@@ -74,6 +75,10 @@ jobs:
         env:
           QA_SCREENSHOT_DIR: qa-screenshots
         run: node scripts/test-complete-report.cjs --browser --webkit
+      - name: Verify current treatment status and original profile preservation
+        env:
+          QA_SCREENSHOT_DIR: qa-screenshots
+        run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-treatment-status.cjs --browser
       - name: Verify live-record refresh and service-worker upgrades with synthetic records
         run: CHROMIUM_PATH="$(node -p "require('playwright').chromium.executablePath()")" node scripts/test-service-worker.cjs --browser
       - name: Retain synthetic UI screenshots

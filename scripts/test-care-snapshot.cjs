@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const context = vm.createContext({
-  console, structuredClone, Date, Intl,
+  console, structuredClone, Date, Intl, RogerHandoff:require('../handoff-report.js'),
   document: {addEventListener() {}},
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8') + `
