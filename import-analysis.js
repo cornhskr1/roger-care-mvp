@@ -21,7 +21,7 @@
     const readings=[];
     // Keep this deliberately narrow: an explicit weight label or "weighed",
     // a decimal measurement and its unit. Never infer units from a bare number.
-    const labeled=/(?:\bweighed|(?:^|[\n;])\s*(?:(?:body|current)\s+)?weight)\s*:?\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\b(?![\w/])(?:\s*\(\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\s*\))?/gi;
+    const labeled=/(?:\bweighed|(?:^|[\n;]|[ \t]{2,})\s*(?:(?:body|current)\s+)?weight)\s*:?\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\b(?![\w/])(?:\s*\(\s*(\d+(?:\.\d+)?|\.\d+)\s*(kg|lbs?)\s*\))?/gi;
     const unitLabel=/(?:^|[\n;])\s*(?:(?:body|current)\s+)?weight\s*\(\s*(kg|lbs?)\s*\)\s*:?\s*(\d+(?:\.\d+)?|\.\d+)(?=$|[\s;)])/gi;
     let invalid=false;
     const add=(value,unit,evidence,pairedValue,pairedUnit)=>{
@@ -39,7 +39,7 @@
     for(const match of text.matchAll(labeled)){
       const prefix=text.slice(0,match.index).split(/[\n.!?;]/).at(-1);
       const suffix=text.slice(match.index+match[0].length).split(/[\n.!?;]/)[0];
-      if(/^weighed/i.test(match[0])&&/\b(previous(?:ly)?|last|formerly|historical|prior)\b|\b\d+\s*(?:days?|weeks?|months?)\s+ago\b/i.test(`${prefix} ${suffix}`))continue;
+      if(/\b(previous(?:ly)?|last|formerly|historical|prior|target|ideal)\b|\b\d+\s*(?:days?|weeks?|months?)\s+ago\b/i.test(`${prefix} ${suffix}`))continue;
       if(match[3]===undefined&&/^\s*\(\s*[-+]?\d/.test(text.slice(match.index+match[0].length))){invalid=true;continue;}
       add(match[1],match[2],match[0],match[3],match[4]);
     }
@@ -87,17 +87,36 @@
     }
     if(kind==='summary'){
       const section=normalized.split(/Treatments Performed/i)[1]?.split(/Potential side effects|Medications|Diagnostics/i)[0]||'';
-      const dose=section.match(/Vinblastine\s*\(\s*(\d+(?:\.\d+)?)\s*mg\s*;\s*(\d+(?:\.\d+)?)\s*mg\s*\/\s*m2\s*\)/i);
-      const ordinal=section.match(/treatment\s*#\s*(\d+)\s*of\s*8/i)||normalized.match(/vinblastine treatment\s*#\s*(\d+)\s*\/\s*8/i);
+      const forwardDose=section.match(/Vinblastine\s*\(\s*(\d+(?:\.\d+)?)\s*mg\s*;\s*(\d+(?:\.\d+)?)\s*mg\s*\/\s*m2\s*\)/i);
+      const reverseDose=section.match(/Vinblastine\s*\(\s*(\d+(?:\.\d+)?)\s*mg\s*\/\s*m2\s*;\s*(\d+(?:\.\d+)?)\s*mg\s*(?:IV)?\s*\)/i);
+      if(forwardDose&&reverseDose)throw Error('Multiple administered dose formats need manual review. No changes were made.');
+      const dose=forwardDose||reverseDose;
+      const ordinal=section.match(/treatment\s*#\s*(\d+)\s*of\s*8/i)||normalized.match(/vinblastine treatment\s*#\s*(\d+)\s*\/\s*8/i)||normalized.match(/Reason:[^\n]*\bvinblastine\s*#\s*(\d+)\b/i);
       if(!dose||!ordinal)throw Error('The administered dose or treatment number is unclear. No changes were made.');
       if(num(ordinal[1])<1||num(ordinal[1])>8)throw Error('The treatment number is outside Roger’s 8-dose course. No changes were made.');
       const weightExtraction=summaryWeight(normalized);
-      return {kind,date,number:num(ordinal[1]),doseMg:num(dose[1]),doseMgM2:num(dose[2]),weightLb:weightExtraction.weightLb??null,weightExtraction,filename,evidence:dose[0]};
+      return {kind,date,number:num(ordinal[1]),doseMg:num(dose[reverseDose?2:1]),doseMgM2:num(dose[reverseDose?1:2]),weightLb:weightExtraction.weightLb??null,weightExtraction,filename,evidence:dose[0]};
     }
     if(kind==='invoice'){
       const invoice=normalized.match(/Invoice\s*#\s*(\d+)/i);
-      const paid=normalized.match(/(?:Payments Total|Payments)\s*:?\s*\$\s*([\d,]+\.\d{2})/i);
-      const total=normalized.match(/\bTotal\s*\$\s*([\d,]+\.\d{2})/i);
+      let paid=normalized.match(/(?:Payments Total|Payments)\s*:?\s*\$\s*([\d,]+\.\d{2})/i);
+      let total=normalized.match(/\bTotal\s*\$\s*([\d,]+\.\d{2})/i);
+      // Some PDF text layers emit the entire subtotal column last. Accept only
+      // the complete, reconciled zero-balance footer, never a guessed amount.
+      if(!paid||!total){
+        const column=normalized.match(/(?:^|\n)SUBTOTAL\s*\n([\s\S]+)$/);
+        const labels=/Subtotal\s+Total\s+Payments[\s\S]*Refunds\s+Payments\s+Total:\s+Payments\s+Unapplied:\s+Invoice\s+Balance:\s+Account\s+Balance:/i.test(normalized);
+        const rows=column?.[1].trim().split(/\n/).map(x=>x.trim()).filter(Boolean);
+        if(labels&&rows?.length>9&&rows.every(x=>/^\(?\$[\d,]+\.\d{2}[)}]?$/.test(x))){
+          const amounts=rows.map(x=>x.startsWith('(')&&!/^\(\$0\.00[)}]$/.test(x)?NaN:num(x.replace(/[\$(){}]/g,'')));
+          const footer=amounts.slice(-9),items=amounts.slice(0,-9);
+          const [subtotal,grand,payments,payment,refund,payTotal,unapplied,invoiceBalance,accountBalance]=footer;
+          const equal=(a,b)=>Math.abs(a-b)<.005;
+          if(equal(items.reduce((a,b)=>a+b,0),subtotal)&&[subtotal,payments,payment,payTotal].every(x=>equal(x,grand))&&[refund,unapplied,invoiceBalance,accountBalance].every(x=>equal(x,0))){
+            paid=['',String(payTotal)];total=['',String(grand)];
+          }
+        }
+      }
       if(!invoice||!paid||!total||Math.abs(num(paid[1])-num(total[1]))>.005)throw Error('Invoice number, total, or payment could not be reconciled. No changes were made.');
       const cerenia=normalized.match(/Cerenia\s*60\s*mg[^\n]*?\b(\d+)\s*tab[^\n]*?\$\s*([\d,]+\.\d{2})\s*(?:LG\d+\s*)?\$\s*([\d,]+\.\d{2})/i);
       return {kind,date,invoiceNumber:invoice[1],amountPaid:num(paid[1]),cereniaQuantity:cerenia?num(cerenia[1]):null,cereniaPaid:cerenia?num(cerenia[3]):null,filename,evidence:`Invoice #${invoice[1]} · Total $${total[1]} · Payments $${paid[1]}`};

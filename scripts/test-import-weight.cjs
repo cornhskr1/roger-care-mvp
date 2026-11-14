@@ -69,8 +69,24 @@ for(const [label,value,unit,pounds] of [
   const d=draft(label);assert.equal(d.weightLb,pounds);assert.equal(d.weightExtraction.value,value);assert.equal(d.weightExtraction.unit,unit);assert.equal(d.weightExtraction.status,'extracted');
 });
 
+test('reversed dose units and visit reason treatment number remain distinct',()=>{
+  const text=`${patientHeader}\nFriday, January 16, 2026\nReason: Restaging, vinblastine #3\nReferring Practice:        Weight: 20kg\nTreatments Performed\nVinblastine (2.5 mg/m²; 2 mg IV) administered via a vein.\nMedications`;
+  const d=RogerImport.analyze(text,'summary');
+  assert.equal(d.number,3);assert.equal(d.doseMg,2);assert.equal(d.doseMgM2,2.5);assert.equal(d.weightLb,44.09);
+  assert.throws(()=>RogerImport.analyze(text.replace('administered via a vein.','administered via a vein. Vinblastine (2 mg; 2.5 mg/m2)'),'summary'));
+  assert.throws(()=>RogerImport.analyze(text.replace('vinblastine #3','vinblastine'),'summary'));
+  assert.throws(()=>RogerImport.analyze(text.replace('2 mg IV','2 ml IV'),'summary'));
+});
+test('column-major invoice requires complete arithmetic and zero balances',()=>{
+  const text=`${patientHeader}\nFriday, January 16, 2026\nInvoice #900001\nSubtotal\nTotal\nPayments\nAccount\nRefunds\nPayments Total:\nPayments Unapplied:\nInvoice Balance:\nAccount Balance:\nSUBTOTAL\n$10.00\n$25.00\n$35.00\n$35.00\n$35.00\n$35.00\n$0.00\n$35.00\n($0.00}\n$0.00\n$0.00`;
+  const d=RogerImport.analyze(text,'invoice');assert.equal(d.amountPaid,35);assert.equal(d.invoiceNumber,'900001');assert.equal(d.cereniaQuantity,null);
+  assert.equal(RogerImport.analyze(text.replaceAll('Payments Total:', 'Payments   Total:').replaceAll('Invoice Balance:', 'Invoice   Balance:'),'invoice').amountPaid,35);
+  for(const broken of [text.replace('$25.00','$24.00'),text.replace('Payments Total:','Unknown:'),text.replace('($0.00}','($1.00)'),text+'\n$5.00',text.replace('$10.00','not readable')])assert.throws(()=>RogerImport.analyze(broken,'invoice'));
+  const inline=RogerImport.analyze(`${patientHeader}\nFriday, January 16, 2026\nInvoice #900002\nTotal $40.00\nPayments Total: $40.00`,'invoice');assert.equal(inline.amountPaid,40);
+});
+
 test('missing, unitless, target and non-weight values are not inferred',()=>{
-  for(const text of ['', 'Weight: 20', '20 kg', 'Dose: 20 mg', 'Target weight: 20 kg', 'Previous weight: 20 kg', 'Ideal weight: 20 kg', 'Weight: 20 kg/m2', 'The patient previously weighed 40 lb', 'Weight (kg): 22,5', 'Weight (kg): 22.5.7', 'Weight (kg): 22e3', 'The patient weighed 40 lb at his last visit.', 'The patient weighed 40 lb previously.']){
+  for(const text of ['', 'Weight: 20', '20 kg', 'Dose: 20 mg', 'Target weight: 20 kg', 'Previous weight: 20 kg', 'Previous  Weight: 20 kg', 'Target  Weight: 20 kg', 'Ideal weight: 20 kg', 'Weight: 20 kg/m2', 'The patient previously weighed 40 lb', 'Weight (kg): 22,5', 'Weight (kg): 22.5.7', 'Weight (kg): 22e3', 'The patient weighed 40 lb at his last visit.', 'The patient weighed 40 lb previously.']){
     const d=draft(text);assert.equal(d.weightLb,null,text);assert.equal(d.weightExtraction.status,'missing',text);
   }
 });
