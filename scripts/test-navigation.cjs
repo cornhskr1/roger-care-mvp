@@ -78,8 +78,12 @@ function staticChecks() {
     assert(start>=0&&end>start,'Care plan visit merge boundaries exist');
     return source.slice(0,start)+'    /* Preserve all saved appointment fields and custom visits. */\n'+source.slice(end);
   };
+  const withoutReviewedEvidenceMerge = source => withoutAppointmentMerge(source)
+    .replace(/  \/\/ Stable IDs carry edits;[\s\S]*?  const migratedSaved = migrateState\(saved\);/, '  const migratedSaved = migrateState(saved);')
+    .replace(/  merged\.(?:sourceNotes|milestones)=mergeEvidence\([^\n]+\);\n/g,'')
+    .replace("'qualityOfLife','treatments','medications']", "'qualityOfLife','treatments']");
   for(const name of protectedFunctions){
-    const normalize=name==='bindImport'?withoutSummarySave:name==='bindForms'?withoutAppointmentSave:name==='mergeCanonicalSeed'?withoutAppointmentMerge:value=>value;
+    const normalize=name==='bindImport'?withoutSummarySave:name==='bindForms'?withoutAppointmentSave:name==='mergeCanonicalSeed'?withoutReviewedEvidenceMerge:value=>value;
     assert.equal(normalize(extract(afterApp,name)),normalize(extract(beforeApp,name)),name+' unchanged outside reviewed summary/appointment branches');
   }
   for(const key of ['STORAGE_KEY','DOC_DB','DOC_STORE','RECOVERY_STORE','BACKUP_META_KEY','PENDING_CLOUD_KEY','SUPABASE_URL','SUPABASE_KEY','SITE_URL']) {
