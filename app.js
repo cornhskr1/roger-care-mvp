@@ -208,7 +208,20 @@ function mergeCanonicalSeed(canonical, saved){
     return [...map.values()];
   };
 
+  // Stable IDs carry edits; legacy rows without IDs are retained unless exactly
+  // identical. Do not coalesce different evidence merely by date/title.
+  const mergeEvidence = (canonicalRows=[], savedRows=[]) => {
+    const rows=structuredClone(canonicalRows);
+    for(const row of savedRows){
+      const index=row.id?rows.findIndex(x=>x.id===row.id):-1;
+      if(index>=0)rows[index]={...rows[index],...structuredClone(row)};
+      else if(!rows.some(x=>JSON.stringify(x)===JSON.stringify(row)))rows.push(structuredClone(row));
+    }
+    return rows;
+  };
   const migratedSaved = migrateState(saved);
+  merged.sourceNotes=mergeEvidence(canonical.sourceNotes,migratedSaved.sourceNotes);
+  merged.milestones=mergeEvidence(canonical.milestones,migratedSaved.milestones);
   merged.observations = mergeById(canonical.observations, migratedSaved.observations, false);
   merged.qualityOfLife = mergeById(canonical.qualityOfLife||[],migratedSaved.qualityOfLife||[],true);
   merged.costs = mergeById(canonical.costs, migratedSaved.costs, true);
@@ -235,7 +248,7 @@ function mergeCanonicalSeed(canonical, saved){
   merged._savedAt = migratedSaved._savedAt||null;
   for (const correction of merged.recordCorrections){
     const rows=merged[correction.collection];
-    if(!['observations','medicationAdministrations','costs','qualityOfLife','treatments'].includes(correction.collection)||!Array.isArray(rows))continue;
+    if(!['observations','medicationAdministrations','costs','qualityOfLife','treatments','medications'].includes(correction.collection)||!Array.isArray(rows))continue;
     const index=rows.findIndex(row=>row.id===correction.id);
     if(index>=0)rows[index]={...rows[index],...correction.after};
   }
@@ -1132,7 +1145,8 @@ function selectMedicationDefaultDose(){
 function suggestTabletQuantity(){
   const med=state.medications.find(m=>m.id===q('#medicationSelect').value);
   const match=q('#medicationDose').value.match(/^(\d+(?:\.\d+)?)\s*mg$/i);
-  q('#medicationTabletQuantity').value=match&&med?.tabletStrengthMg?Number(match[1])/med.tabletStrengthMg:'';
+  const strength=medicationStrengthAtDate(med,q('#medicationDate')?.value||todayIso());
+  q('#medicationTabletQuantity').value=match&&strength?Number(match[1])/strength:'';
 }
 
 function configureMedicationPurchase(){
@@ -1146,7 +1160,19 @@ function configureMedicationPurchase(){
   q('#purchaseCostId').innerHTML='<option value="">New expense — add to total care cost</option>'+state.costs.map(c=>`<option value="${esc(c.id)}">Included in: ${fmtDate(c.date)} · ${esc(c.label)} · ${money(c.amountPaid)}</option>`).join('');
 }
 
+function medicationStrengthAtDate(medication,date){
+  if(medication?.prescribedEffectiveDate&&(!date||date<medication.prescribedEffectiveDate))return null;
+  const strength=medication?.tabletStrengthMg;
+  return typeof strength==='number'&&Number.isFinite(strength)&&strength>0?strength:null;
+}
+
 function defaultDoseForMedication(medId,date){
+  const medication=(state.medications||[]).find(m=>m.id===medId);
+  // Reviewed prescriptions must not silently fall back to an obsolete dose.
+  if(medication?.prescribedEffectiveDate&&date>=medication.prescribedEffectiveDate){
+    const dose=medication.prescribedDoseMg;
+    return !medication.prescribedDoseRequiresReview&&typeof dose==='number'&&Number.isFinite(dose)&&dose>0?`${dose} mg`:'';
+  }
   if(medId==='med-prednisone') return date>='2026-10-02'?'10 mg':'20 mg';
   if(medId==='med-cerenia') return '60 mg';
   if(medId==='med-metronidazole') return '250 mg';
@@ -1840,6 +1866,7 @@ function careSnapshotDateList(rows){
 function medicationCourseSummary(course,{start='',end='9999-12-31'}={}){
   const name=medicationName(course.medicationId),dose=course.dose||'dose not recorded',frequency=course.frequency||'frequency not recorded';
   const prefix=`${name} ${dose}, ${frequency}`;
+  if(/^prescribed\b/i.test(course.status||''))return `${prefix}: prescribed ${fmtDate(course.startDate)}; administration dates not confirmed`;
   if(course.status?.includes('owner-confirmed daily given')){
     const allDates=medicationCourseDailyDates(course),dates=allDates.filter(date=>date>=start&&date<=end);
     if(dates.length)return `${prefix}: daily use confirmed for ${careSnapshotDateList(dates)} from the owner-reported course and dated dose records`;
@@ -2385,7 +2412,8 @@ function tabletQuantity(administration){
   // Physical tablet counts need a known tablet strength and a simple recorded mg dose.
   const med=state.medications.find(m=>m.id===administration.medicationId);
   const match=String(administration.dose||'').match(/^(\d+(?:\.\d+)?)\s*mg$/i);
-  return med?.tabletStrengthMg&&match?Number(match[1])/med.tabletStrengthMg:null;
+  const strength=medicationStrengthAtDate(med,administration.date);
+  return strength&&match?Number(match[1])/strength:null;
 }
 
 function medicationStats(id,window=null){
@@ -2409,7 +2437,7 @@ function renderMedicationOverview(window=null){
     return `<div class="cerenia-cycle"><span>Chemo #${t.number}</span><strong>${n.tablets}${n.unknown?' + ?':''}</strong><small>tablets given</small></div>`;
   }).join('');
   return `<section class="medication-overview"><div class="section-kicker">MEDICATION USE & COST</div><h3>${heading}</h3>
-    <div class="medication-kpis"><div><strong>${c.tablets}${c.unknown?' + ?':''}</strong><span>60 mg tablets given</span></div><div><strong>${nauseaDates.size}</strong><span>recorded nausea days</span></div><div class="owner-only"><strong>${total.purchased}</strong><span>tablets purchased to date</span></div><div class="owner-only"><strong>${money(total.spent)}</strong><span>Cerenia spent to date</span></div></div>
+    <div class="medication-kpis"><div><strong>${c.tablets}${c.unknown?' + ?':''}</strong><span>tablets given · strengths may differ</span></div><div><strong>${nauseaDates.size}</strong><span>recorded nausea days</span></div><div class="owner-only"><strong>${total.purchased}</strong><span>tablets purchased to date</span></div><div class="owner-only"><strong>${money(total.spent)}</strong><span>Cerenia spent to date</span></div></div>
     <p class="medication-note">${treated} of ${nauseaDates.size} recorded nausea days${nauseaDates.size?` (${Math.round(treated/nauseaDates.size*100)}%)`:""} have a Cerenia dose logged on the same date. ${c.last?`Last given: ${fmtDate(c.last)}.`:'No Cerenia dose logged in this window.'} Counts reflect recorded administrations; daily prescriptions alone do not add pills.</p>
     <div class="medication-note owner-only">Average purchase cost: ${total.unitCost==null?'not recorded':money(total.unitCost)+' / tablet'}. ${window?`${c.purchased} tablets purchased for ${money(c.spent)} during this window. `:''}Medication spending is already included in the visit or purchase bills.</div>
     ${!window?`<div class="cerenia-cycle-grid">${cycleCounts}</div>`:''}
@@ -2435,7 +2463,7 @@ function renderMedications(){
   const currentPred=(state.medicationCourses||[]).filter(c=>c.medicationId==='med-prednisone'&&!c.endDate).sort((a,b)=>a.startDate.localeCompare(b.startDate)).at(-1);
 
   els.medicationSummary.innerHTML=`<div class="summary-grid medication-grid">
-    <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-cerenia').tablets}</div><div class="summary-label">CERENIA TABLETS</div><div class="item-meta">60 mg PRN</div></div>
+    <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-cerenia').tablets}</div><div class="summary-label">CERENIA TABLETS</div><div class="item-meta">${esc((state.medications||[]).find(m=>m.id==='med-cerenia')?.prescribedDose||'See prescription')}</div></div>
     <div class="summary-tile med-summary owner-med"><div class="summary-value">${medicationStats('med-metronidazole').tablets}</div><div class="summary-label">METRONIDAZOLE TABLETS</div><div class="item-meta">250 mg PRN</div></div>
     <div class="summary-tile med-summary ksu-med"><div class="summary-value">${esc(currentPred?.dose||'Not recorded')}</div><div class="summary-label">PREDNISONE PLAN ON FILE</div><div class="item-meta">${esc(currentPred?.frequency||'Frequency not recorded')}</div></div>
     <div class="summary-tile med-summary neutral-med"><div class="summary-value">${traz.length}</div><div class="summary-label">TRAZODONE DAYS</div><div class="item-meta">200 mg pre-visit</div></div>

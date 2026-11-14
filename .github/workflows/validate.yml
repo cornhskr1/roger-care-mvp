@@ -33,6 +33,7 @@ jobs:
           node scripts/test-snapshot-readability.cjs
           node scripts/test-complete-report.cjs
           node scripts/test-treatment-status.cjs
+          node scripts/test-reviewed-records.cjs
       - name: Validate seed JSON
         run: node -e "JSON.parse(require('fs').readFileSync('data/seed.json','utf8')); console.log('seed.json OK')"
       - name: Verify required app assets

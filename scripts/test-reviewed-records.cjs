@@ -1,0 +1,24 @@
+'use strict';
+// Synthetic records only; never loads private backup or production seed.
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const {fixture}=require('./test-navigation.cjs');
+const code=fs.readFileSync(require('node:path').join(__dirname,'../app.js'),'utf8');
+const ctx=vm.createContext({console,structuredClone,Date,Intl,document:{addEventListener(){}}});
+vm.runInContext(code+`\nglobalThis.api={merge:mergeCanonicalSeed,set(s){state=s;},dose:defaultDoseForMedication,tablets:tabletQuantity,course:medicationCourseSummary,strength:medicationStrengthAtDate};`,ctx);
+const plain=x=>JSON.parse(JSON.stringify(x)),base=structuredClone(fixture),saved=structuredClone(fixture);
+base.sourceNotes=[{id:'SYN-existing',summary:'old'}];saved.sourceNotes=[{id:'SYN-existing',summary:'reviewed'},{id:'SYN-new',summary:'new'}];
+base.milestones=[{date:'2026-01-01',title:'Legacy'}];saved.milestones=[{date:'2026-01-01',title:'Legacy'},{date:'2026-01-01',title:'Legacy',detail:'Additional evidence'},{id:'SYN-milestone',date:'2026-01-02',title:'new'}];
+base.medications=[{id:'SYN-med',tabletStrengthMg:30,prescribedDose:'old'}];saved.medications=structuredClone(base.medications);
+saved.recordCorrections=[{collection:'medications',id:'SYN-med',before:structuredClone(base.medications[0]),after:{tabletStrengthMg:15,prescribedDose:'reviewed',prescribedDoseMg:45,prescribedEffectiveDate:'2026-02-01'}}];
+const merged=ctx.api.merge(base,saved);
+assert.equal(merged.sourceNotes.length,2);assert.equal(merged.sourceNotes[0].summary,'reviewed');assert.equal(merged.milestones.length,3);assert.equal(merged.medications[0].tabletStrengthMg,15);
+const again=ctx.api.merge(base,structuredClone(merged));assert.deepEqual(plain(again.sourceNotes),plain(merged.sourceNotes));assert.deepEqual(plain(again.milestones),plain(merged.milestones));assert.deepEqual(plain(again.medications),plain(merged.medications));
+ctx.api.set(merged);assert.equal(ctx.api.dose('SYN-med','2026-02-02'),'45 mg');assert.equal(ctx.api.dose('SYN-med','2026-01-31'),'');
+merged.medications[0].prescribedDoseRequiresReview=true;assert.equal(ctx.api.dose('SYN-med','2026-02-02'),'');
+merged.medications[0].prescribedDoseRequiresReview=false;merged.medications[0].prescribedDoseMg=null;assert.equal(ctx.api.dose('SYN-med','2026-02-02'),'');
+assert.equal(ctx.api.strength(merged.medications[0],'2026-01-31'),null);
+assert.equal(ctx.api.tablets({medicationId:'SYN-med',date:'2026-01-31',dose:'30 mg',status:'given'}),null);
+assert.equal(ctx.api.tablets({medicationId:'SYN-med',dose:'30 mg',tabletQuantity:1,status:'given'}),1);
+assert(!code.includes('<span>60 mg tablets given</span>'));assert(!code.includes('<div class="item-meta">60 mg PRN</div>'));
+assert.match(ctx.api.course({medicationId:'SYN-med',dose:'15 mg',frequency:'Every other day',startDate:'2026-02-01',endDate:null,status:'Prescribed only; actual doses unknown'}),/prescribed.*administration dates not confirmed/);
+console.log('Reviewed-record preservation and prescription defaults: passed');
