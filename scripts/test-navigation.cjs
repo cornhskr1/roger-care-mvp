@@ -163,6 +163,20 @@ function vmChecks() {
   assert.match(document.querySelector('#timelineEntries').innerHTML,/Oct 13/);
   vm.runInContext("timelineFilter='owner';renderTimeline()",ctx);assert(document.querySelector('#timelineUpcoming').hidden);
   assert.equal(JSON.stringify(ctx.fixture),original,'Navigation and timeline/plan rendering preserve record exactly');
+  const bill={category:'mixed',amountPaid:70.01,categoryAllocations:[{category:'treatment',amount:20.01},{category:'restaging',amount:40},{category:'medication',amount:10}]};
+  ctx.fixture.costs.push(bill);
+  const itemized=JSON.stringify(ctx.fixture);
+  const categoryTotals=vm.runInContext('categoryMeters()',ctx);
+  assert.match(categoryTotals,/Chemo treatment<\/span><strong>\$70\.01/);
+  assert.match(categoryTotals,/Restaging<\/span><strong>\$40\.00/);
+  assert.match(categoryTotals,/Medication<\/span><strong>\$10\.00/);
+  assert.doesNotMatch(categoryTotals,/Mixed care/);
+  assert.equal(vm.runInContext('money(totalPaid())',ctx),'$120.01');
+  assert.match(vm.runInContext('renderCostAllocations(state.costs.at(-1))',ctx),/Care type breakdown[\s\S]*Chemo treatment[\s\S]*Restaging[\s\S]*Medication/);
+  assert.equal(JSON.stringify(ctx.fixture),itemized,'Itemized rendering preserves the original bill');
+  bill.amountPaid=75;
+  assert.match(vm.runInContext('categoryMeters()',ctx),/Mixed care<\/span><strong>\$75\.00/);
+  assert.equal(vm.runInContext('renderCostAllocations(state.costs.at(-1))',ctx),'');
   console.log('VM: 16 routes, defaults, fallback, history, repeated clicks, selected panels, chronological recorded/appointment separation, and immutable navigation passed');
 }
 module.exports={fixture,expectedRoutes};
