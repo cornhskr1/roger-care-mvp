@@ -66,11 +66,12 @@ function staticChecks() {
     assert(start>=0&&end>start,'Summary save branch boundaries exist');
     return source.slice(0,start)+'      /* reviewed summary save */\n'+source.slice(end);
   };
-  const withoutAppointmentSave = source => {
+  const withoutAppointmentAndCostSaves = source => {
     const start=source.indexOf("  q('#carePlanForm').addEventListener('submit'");
-    const end=source.indexOf("  q('#costCorrectionForm')",start);
-    assert(start>=0&&end>start,'Care plan save boundaries exist');
-    return source.slice(0,start)+'  /* Appointment dates now use an isolated audited editor; this form saves instructions only. */\n'+source.slice(end);
+    const cost=source.indexOf("  q('#costCorrectionForm')",start);
+    const end=source.indexOf("  q('#documentForm')",cost);
+    assert(start>=0&&cost>start&&end>cost,'Care plan and cost correction save boundaries exist');
+    return source.slice(0,start)+'  /* Reviewed care plan and cost correction handlers. */\n'+source.slice(end);
   };
   const withoutAppointmentMerge = source => {
     const start=source.indexOf('    visits:');
@@ -83,8 +84,8 @@ function staticChecks() {
     .replace(/  merged\.(?:sourceNotes|milestones)=mergeEvidence\([^\n]+\);\n/g,'')
     .replace("'qualityOfLife','treatments','medications']", "'qualityOfLife','treatments']");
   for(const name of protectedFunctions){
-    const normalize=name==='bindImport'?withoutSummarySave:name==='bindForms'?withoutAppointmentSave:name==='mergeCanonicalSeed'?withoutReviewedEvidenceMerge:value=>value;
-    assert.equal(normalize(extract(afterApp,name)),normalize(extract(beforeApp,name)),name+' unchanged outside reviewed summary/appointment branches');
+    const normalize=name==='bindImport'?withoutSummarySave:name==='bindForms'?withoutAppointmentAndCostSaves:name==='mergeCanonicalSeed'?withoutReviewedEvidenceMerge:value=>value;
+    assert.equal(normalize(extract(afterApp,name)),normalize(extract(beforeApp,name)),name+' unchanged outside reviewed branches');
   }
   for(const key of ['STORAGE_KEY','DOC_DB','DOC_STORE','RECOVERY_STORE','BACKUP_META_KEY','PENDING_CLOUD_KEY','SUPABASE_URL','SUPABASE_KEY','SITE_URL']) {
     const re=new RegExp(`const ${key} = [^;]+;`);
@@ -92,7 +93,7 @@ function staticChecks() {
   }
   const changed = execFileSync('git',['diff','--name-only','b2941ebb'],{cwd:root,encoding:'utf8'}).trim().split('\n');
   assert(!changed.some(p=>p.startsWith('data/')||p.startsWith('supabase/')), 'Seed/schema contracts unchanged');
-  return `${oldIds.length} pre-existing IDs retained; storage, migration, and sync protected outside reviewed appointment merge/save branches`;
+  return `${oldIds.length} pre-existing IDs retained; storage, migration, and sync protected outside reviewed branches`;
 }
 function vmChecks() {
   // A small deterministic DOM model checks route/state mechanics. This does
@@ -365,7 +366,7 @@ if(require.main===module)(async()=>{
       for(const id of ['openJournalComposer','homeMedicationButton','journalAddButton','medicationAddButton','costAddButton','profilePhotoButton'])assert(await page.locator('#'+id).isDisabled(),id+' disabled for viewer');
       for(const id of ['carePlanForm','careTeamForm','questionForm','wellbeingForm'])assert(await page.locator('#'+id+' button[type="submit"]').isDisabled(),id+' disabled for viewer');
       // Owner editor entry points are exercised only with synthetic in-memory
-      // capability; nothing is saved and every request outside localhost is blocked.
+      // capability. Any saves stay in the isolated browser context.
       await page.evaluate(()=>{ownerCanEdit=true;renderSharedStatus();});
       for(const [route,button,dialog] of [['home','#openJournalComposer','journalDialog'],['home','#homeMedicationButton','medicationDialog'],['journal/entries','#journalAddButton','journalDialog'],['medications','#medicationAddButton','medicationDialog'],['costs','#costAddButton','costDialog']]){
         await go(route);await page.locator(button).click();assert(await page.locator('#'+dialog).isVisible());
@@ -411,8 +412,23 @@ if(require.main===module)(async()=>{
       await page.goForward();assert(await page.locator('#journal-panel-entries').isVisible());
       assert(!(await page.locator('#journalDialog').isVisible()),'Forward does not resurrect editor');
       assert.deepEqual(await snapshot(),initial,'Navigation, range changes and editor cancellations do not mutate clinical data or localStorage');
+      await go('costs');
+      await page.locator('[data-edit-cost="cost-test"]').click();
+      const costCategory=page.locator('#costCorrectionForm select[name="category"]');
+      assert.equal(await costCategory.inputValue(),'treatment');
+      await costCategory.selectOption('restaging');
+      await page.locator('#costCorrectionForm button[type="submit"]').click();
+      await page.locator('#costCorrectionDialog').waitFor({state:'hidden'});
+      const savedCost=await page.evaluate(()=>{
+        const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));
+        return {row:saved.costs.find(cost=>cost.id==='cost-test'),correction:saved.recordCorrections.at(-1)};
+      });
+      assert.deepEqual(savedCost.row,{...fixture.costs[0],category:'restaging'});
+      assert.equal(savedCost.correction.before.category,'treatment');
+      assert.equal(savedCost.correction.after.category,'restaging');
+      assert.match(await page.locator('#costSummary').textContent(),/Restaging\s*\$50\.00/);
       assert.deepEqual(errors,[], 'No browser runtime errors');
-      console.log(`PASS ${viewport.width}x${viewport.height}: ${Object.keys(expectedRoutes).length} destinations, history/repeated clicks, journal-first, controls, exports, edit/cancel, continuous prednisone band, no record mutations`);
+      console.log(`PASS ${viewport.width}x${viewport.height}: ${Object.keys(expectedRoutes).length} destinations, controls, exports, editor cancellation, cost category correction, and continuous prednisone band`);
       await context.close();
     }
   }catch(error){

@@ -1,6 +1,6 @@
-const CACHE = 'roger-care-v72';
+const CACHE = 'roger-care-v73';
 const LIVE_RECORD_ORIGIN = 'https://gkotvodoqwdhmdeigrra.supabase.co';
-const CORE = ['./','./index.html','./styles.css?v=49','./import-analysis.js?v=4','./handoff-report.js?v=2','./app.js?v=71','./manifest.webmanifest?v=27','./data/seed.json','./icons/icon.svg'];
+const CORE = ['./','./index.html','./styles.css?v=49','./import-analysis.js?v=4','./handoff-report.js?v=2','./app.js?v=72','./manifest.webmanifest?v=27','./data/seed.json','./icons/icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(

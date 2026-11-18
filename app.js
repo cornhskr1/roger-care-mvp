@@ -767,6 +767,12 @@ function openCostCorrectionDialog(id){
   const row=state.costs.find(c=>c.id===id);if(!row)return;
   const form=q('#costCorrectionForm');
   for(const name of ['date','amountPaid','provider','label'])form.elements.namedItem(name).value=row[name]??'';
+  const categoryField=form.elements.namedItem('category');
+  const currentCategory=String(row.category??'');
+  const categories=Object.keys(CARE_COST_CATEGORIES);
+  if(!categories.includes(currentCategory))categories.push(currentCategory);
+  categoryField.replaceChildren(...categories.map(category=>new Option(categoryLabel(category),category)));
+  categoryField.value=currentCategory;
   form.elements.namedItem('editId').value=id;
   q('#costCorrectionDialog').showModal();
 }
@@ -1082,10 +1088,16 @@ function bindForms(){
 
   q('#costCorrectionForm').addEventListener('submit',async event=>{
     event.preventDefault();const fd=new FormData(event.currentTarget),id=String(fd.get('editId')||'');
+    const row=state.costs.find(cost=>cost.id===id);
+    if(!row)return toast('Cost no longer found',true);
+    const category=fd.get('category');
+    if(category!==String(row.category??'')&&!Object.hasOwn(CARE_COST_CATEGORIES,category))return toast('Choose a cost category',true);
     const amount=Number(fd.get('amountPaid'));
     const allocated=state.medicationPurchases.filter(p=>p.costId===id).reduce((n,p)=>n+Number(p.amountPaid||0),0);
     if(!Number.isFinite(amount)||amount<allocated-.005)return toast(`Amount cannot be below allocated medication purchases (${money(allocated)})`,true);
-    if(!recordCorrection('costs',id,{date:fd.get('date'),amountPaid:amount,provider:String(fd.get('provider')||'').trim(),label:String(fd.get('label')||'').trim()}))return toast('Cost no longer found',true);
+    const changes={date:fd.get('date'),amountPaid:amount,provider:String(fd.get('provider')||'').trim(),label:String(fd.get('label')||'').trim()};
+    if(category!==String(row.category??''))changes.category=category;
+    recordCorrection('costs',id,changes);
     if(!await saveChanges())return;renderAll();q('#costCorrectionDialog').close();toast('Cost corrected');
   });
 
@@ -2536,20 +2548,21 @@ function renderCostComponents(cost){
   return `<div class="cost-components">${cost.components.map(part=>`<div class="cost-component-row"><span>${esc(part[0])}</span><strong>${money(part[1])}</strong></div>`).join('')}</div>`;
 }
 
+const CARE_COST_CATEGORIES={
+  mixed_surgery_dental:'Surgery + dental day',
+  treatment:'Chemo treatment',
+  staging:'Initial staging',
+  restaging:'Restaging',
+  monitoring:'Monitoring labs',
+  diagnosis:'Initial diagnosis',
+  medication_unresolved:'Unresolved medication',
+  medication:'Medication',
+  mixed:'Mixed care',
+  other:'Other'
+};
+
 function categoryLabel(category){
-  const labels={
-    mixed_surgery_dental:'Surgery + dental day',
-    treatment:'Chemo treatment',
-    staging:'Initial staging',
-    restaging:'Restaging',
-    monitoring:'Monitoring labs',
-    diagnosis:'Initial diagnosis',
-    medication_unresolved:'Unresolved medication',
-    medication:'Medication',
-    mixed:'Mixed care',
-    other:'Other'
-  };
-  return labels[category]||String(category||'Other').replaceAll('_',' ');
+  return Object.hasOwn(CARE_COST_CATEGORIES,category)?CARE_COST_CATEGORIES[category]:String(category||'Other').replaceAll('_',' ');
 }
 
 function careColor(category){
