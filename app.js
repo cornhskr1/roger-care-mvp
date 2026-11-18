@@ -2552,14 +2552,19 @@ function renderCostComponents(cost){
 function costAllocations(cost){
   const allocations=cost.categoryAllocations;
   if(!Array.isArray(allocations)||!allocations.length)return [];
+  const includesChemo=allocations.some(line=>line?.category==='treatment');
+  const byCategory=new Map();
   let allocatedCents=0;
   for(const line of allocations){
     if(typeof line?.category!=='string'||!line.category.trim()||!Number.isFinite(line.amount)||line.amount<0)return [];
     const cents=Math.round(line.amount*100);
     if(!Number.isSafeInteger(cents)||cents/100!==line.amount)return [];
     allocatedCents+=cents;
+    const category=includesChemo&&line.category==='medication'?'treatment':line.category;
+    byCategory.set(category,(byCategory.get(category)||0)+cents);
   }
-  return allocatedCents===Math.round(Number(cost.amountPaid)*100)?allocations:[];
+  if(allocatedCents!==Math.round(Number(cost.amountPaid)*100))return [];
+  return [...byCategory].map(([category,cents])=>({category,amount:cents/100}));
 }
 
 function renderCostAllocations(cost){
