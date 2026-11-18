@@ -2539,6 +2539,7 @@ function renderCosts(){
         <span class="chip ${c.status==='confirmed'?'':'warn'}">${esc(c.status)}</span>
         <span class="chip info">${esc(categoryLabel(c.category))}</span>
       </div>
+      ${renderCostAllocations(c)}
       ${renderCostComponents(c)}
     </article>`).join('');
 }
@@ -2546,6 +2547,28 @@ function renderCosts(){
 function renderCostComponents(cost){
   if(!Array.isArray(cost.components)||!cost.components.length)return '';
   return `<div class="cost-components">${cost.components.map(part=>`<div class="cost-component-row"><span>${esc(part[0])}</span><strong>${money(part[1])}</strong></div>`).join('')}</div>`;
+}
+
+function costAllocations(cost){
+  const allocations=cost.categoryAllocations;
+  if(!Array.isArray(allocations)||!allocations.length)return [];
+  let allocatedCents=0;
+  for(const line of allocations){
+    if(typeof line?.category!=='string'||!line.category.trim()||!Number.isFinite(line.amount)||line.amount<0)return [];
+    const cents=Math.round(line.amount*100);
+    if(!Number.isSafeInteger(cents)||cents/100!==line.amount)return [];
+    allocatedCents+=cents;
+  }
+  return allocatedCents===Math.round(Number(cost.amountPaid)*100)?allocations:[];
+}
+
+function renderCostAllocations(cost){
+  const allocations=costAllocations(cost);
+  if(!allocations.length)return '';
+  return `<div class="cost-components">
+    <div class="section-kicker">Care type breakdown</div>
+    ${allocations.map(({category,amount})=>`<div class="cost-component-row"><span>${esc(categoryLabel(category))}</span><strong>${money(amount)}</strong></div>`).join('')}
+  </div>`;
 }
 
 const CARE_COST_CATEGORIES={
@@ -2582,9 +2605,13 @@ function careColor(category){
 }
 
 function categoryMeters(){
-  const groups={};
-  state.costs.forEach(c=>{groups[c.category]=(groups[c.category]||0)+Number(c.amountPaid||0);});
-  const rows=Object.entries(groups).sort((a,b)=>b[1]-a[1]);
+  const groups=new Map();
+  for(const cost of state.costs){
+    const allocations=costAllocations(cost);
+    const lines=allocations.length?allocations:[{category:cost.category,amount:Number(cost.amountPaid||0)}];
+    for(const {category,amount} of lines)groups.set(category,(groups.get(category)||0)+amount);
+  }
+  const rows=[...groups].sort((a,b)=>b[1]-a[1]);
   const max=Math.max(...rows.map(r=>r[1]),1);
   return `<section class="card" style="box-shadow:none;margin-top:10px">
     <div class="section-kicker">BY CARE TYPE</div>
